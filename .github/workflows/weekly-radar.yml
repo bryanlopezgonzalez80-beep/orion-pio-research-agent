@@ -2,6 +2,10 @@ name: Orion PIO Weekly Radar
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/weekly-radar.yml"
   schedule:
     # Fridays at 08:00 Puerto Rico (AST, UTC-4)
     - cron: "0 12 * * 5"
