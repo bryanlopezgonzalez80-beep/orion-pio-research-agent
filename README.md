@@ -1,4 +1,4 @@
-# Orion PIO Research Agent
+# Orion Research Platform
 
 Dashboard y agente de investigación para Psicología Industrial-Organizacional, Recursos Humanos, liderazgo y desarrollo organizacional.
 
@@ -37,3 +37,17 @@ Si configuraste claves opcionales, añádelas en **GitHub → Settings → Secre
 ## Persistencia
 
 El radar automático guarda `pio_dashboard.db` y los reportes en GitHub, por lo que sus actualizaciones sobreviven a reinicios del dashboard. Los cambios manuales hechos dentro de una instancia gratuita de Streamlit (por ejemplo favoritos, CRM o encuestas) pueden no persistir después de que la instancia se reinicie. Para persistencia total de esas funciones conviene migrar la base de datos a un servicio externo en una siguiente fase.
+
+## Orion v3
+
+La capa v3 añade:
+- router automático entre investigación académica y Derecho PR / federal / internacional;
+- búsqueda académica resiliente con caché, reintentos y circuit breaker;
+- guardado automático en Biblioteca;
+- historial de búsquedas, colecciones, alertas y salud de fuentes;
+- catálogo de fuentes con accesos oficiales y credenciales por Secrets;
+- actualización diaria a las 07:00 AST mediante `.github/workflows/daily-radar.yml`;
+- paquete de migración a ChatGPT Sites en `site_migration/`.
+
+### Principio de seguridad
+Orion no guarda contraseñas de servicios externos. Los logins abren los portales oficiales y las API keys se configuran únicamente mediante variables de entorno/Secrets.

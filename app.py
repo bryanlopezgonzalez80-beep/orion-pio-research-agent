@@ -17,6 +17,7 @@ from data_store import (
     save_ai_analysis, save_survey_response, set_favorite, set_read_full, upsert_papers,
 )
 from export_utils import export_docx, export_pdf, export_pptx
+from orion_platform_ui import render_legal, render_platform, render_sources
 from research_agent import (
     APP_VERSION, DEFAULT_SOURCES, DEFAULT_TOPICS, analyze_paper, answer_from_library,
     compare_papers, deduplicate, extract_trends, generate_case, generate_class_activity,
@@ -89,8 +90,8 @@ def paper_card(p, *, section, position):
             )
 
 
-st.title("🧠 PIO Intelligence Hub")
-st.caption("Research intelligence + consultoría + capacitación + docencia + agente de evidencia")
+st.title("🧠 Orion Research Platform")
+st.caption("Research intelligence · PIO · derecho · consultoría · docencia · evidencia")
 
 stats = db_stats()
 with st.sidebar:
@@ -113,10 +114,19 @@ m3.metric("Leer completos", stats["read_full"])
 m4.metric("Clientes", stats["clients"])
 m5.metric("Proyectos", stats["projects"])
 
-home_tab, radar_tab, lib_tab, trends_tab, lab_tab, consulting_tab, agent_tab, reports_tab, setup_tab = st.tabs([
-    "🏠 Inicio", "🔎 Radar", "📚 Biblioteca", "📈 Tendencias", "🧪 Laboratorio",
-    "💼 Consultoría", "🤖 Agente", "📄 Reportes", "⚙️ Sistema"
+platform_tab, home_tab, radar_tab, lib_tab, trends_tab, legal_tab, lab_tab, consulting_tab, agent_tab, sources_tab, reports_tab, setup_tab = st.tabs([
+    "🚀 Orion", "🏠 Inicio", "🔎 Radar", "📚 Biblioteca", "📈 Tendencias", "⚖️ Legal", "🧪 Laboratorio",
+    "💼 Consultoría", "🤖 Agente", "🔌 Fuentes", "📄 Reportes", "⚙️ Sistema"
 ])
+
+with platform_tab:
+    render_platform()
+
+with legal_tab:
+    render_legal()
+
+with sources_tab:
+    render_sources()
 
 with home_tab:
     st.subheader("Centro de inteligencia PIO")
@@ -483,5 +493,5 @@ SEMANTIC_SCHOLAR_API_KEY=
 CROSSREF_EMAIL=tu_email@ejemplo.com""", language="text")
     st.caption("Semantic Scholar funciona sin clave en muchos casos, pero una clave puede mejorar límites. Crossref recomienda identificar las solicitudes con email para uso cortés de su API.")
     st.markdown("#### Automatización semanal")
-    st.write("En la versión cloud, `.github/workflows/weekly-radar.yml` ejecuta el radar automáticamente los viernes a las 8:00 a. m. (Puerto Rico) y también puede lanzarse manualmente desde GitHub Actions.")
+    st.write("`.github/workflows/daily-radar.yml` actualiza Orion todos los días a las 7:00 a. m. de Puerto Rico. Además, el buscador permite actualización manual; la caché, los reintentos y el circuito de protección reducen presión sobre las fuentes.")
     st.warning("El radar de GitHub Actions actualiza la base SQLite y guarda los cambios en el repositorio. Los cambios manuales realizados dentro de una instancia gratuita de Streamlit pueden perderse si la instancia se reinicia; para persistencia total de favoritos, clientes, proyectos y encuestas conviene usar una base externa en una fase posterior.")
