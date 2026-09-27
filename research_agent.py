@@ -21,7 +21,7 @@ except Exception:
 
 load_dotenv()
 
-APP_VERSION = "2.0.2"
+APP_VERSION = "3.0.0"
 USER_AGENT = "PIO-Intelligence-Hub/2.0 (research dashboard; personal use)"
 TIMEOUT = 25
 
