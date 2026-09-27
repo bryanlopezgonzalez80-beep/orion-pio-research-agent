@@ -1,0 +1,63 @@
+{
+  "date": "2026-09-27",
+  "queries": [
+    {
+      "query": "leadership effectiveness",
+      "received": 12,
+      "unique": 11,
+      "errors": 1
+    },
+    {
+      "query": "employee engagement",
+      "received": 18,
+      "unique": 18,
+      "errors": 0
+    },
+    {
+      "query": "organizational development",
+      "received": 12,
+      "unique": 10,
+      "errors": 1
+    },
+    {
+      "query": "psychological safety workplace",
+      "received": 12,
+      "unique": 10,
+      "errors": 1
+    },
+    {
+      "query": "training transfer",
+      "received": 12,
+      "unique": 12,
+      "errors": 1
+    },
+    {
+      "query": "workplace wellbeing",
+      "received": 15,
+      "unique": 14,
+      "errors": 1
+    },
+    {
+      "query": "team effectiveness",
+      "received": 12,
+      "unique": 12,
+      "errors": 1
+    },
+    {
+      "query": "AI human resources workplace",
+      "received": 12,
+      "unique": 12,
+      "errors": 1
+    }
+  ],
+  "results_seen": 99,
+  "errors": [
+    "leadership effectiveness: Semantic Scholar: HTTPError: 429 Client Error:  for url: https://api.semanticscholar.org/graph/v1/paper/search?query=leadership+effectiveness&limit=6&fields=title%2Cabstract%2Cauthors%2Cyear%2Cvenue%2Curl%2CexternalIds%2CcitationCount%2CpublicationDate%2CopenAccessPdf%2CpublicationTypes%2CfieldsOfStudy&publicationDateOrYear=2026-09-13%3A2026-09-27",
+    "organizational development: Semantic Scholar: HTTPError: 429 Client Error:  for url: https://api.semanticscholar.org/graph/v1/paper/search?query=organizational+development&limit=6&fields=title%2Cabstract%2Cauthors%2Cyear%2Cvenue%2Curl%2CexternalIds%2CcitationCount%2CpublicationDate%2CopenAccessPdf%2CpublicationTypes%2CfieldsOfStudy&publicationDateOrYear=2026-09-13%3A2026-09-27",
+    "psychological safety workplace: Semantic Scholar: HTTPError: 429 Client Error:  for url: https://api.semanticscholar.org/graph/v1/paper/search?query=psychological+safety+workplace&limit=6&fields=title%2Cabstract%2Cauthors%2Cyear%2Cvenue%2Curl%2CexternalIds%2CcitationCount%2CpublicationDate%2CopenAccessPdf%2CpublicationTypes%2CfieldsOfStudy&publicationDateOrYear=2026-09-13%3A2026-09-27",
+    "training transfer: Semantic Scholar: HTTPError: 429 Client Error:  for url: https://api.semanticscholar.org/graph/v1/paper/search?query=training+transfer&limit=6&fields=title%2Cabstract%2Cauthors%2Cyear%2Cvenue%2Curl%2CexternalIds%2CcitationCount%2CpublicationDate%2CopenAccessPdf%2CpublicationTypes%2CfieldsOfStudy&publicationDateOrYear=2026-09-13%3A2026-09-27",
+    "workplace wellbeing: Semantic Scholar: temporarily paused after repeated failures",
+    "team effectiveness: Semantic Scholar: temporarily paused after repeated failures",
+    "AI human resources workplace: Semantic Scholar: temporarily paused after repeated failures"
+  ]
+}
