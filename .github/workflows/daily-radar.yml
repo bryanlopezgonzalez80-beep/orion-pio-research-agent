@@ -1,0 +1,45 @@
+name: Orion Daily Radar
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 07:00 Puerto Rico / AST (UTC-4) year-round
+    - cron: "0 11 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: orion-daily-radar
+  cancel-in-progress: false
+
+jobs:
+  daily-radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run Orion daily refresh
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
+          CROSSREF_EMAIL: ${{ secrets.CROSSREF_EMAIL }}
+          COURTLISTENER_API_TOKEN: ${{ secrets.COURTLISTENER_API_TOKEN }}
+        run: python daily_agent.py
+      - name: Commit refreshed database and reports
+        run: |
+          git config user.name "orion-research-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add pio_dashboard.db reports/ || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: Orion daily research refresh"
+            git push
+          fi
