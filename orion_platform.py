@@ -77,7 +77,10 @@ def classify_query(query):
     return "academic"
 
 def recommended_academic_sources(query):
-    q=normalize_query(query); sources=["OpenAlex","Crossref","Semantic Scholar"]
+    q=normalize_query(query); sources=["OpenAlex","Crossref"]
+    # Semantic Scholar is excellent, but unauthenticated requests have tight rate limits.
+    # Promote it to the default route only when a key is configured; it remains user-selectable.
+    if os.getenv("SEMANTIC_SCHOLAR_API_KEY"): sources.append("Semantic Scholar")
     if any(t in q for t in ("wellbeing","burnout","stress","health","mental","fatigue","sleep")): sources.append("Europe PMC")
     if any(t in q for t in ("ai ","machine learning","algorithm","automation","computational","large language")): sources.append("arXiv")
     return list(dict.fromkeys(sources))
