@@ -2,6 +2,10 @@ name: Orion Daily Radar
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/daily-radar.yml"
   schedule:
     # 07:00 Puerto Rico / AST (UTC-4) year-round
     - cron: "0 11 * * *"
