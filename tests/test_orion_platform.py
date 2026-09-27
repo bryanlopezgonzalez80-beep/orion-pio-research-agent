@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import platform_store
-from orion_platform import SOURCE_SPECS, all_topics, classify_query, execute_academic_search, route_query, source_search_url
+from orion_platform import SOURCE_SPECS, all_topics, classify_query, execute_academic_search, recommended_academic_sources, route_query, source_search_url
 
 def test_topic_catalog_is_broad():
     topics=all_topics()
@@ -87,3 +87,10 @@ def test_alert_is_due(tmp_path,monkeypatch):
     monkeypatch.setenv("ORION_DB_PATH",str(tmp_path/"test.db"))
     aid=platform_store.create_alert("Daily leadership","leadership","academic",["OpenAlex"],"daily")
     assert any(a["id"]==aid for a in platform_store.alerts_due())
+
+
+def test_semantic_scholar_default_requires_key(monkeypatch):
+    monkeypatch.delenv("SEMANTIC_SCHOLAR_API_KEY", raising=False)
+    assert "Semantic Scholar" not in recommended_academic_sources("leadership effectiveness")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_API_KEY", "test-key")
+    assert "Semantic Scholar" in recommended_academic_sources("leadership effectiveness")
