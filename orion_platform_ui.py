@@ -5,7 +5,7 @@ import streamlit as st
 
 from data_store import get_papers, upsert_papers
 from orion_platform import (
-    PLATFORM_VERSION, SOURCE_BY_NAME, TOPIC_GROUPS, classify_query,
+    ACADEMIC_AUTOMATED, PLATFORM_VERSION, SOURCE_BY_NAME, TOPIC_GROUPS, classify_query,
     execute_academic_search, route_query, source_configuration, source_search_url,
 )
 from platform_store import (
@@ -48,7 +48,10 @@ def render_platform():
             days=c1.slider("Ventana (días)",7,730,90,1,key="v3_days")
             per_source=c2.slider("Por fuente",3,40,10,1,key="v3_per_source")
             max_keep=c3.slider("Máximo a guardar",20,500,180,10,key="v3_max_keep")
-            sources=st.multiselect("Fuentes automáticas",plan["automated_sources"],default=plan["automated_sources"],key="v3_sources")
+            source_options=ACADEMIC_AUTOMATED
+            sources=st.multiselect("Fuentes automáticas",source_options,default=plan["automated_sources"],key="v3_sources")
+            if "Semantic Scholar" not in plan["automated_sources"]:
+                st.caption("Semantic Scholar está disponible como fuente opcional. Con SEMANTIC_SCHOLAR_API_KEY configurada, Orion la activa automáticamente.")
             force=st.checkbox("Forzar actualización (ignorar caché)",False)
             if st.button("🚀 Buscar y guardar en Biblioteca",type="primary",use_container_width=True,disabled=not query.strip()):
                 with st.spinner("Orion consulta las fuentes, reintenta fallos y elimina duplicados…"):
