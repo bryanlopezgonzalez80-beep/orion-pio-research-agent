@@ -21,7 +21,7 @@ except Exception:
 
 load_dotenv()
 
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 USER_AGENT = "PIO-Intelligence-Hub/2.0 (research dashboard; personal use)"
 TIMEOUT = 25
 
@@ -132,15 +132,66 @@ def apa_fallback(p: dict) -> str:
     return f"{authors} ({year}). {title}. {journal}.{tail}".strip()
 
 
+QUERY_STOPWORDS = {
+    "the","and","for","with","from","into","among","using","study","research","analysis",
+    "about","sobre","para","con","una","uno","del","las","los","and","of","in","on","to"
+}
+
+QUERY_ALIASES = {
+    "organizational justice": ["organizational justice", "workplace fairness", "procedural justice", "distributive justice", "interactional justice"],
+    "employee burnout": ["employee burnout", "occupational burnout", "job burnout", "emotional exhaustion"],
+    "succession planning": ["succession planning", "succession management", "leadership succession"],
+    "psychological safety": ["psychological safety", "team psychological safety", "interpersonal risk"],
+    "training transfer": ["training transfer", "transfer of training", "learning transfer", "transfer of learning"],
+}
+
+
+def _normalized(value: str) -> str:
+    value = (value or "").casefold()
+    value = re.sub(r"[^a-záéíóúñ0-9]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def topic_relevance_percent(p: dict, query: str) -> float:
+    """Estimate topical match only. Quality, citations, OA and recency do not affect this score."""
+    query_n = _normalized(query)
+    terms = [
+        t for t in re.findall(r"[a-záéíóúñ0-9]+", query_n)
+        if len(t) >= 3 and t not in QUERY_STOPWORDS
+    ]
+    if not terms:
+        return 0.0
+
+    title = _normalized(p.get("title") or "")
+    topics = _normalized(p.get("topics") or "")
+    abstract = _normalized(p.get("abstract") or "")
+    journal = _normalized(p.get("journal") or "")
+
+    aliases = QUERY_ALIASES.get(query_n, [query_n])
+    aliases = [_normalized(x) for x in aliases if x]
+
+    def field_score(text: str) -> float:
+        if not text:
+            return 0.0
+        coverage = sum(1 for t in terms if t in text) / max(len(terms), 1)
+        phrase = 1.0 if any(a and a in text for a in aliases) else 0.0
+        return min(1.0, coverage * 0.75 + phrase * 0.45)
+
+    score = (
+        0.42 * field_score(title)
+        + 0.30 * field_score(topics)
+        + 0.25 * field_score(abstract)
+        + 0.03 * field_score(journal)
+    )
+    return round(min(100.0, score * 100.0), 1)
+
+
 def score_record(p: dict, query: str, days: int) -> dict:
     title = (p.get("title") or "").lower()
     abstract = (p.get("abstract") or "").lower()
     blob = f"{title} {abstract} {(p.get('topics') or '').lower()}"
-    q_terms = [t for t in re.findall(r"[a-záéíóúñ]+", query.lower()) if len(t) > 3]
-    q_hits = sum(1 for t in q_terms if t in blob)
     practical = sum(weight for term, weight in PRACTICAL_TERMS.items() if term in blob)
     citations = min(math.log1p(int(p.get("cited_by_count") or 0)) / 2.5, 1.8)
-    abstract_bonus = 0.8 if len(abstract) >= 200 else 0
     oa_bonus = 0.6 if p.get("oa_url") or p.get("pdf_url") else 0
     pub = p.get("published_date") or ""
     recency = 0.0
@@ -150,6 +201,7 @@ def score_record(p: dict, query: str, days: int) -> dict:
         recency = max(0.0, 2.2 * (1 - age / max(days, 1)))
     except Exception:
         pass
+
     evidence = 0.0
     kind = f"{title} {p.get('work_type','')}".lower()
     if "meta-analysis" in kind or "meta analysis" in kind:
@@ -162,9 +214,13 @@ def score_record(p: dict, query: str, days: int) -> dict:
         evidence += 0.7
     if "validation" in blob:
         evidence += 0.6
-    relevance = min(20.0, round(q_hits * 1.4 + practical + citations + abstract_bonus + oa_bonus + recency + evidence, 2))
-    p["relevance_score"] = relevance
-    p["practical_score"] = min(10.0, round(practical + q_hits * 0.5 + oa_bonus, 2))
+
+    topical = topic_relevance_percent(p, query)
+    p["matched_query"] = query
+    p["topic_relevance_percent"] = topical
+    # Backward-compatible 0–20 field, now based ONLY on topical match.
+    p["relevance_score"] = round(topical / 5.0, 2)
+    p["practical_score"] = min(10.0, round(practical + oa_bonus, 2))
     p["evidence_score"] = min(10.0, round(evidence + citations, 2))
     p["recency_score"] = round(recency, 2)
     p["apa_citation"] = p.get("apa_citation") or apa_fallback(p)
