@@ -46,8 +46,9 @@ def paper_card(p, *, section, position):
     with st.container(border=True):
         c1, c2, c3 = st.columns([7, 1, 1])
         c1.markdown(f"### {p.get('title','Sin título')}")
-        c2.metric("Afinidad", f"{float(p.get('relevance_score') or 0):.1f}")
-        c3.metric("Práctica", f"{float(p.get('practical_score') or 0):.1f}")
+        topical = float(p.get("topic_relevance_percent") or (float(p.get("relevance_score") or 0) * 5))
+        c2.metric("Coincidencia", f"{topical:.0f}%")
+        c3.metric("Práctica", f"{float(p.get('practical_score') or 0):.1f}/10")
         st.caption(
             f"{p.get('authors','')} · {p.get('journal') or p.get('source','')} · {p.get('published_date','')} · "
             f"Vía: {p.get('discovered_via') or p.get('source','')}"
@@ -147,8 +148,9 @@ with radar_tab:
     per_source = c2.slider("Resultados por fuente y tema", 3, 25, 8, 1)
     max_keep = c3.slider("Máximo a guardar por corrida", 20, 500, 150, 10)
     sources = st.multiselect("Fuentes automáticas", DEFAULT_SOURCES, default=DEFAULT_SOURCES)
-    topics = st.multiselect("Temas", DEFAULT_TOPICS, default=DEFAULT_TOPICS[:8])
+    topics = st.multiselect("Temas", DEFAULT_TOPICS, default=[])
     custom = st.text_input("Tema o búsqueda adicional", placeholder="ej. leadership development transfer training")
+    st.caption("Selecciona uno o varios temas, o escribe una búsqueda libre. Los resultados de esta corrida se muestran separados de la biblioteca histórica.")
 
     if st.button("🚀 Ejecutar radar multifuente", type="primary", use_container_width=True):
         queries = list(topics)
@@ -167,6 +169,10 @@ with radar_tab:
                 all_errors.extend([f"{q} → {e}" for e in errors])
                 progress.progress(i / total_steps)
             unique = deduplicate(all_results)[:max_keep]
+            # Preserve only this run for the Radar view; the database remains the historical library.
+            st.session_state["current_search_results"] = unique
+            st.session_state["current_search_queries"] = queries
+            st.session_state["current_search_timestamp"] = datetime.now().isoformat(timespec="seconds")
             upsert_papers(unique)
             log_radar_run(sources, queries, len(all_results), len(unique), all_errors)
             status.success(f"Radar completado: {len(all_results)} resultados recibidos; {len(unique)} únicos priorizados/guardados.")
@@ -184,14 +190,40 @@ with radar_tab:
             cols[i % 3].link_button(name, url, use_container_width=True)
 
     st.divider()
-    st.markdown("#### Resultados priorizados")
-    min_score = st.slider("Afinidad mínima", 0.0, 20.0, 5.0, 0.5, key="radar_min")
+    st.markdown("#### Resultados de esta búsqueda")
+    current = st.session_state.get("current_search_results", [])
+    current_queries = st.session_state.get("current_search_queries", [])
+    if current_queries:
+        st.caption("Consulta actual: " + " · ".join(current_queries))
+    min_topic = st.slider("Coincidencia temática mínima (%)", 0, 100, 60, 5, key="radar_topic_min")
     source_filter = st.multiselect("Filtrar por origen", DEFAULT_SOURCES, default=[])
-    papers = get_papers(150)
-    filtered = [p for p in papers if float(p.get("relevance_score") or 0) >= min_score]
+    filtered = [
+        p for p in current
+        if float(p.get("topic_relevance_percent") or (float(p.get("relevance_score") or 0) * 5)) >= min_topic
+    ]
     if source_filter:
         filtered = [p for p in filtered if any(s in (p.get("discovered_via") or p.get("source") or "") for s in source_filter)]
-    for i, p in enumerate(filtered[:30]): paper_card(p, section="radar", position=i)
+    filtered = sorted(
+        filtered,
+        key=lambda p: (
+            float(p.get("topic_relevance_percent") or 0),
+            float(p.get("evidence_score") or 0),
+            p.get("published_date") or "",
+        ),
+        reverse=True,
+    )
+    if current and not filtered:
+        st.info("La búsqueda sí recuperó registros, pero ninguno supera el umbral temático actual. Baja el umbral si quieres revisar coincidencias débiles.")
+    elif not current:
+        st.info("Ejecuta una búsqueda para ver aquí únicamente los resultados de esa corrida.")
+    else:
+        st.caption(f"{len(filtered)} resultados superan el umbral de relevancia temática.")
+        for i, p in enumerate(filtered[:30]):
+            paper_card(p, section="current_radar", position=i)
+
+    with st.expander("📚 Biblioteca histórica / radar acumulado"):
+        historical = get_papers(150)
+        st.write(f"{len(historical)} estudios recientes guardados en la biblioteca. Usa la pestaña Biblioteca para explorarlos sin mezclarlos con la búsqueda actual.")
 
 with lib_tab:
     st.subheader("Biblioteca acumulada")
