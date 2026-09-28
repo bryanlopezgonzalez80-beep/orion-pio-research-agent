@@ -41,6 +41,7 @@ Protected endpoints:
 
 - `GET /api/v1/papers`
 - `GET /api/v1/papers/{paper_id}`
+- `GET /api/v1/radar`
 - `GET /api/v1/sources`
 - `POST /api/v1/search`
 - `GET /api/v1/library`
