@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from research_agent import source_rate_policy
 from data_store import get_papers, upsert_papers
 from orion_platform import (
     ACADEMIC_AUTOMATED, PLATFORM_VERSION, SOURCE_BY_NAME, TOPIC_GROUPS, classify_query,
@@ -189,7 +190,9 @@ def render_sources():
     table=pd.DataFrame([{
         "Fuente":r["name"],"Dominio":r["domain"],"Automática":r["automated"],
         "Acceso gratuito":r["free_access"],"Credencial":r["credential_env"] or "—",
-        "Configurada":r["credential_configured"],"Autoridad":r["authority"]
+        "Configurada":r["credential_configured"],"Autoridad":r["authority"],
+        "Pausa mínima (s)":source_rate_policy(r["name"])["minimum_interval_seconds"],
+        "Guía":source_rate_policy(r["name"])["guidance"],
     } for r in rows])
     st.dataframe(table,use_container_width=True,hide_index=True)
     st.markdown("#### Acceso oficial")
