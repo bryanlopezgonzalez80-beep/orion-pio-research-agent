@@ -12,7 +12,7 @@ from database.connection import DatabaseConnectionError
 from .config import APISettings, get_settings, validate_settings
 from .errors import ExternalRateLimit, ExternalSearchError, ExternalSearchTimeout
 from .rate_limit import InMemoryRateLimiter, RateLimitCategory
-from .routes import health, library, papers, search, sources
+from .routes import health, library, papers, radar, search, sources
 
 
 def create_app(
@@ -102,6 +102,7 @@ def create_app(
     versioned.include_router(health.router)
     protected = APIRouter()
     protected.include_router(papers.router)
+    protected.include_router(radar.router)
     protected.include_router(search.router)
     protected.include_router(sources.router)
     protected.include_router(library.router)
