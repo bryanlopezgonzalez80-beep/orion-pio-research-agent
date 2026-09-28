@@ -78,6 +78,16 @@ No Content Security Policy is added in Phase 8A because an incorrect policy coul
 
 GitHub workflows use `contents: read`; checkout does not persist Git credentials. Automated radar and monitoring jobs never commit or push. Dependabot checks Python, GitHub Actions, and Docker dependencies weekly with bounded concurrent PRs. Dependency updates still require normal review and CI.
 
+### Supply-chain security
+
+- Every GitHub Action is pinned to a full, immutable commit SHA. A trailing comment records the corresponding release tag so updates remain reviewable.
+- Dependabot checks pip, GitHub Actions, and Docker weekly. It may open update pull requests, but automatic merging is not enabled.
+- CodeQL analyzes Python on pull requests, pushes to `main`, and a weekly schedule. Only that job receives `security-events: write`, which is required to publish analysis results.
+- `pip-audit` checks `requirements.txt` on pull requests, manual dispatch, and a weekly schedule. It receives no secrets and does not suppress advisories.
+- Dependency and workflow updates require human review, successful CI, and evaluation of upstream release notes before merge.
+
+When an audit reports a CVE, record the affected package and advisory without copying secrets or production data. Confirm whether Orion uses the vulnerable code path, identify the smallest compatible fixed version, test the upgrade in a dedicated pull request, and obtain manual approval before merge. Do not hide the finding with an ignore flag merely to make CI pass. If no fix exists, document the exposure and compensating controls, then track the advisory until remediation is available.
+
 The Docker image runs as the non-root `orion` user. `.dockerignore` excludes `.env` files, Streamlit secrets, databases, reports, backups, tests, Git metadata, caches, and coverage output.
 
 ## Accidental exposure response
