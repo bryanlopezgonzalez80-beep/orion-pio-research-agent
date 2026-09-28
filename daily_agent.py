@@ -5,7 +5,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from data_store import upsert_papers
+from data_store import upsert_papers, verify_database_backend
 from orion_platform import execute_academic_search, route_query
 from platform_store import alerts_due, mark_alert_run
 
@@ -23,6 +23,7 @@ def _run(query,sources=None):
     return execute_academic_search(query,days=14,per_source=6,sources=sources,max_keep=120,retries=2,cache_ttl_hours=6,force_refresh=True)
 
 def main():
+    verify_database_backend()
     results=[]; summaries=[]; errors=[]
     for topic in CORE_TOPICS:
         print(f"[core] {topic}")

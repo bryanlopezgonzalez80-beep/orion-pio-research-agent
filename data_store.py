@@ -54,6 +54,15 @@ def connect():
     return con
 
 
+def verify_database_backend() -> str:
+    """Fail fast if the configured database cannot be opened."""
+    con = connect()
+    try:
+        return con.engine
+    finally:
+        con.close()
+
+
 def _init_schema(con):
     cols = ",\n        ".join(f"{name} {spec}" for name, spec in PAPER_COLUMNS.items())
     con.execute(f"CREATE TABLE IF NOT EXISTS papers (\n        {cols}\n    )")
