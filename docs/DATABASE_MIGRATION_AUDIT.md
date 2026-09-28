@@ -46,7 +46,7 @@ The live SQLite schema has no explicit user-created indexes. The D1-oriented `si
 - SQLite `lastrowid` becomes `INSERT ... RETURNING id`.
 - SQLite scalar `MAX(a,b)` becomes PostgreSQL `GREATEST(a,b)`.
 - Existing JSON and timestamp values remain text in Phase 3 to preserve exact behavior and enable reversible migration without changing application semantics.
-- Explicit migrated serial IDs require sequence synchronization after insertion.
+- Explicit migrated `BIGSERIAL` IDs require sequence synchronization after insertion. The migrator maintains an explicit map of serial columns and confirms each sequence with `pg_get_serial_sequence()` before calling `setval`; text keys such as `papers.id` are never synchronized.
 
 ## Risks
 

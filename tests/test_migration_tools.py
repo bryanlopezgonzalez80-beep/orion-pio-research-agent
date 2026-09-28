@@ -65,13 +65,22 @@ def test_migration_is_idempotent_and_commits_after_verification(tmp_path, monkey
     events = []
 
     class Cursor:
-        rowcount = 1
+        def __init__(self, rowcount=1):
+            self.rowcount = rowcount
+
+        def fetchone(self):
+            return {"sequence_name": None}
 
     class Destination:
         engine = "postgres"
+        inserted = False
 
         def execute(self, sql, params=None):
             events.append((sql, params))
+            if sql.startswith("INSERT"):
+                if self.inserted:
+                    return Cursor(rowcount=0)
+                self.inserted = True
             return Cursor()
 
         def commit(self):
@@ -84,12 +93,107 @@ def test_migration_is_idempotent_and_commits_after_verification(tmp_path, monkey
     monkeypatch.setattr(migration, "ensure_postgres_schema", lambda con: events.append(("schema", None)))
     monkeypatch.setattr(migration, "verify_counts", lambda *a: {"papers": {"source": 1, "destination": 1, "missing": 0, "mismatched": 0}})
     try:
-        results = migration.migrate(source, destination)
+        first = migration.migrate(source, destination)
+        second = migration.migrate(source, destination)
     finally:
         source.close()
-    assert results["papers"].inserted == 1
+    assert first["papers"].inserted == 1
+    assert second["papers"].inserted == 0
+    assert second["papers"].skipped == 1
     assert any("ON CONFLICT DO NOTHING" in sql for sql, _ in events if isinstance(sql, str))
-    assert events[-1] == ("commit", None)
+    assert events.count(("commit", None)) == 2
+
+
+def test_text_primary_key_is_never_treated_as_a_sequence(tmp_path, monkeypatch):
+    source_path = tmp_path / "source.db"
+    create_source(source_path)
+    source = migration.open_sqlite_read_only(source_path)
+    sequence_tables = []
+
+    class Cursor:
+        rowcount = 1
+
+        def fetchone(self):
+            return {"sequence_name": None}
+
+    class Destination:
+        engine = "postgres"
+
+        def execute(self, sql, params=None):
+            if "pg_get_serial_sequence" in sql:
+                sequence_tables.append(params[0])
+            return Cursor()
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+    monkeypatch.setattr(migration, "ensure_postgres_schema", lambda con: None)
+    monkeypatch.setattr(
+        migration,
+        "verify_counts",
+        lambda *a: {"papers": {"source": 1, "destination": 1, "missing": 0, "mismatched": 0}},
+    )
+    try:
+        migration.migrate(source, Destination())
+    finally:
+        source.close()
+
+    assert "papers" not in sequence_tables
+
+
+def test_integer_serial_sequence_is_synchronized():
+    statements = []
+
+    class Cursor:
+        def __init__(self, row):
+            self.row = row
+
+        def fetchone(self):
+            return self.row
+
+    class Destination:
+        def execute(self, sql, params=None):
+            statements.append((sql, params))
+            if "pg_get_serial_sequence" in sql:
+                table = params[0]
+                sequence = "public.clients_id_seq" if table == "clients" else None
+                return Cursor({"sequence_name": sequence})
+            if "MAX" in sql:
+                return Cursor({"max_value": 17, "has_rows": True})
+            return Cursor(None)
+
+    synchronized = migration.synchronize_sequences(Destination())
+    assert synchronized == [("clients", "id")]
+    setval = next((sql, params) for sql, params in statements if "setval" in sql)
+    assert setval[1] == ("public.clients_id_seq", 17, True)
+
+
+def test_empty_serial_table_resets_sequence_for_first_id():
+    setval_params = []
+
+    class Cursor:
+        def __init__(self, row):
+            self.row = row
+
+        def fetchone(self):
+            return self.row
+
+    class Destination:
+        def execute(self, sql, params=None):
+            if "pg_get_serial_sequence" in sql:
+                sequence = "public.clients_id_seq" if params[0] == "clients" else None
+                return Cursor({"sequence_name": sequence})
+            if "MAX" in sql:
+                return Cursor({"max_value": 1, "has_rows": False})
+            if "setval" in sql:
+                setval_params.append(params)
+            return Cursor(None)
+
+    migration.synchronize_sequences(Destination())
+    assert setval_params == [("public.clients_id_seq", 1, False)]
 
 
 def test_migration_rolls_back_completely_on_error(tmp_path, monkeypatch):
@@ -119,6 +223,50 @@ def test_migration_rolls_back_completely_on_error(tmp_path, monkeypatch):
     finally:
         source.close()
     assert events == ["rollback"]
+
+
+def test_sequence_error_rolls_back_inserted_rows(tmp_path, monkeypatch):
+    source_path = tmp_path / "source.db"
+    create_source(source_path)
+    source = migration.open_sqlite_read_only(source_path)
+    events = []
+
+    class Cursor:
+        rowcount = 1
+
+        def __init__(self, row=None):
+            self.row = row
+
+        def fetchone(self):
+            return self.row
+
+    class Destination:
+        engine = "postgres"
+
+        def execute(self, sql, params=None):
+            if sql.startswith("INSERT"):
+                events.append("insert")
+                return Cursor()
+            if "pg_get_serial_sequence" in sql:
+                sequence = "public.clients_id_seq" if params[0] == "clients" else None
+                return Cursor({"sequence_name": sequence})
+            if "MAX" in sql:
+                raise RuntimeError("sequence lookup failed")
+            return Cursor()
+
+        def commit(self):
+            events.append("commit")
+
+        def rollback(self):
+            events.append("rollback")
+
+    monkeypatch.setattr(migration, "ensure_postgres_schema", lambda con: None)
+    try:
+        with pytest.raises(RuntimeError, match="sequence lookup failed"):
+            migration.migrate(source, Destination())
+    finally:
+        source.close()
+    assert events == ["insert", "rollback"]
 
 
 def test_safe_error_redacts_database_url():
