@@ -23,7 +23,7 @@ Interactive documentation is available at `/docs`; the OpenAPI document is `/ope
 | --- | --- |
 | `DATABASE_URL` | Optional PostgreSQL connection. Never expose it to clients or logs. |
 | `ORION_ALLOWED_ORIGINS` | Comma-separated browser origins. Defaults to local development origins; wildcard origins are rejected. |
-| `ORION_API_KEY` | Optional shared internal key. When configured, protected operations require `X-API-Key`. |
+| `ORION_API_KEY` | Optional shared internal key. When configured, every `/api/v1` data endpoint requires `X-Orion-API-Key`; health, docs, and OpenAPI remain public. |
 
 The future GPT Site should be added as an explicit HTTPS origin in `ORION_ALLOWED_ORIGINS`. Phase 4 does not connect or deploy that Site.
 
@@ -50,7 +50,7 @@ curl -X POST http://localhost:8000/api/v1/search \
   -d '{"query":"psychological safety", "limit":20}'
 ```
 
-If `ORION_API_KEY` is configured, add `-H 'X-API-Key: ...'` to protected POST requests. No real key belongs in source control or documentation examples.
+If `ORION_API_KEY` is configured, add `-H 'X-Orion-API-Key: ...'` to data requests. This protects papers, sources, search, and both library operations. `/health`, `/api/v1/health`, `/docs`, and `/openapi.json` remain public. When the variable is absent, the dependency allows local development without a key. No real key belongs in source control, logs, examples, or OpenAPI.
 
 ## Validation and errors
 

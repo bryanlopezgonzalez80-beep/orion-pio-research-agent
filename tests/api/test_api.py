@@ -299,8 +299,11 @@ def test_library_rejects_unknown_paper(client):
     assert response.status_code == 404
 
 
-def test_optional_api_key_protects_mutations_but_not_health(monkeypatch, sample_paper):
-    monkeypatch.setenv("ORION_API_KEY", "test-api-key")
+@pytest.fixture
+def authenticated_api(monkeypatch, sample_paper):
+    secret = "test-only-orion-key"
+    monkeypatch.setenv("ORION_API_KEY", secret)
+    data_store.upsert_papers([sample_paper])
     monkeypatch.setattr(
         research_service,
         "search",
@@ -312,26 +315,101 @@ def test_optional_api_key_protects_mutations_but_not_health(monkeypatch, sample_
             "metadata": {},
         },
     )
-    client = TestClient(create_app(), raise_server_exceptions=False)
+    return TestClient(create_app(), raise_server_exceptions=False), secret, sample_paper
 
-    assert client.get("/health").status_code == 200
-    assert client.post("/api/v1/search", json={"query": "leadership"}).status_code == 401
-    assert (
-        client.post(
-            "/api/v1/search",
-            json={"query": "leadership"},
-            headers={"X-API-Key": "wrong"},
-        ).status_code
-        == 401
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        ("get", "/api/v1/papers", None),
+        ("get", "/api/v1/papers/doi:10.1234/orion", None),
+        ("get", "/api/v1/sources", None),
+        ("post", "/api/v1/search", {"query": "leadership"}),
+        ("get", "/api/v1/library", None),
+        (
+            "post",
+            "/api/v1/library",
+            {"paper_id": "doi:10.1234/orion", "favorite": True},
+        ),
+    ],
+)
+def test_all_data_endpoints_reject_missing_and_incorrect_key(
+    authenticated_api, method, path, payload
+):
+    client, secret, _ = authenticated_api
+
+    missing = client.request(method, path, json=payload)
+    incorrect = client.request(
+        method,
+        path,
+        json=payload,
+        headers={"X-Orion-API-Key": "incorrect-key"},
     )
-    assert (
-        client.post(
-            "/api/v1/search",
-            json={"query": "leadership"},
-            headers={"X-API-Key": "test-api-key"},
-        ).status_code
-        == 200
+
+    assert missing.status_code == 401
+    assert incorrect.status_code == 401
+    assert missing.json() == {"detail": "Valid API key required"}
+    assert incorrect.json() == {"detail": "Valid API key required"}
+    assert secret not in missing.text
+    assert secret not in incorrect.text
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        ("get", "/api/v1/papers", None),
+        ("get", "/api/v1/papers/doi:10.1234/orion", None),
+        ("get", "/api/v1/sources", None),
+        ("post", "/api/v1/search", {"query": "leadership"}),
+        ("get", "/api/v1/library", None),
+        (
+            "post",
+            "/api/v1/library",
+            {"paper_id": "doi:10.1234/orion", "favorite": True},
+        ),
+    ],
+)
+def test_all_data_endpoints_accept_correct_key(
+    authenticated_api, method, path, payload
+):
+    client, secret, _ = authenticated_api
+
+    response = client.request(
+        method,
+        path,
+        json=payload,
+        headers={"X-Orion-API-Key": secret},
     )
+
+    assert response.status_code == 200
+    assert secret not in response.text
+
+
+@pytest.mark.parametrize(
+    "path", ["/health", "/api/v1/health", "/docs", "/openapi.json"]
+)
+def test_health_and_api_documentation_remain_public(authenticated_api, path):
+    client, secret, _ = authenticated_api
+
+    response = client.get(path)
+
+    assert response.status_code == 200
+    assert secret not in response.text
+
+
+def test_api_key_is_not_logged_or_exposed_in_openapi(authenticated_api, caplog):
+    client, secret, _ = authenticated_api
+
+    denied = client.get(
+        "/api/v1/papers", headers={"X-Orion-API-Key": f"wrong-{secret}"}
+    )
+    schema = client.get("/openapi.json")
+
+    assert denied.status_code == 401
+    assert "X-Orion-API-Key" in schema.text
+    assert secret not in schema.text
+    assert secret not in denied.text
+    assert secret not in caplog.text
 
 
 def test_cors_defaults_and_explicit_configuration(monkeypatch):
@@ -374,5 +452,6 @@ def test_openapi_and_docs_are_available_without_secrets(client, monkeypatch):
         "version": "v1",
     }
     assert "/api/v1/papers/{paper_id}" in schema.json()["paths"]
+    assert "X-Orion-API-Key" in schema.text
     assert docs.status_code == 200
     assert "openapi-secret" not in schema.text

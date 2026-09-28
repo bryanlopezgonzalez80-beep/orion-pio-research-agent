@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, FastAPI, Request, status
+from fastapi import APIRouter, Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -8,6 +8,7 @@ from database.config import DatabaseConfigurationError
 from database.connection import DatabaseConnectionError
 
 from .config import APISettings, get_settings
+from .dependencies import require_api_key
 from .errors import ExternalRateLimit, ExternalSearchError, ExternalSearchTimeout
 from .routes import health, library, papers, search, sources
 
@@ -26,7 +27,7 @@ def create_app(settings: APISettings | None = None) -> FastAPI:
         allow_origins=list(settings.allowed_origins),
         allow_credentials=False,
         allow_methods=["GET", "POST"],
-        allow_headers=["Accept", "Content-Type", "X-API-Key"],
+        allow_headers=["Accept", "Content-Type", "X-Orion-API-Key"],
     )
 
     @application.exception_handler(DatabaseConnectionError)
@@ -68,10 +69,12 @@ def create_app(settings: APISettings | None = None) -> FastAPI:
     application.include_router(health.router)
     versioned = APIRouter()
     versioned.include_router(health.router)
-    versioned.include_router(papers.router)
-    versioned.include_router(search.router)
-    versioned.include_router(sources.router)
-    versioned.include_router(library.router)
+    protected = APIRouter(dependencies=[Depends(require_api_key)])
+    protected.include_router(papers.router)
+    protected.include_router(search.router)
+    protected.include_router(sources.router)
+    protected.include_router(library.router)
+    versioned.include_router(protected)
     application.include_router(versioned, prefix="/api/v1")
     return application
 
