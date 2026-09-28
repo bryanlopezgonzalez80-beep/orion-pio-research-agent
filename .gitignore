@@ -19,3 +19,7 @@ backups/
 *.db-wal
 *.db-journal
 pio_private.db
+
+# Local health-monitor outputs
+/artifacts/
+/orion-health.json

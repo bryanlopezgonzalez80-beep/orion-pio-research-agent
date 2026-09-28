@@ -58,16 +58,16 @@ Orion no guarda contraseñas de servicios externos. Los logins abren los portale
 
 ## Roadmap Cloud
 
-Las Fases 1–3 están completadas. La Fase 4 añade el backend API; las fases posteriores continúan como planificación.
+Las Fases 1–5 están completadas. La Fase 7 incorpora monitoring y observabilidad cloud; las fases restantes continúan según el roadmap vigente.
 
 1. **Fase 1 — Hardening del repositorio y automatización (completada)**
 2. **Fase 2 — Suite de pruebas y CI reforzado (completada)**
 3. **Fase 3 — PostgreSQL y migración reversible (completada)**
-4. **Fase 4 — Backend API (actual)**
-5. **Fase 5 — Identidad, autenticación y autorización (próxima)**
+4. **Fase 4 — Backend API (completada)**
+5. **Fase 5 — Autenticación de API para integración (completada)**
 6. Fase 6 — Almacenamiento de archivos y exportaciones
-7. Fase 7 — Ejecución administrada de agentes
-8. Fase 8 — Observabilidad y alertas
+7. **Fase 7 — Monitoring & Observability (actual)**
+8. Fase 8 — Alertas y respuesta operacional
 9. Fase 9 — Escalabilidad, rendimiento y costos
 10. Fase 10 — Preparación para producción y recuperación
 
@@ -82,3 +82,7 @@ SQLite continúa siendo el motor local y el fallback predeterminado. Si el entor
 ## Orion API
 
 La Fase 4 expone una API FastAPI versionada sobre la misma persistencia y lógica de investigación. Se inicia con `uvicorn orion_api.main:app --host 0.0.0.0 --port 8000`. Consulta `docs/API.md` para endpoints, CORS, autenticación opcional, OpenAPI y contenedor.
+
+## Orion Monitoring
+
+La Fase 7 comprueba cada hora la API, PostgreSQL, persistencia, actividad de radares y salud de fuentes mediante GitHub Actions, sin depender de una computadora local. Consulta `docs/MONITORING.md` para métricas, severidades, límites y operación segura.
