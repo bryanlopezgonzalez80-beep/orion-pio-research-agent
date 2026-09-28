@@ -12,6 +12,20 @@ from platform_store import get_cache, log_search, record_source_failure, record_
 
 PLATFORM_VERSION = "3.0.0"
 
+
+def _rate_limit_delay(exc: Exception, attempt: int) -> float | None:
+    """Return a bounded retry delay for HTTP 429, otherwise None."""
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) != 429:
+        return None
+    raw = (getattr(response, "headers", None) or {}).get("Retry-After")
+    if raw:
+        try:
+            return min(10.0, max(0.0, float(raw)))
+        except (TypeError, ValueError):
+            pass
+    return min(8.0, 0.75 * (2 ** max(0, attempt)))
+
 @dataclass(frozen=True)
 class SourceSpec:
     name: str
@@ -157,7 +171,9 @@ def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_k
                 result=fn(query,days=days,per_page=per_source); record_source_success(source); break
             except Exception as exc:
                 last_error=exc
-                if attempt<retries: sleep_fn(min(3.0,0.45*(2**attempt)+random.random()*0.2))
+                if attempt<retries:
+                    rate_limit_delay=_rate_limit_delay(exc,attempt)
+                    sleep_fn(rate_limit_delay if rate_limit_delay is not None else min(3.0,0.45*(2**attempt)+random.random()*0.2))
         if result is None:
             msg=f"{source}: {type(last_error).__name__}: {last_error}"
             errors.append(msg); record_source_failure(source,msg)
