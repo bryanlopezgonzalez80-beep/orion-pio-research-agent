@@ -131,6 +131,60 @@ def test_http_errors_bad_json_rate_limit_and_timeout_are_propagated(monkeypatch,
         research_agent.search_openalex("query")
 
 
+def test_spanish_academic_query_variants_and_relevance():
+    variants = research_agent.academic_query_variants(
+        "desarrollo organizacional y liderazgo"
+    )
+    assert variants == [
+        "desarrollo organizacional y liderazgo",
+        "organizational development and leadership",
+    ]
+    assert research_agent.academic_query_variants("leadership effectiveness") == [
+        "leadership effectiveness"
+    ]
+
+    paper = {
+        "title": "Psychological safety and leadership in teams",
+        "topics": "psychological safety, leadership",
+        "abstract": "Team psychological safety predicts learning behavior.",
+    }
+    assert (
+        research_agent.topic_relevance_percent(
+            paper, "seguridad psicológica y liderazgo"
+        )
+        >= 70
+    )
+
+
+def test_spanish_search_queries_original_and_english_variant(monkeypatch):
+    calls = []
+
+    def searcher(query, days, per_page):
+        calls.append(query)
+        return [
+            {
+                "id": f"id-{len(calls)}",
+                "title": "Organizational development and leadership",
+                "relevance_score": 1,
+            }
+        ]
+
+    monkeypatch.setattr(research_agent, "SEARCHERS", {"OpenAlex": searcher})
+    monkeypatch.setattr(research_agent.time, "sleep", lambda _: None)
+
+    papers, errors = research_agent.search_all_sources(
+        "desarrollo organizacional y liderazgo", 30, 5, ["OpenAlex"]
+    )
+
+    assert calls == [
+        "desarrollo organizacional y liderazgo",
+        "organizational development and leadership",
+    ]
+    assert errors == []
+    assert papers
+    assert papers[0]["matched_query"] == "desarrollo organizacional y liderazgo"
+
+
 def test_search_all_sources_collects_errors_without_sleep(monkeypatch):
     def good(*args, **kwargs):
         return [{"id": "1", "title": "One", "relevance_score": 1}]
