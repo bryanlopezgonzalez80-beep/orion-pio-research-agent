@@ -7,14 +7,14 @@ from fastapi.responses import JSONResponse
 from database.config import DatabaseConfigurationError
 from database.connection import DatabaseConnectionError
 
-from .config import APISettings, get_settings
+from .config import APISettings, get_settings, validate_settings
 from .dependencies import require_api_key
 from .errors import ExternalRateLimit, ExternalSearchError, ExternalSearchTimeout
 from .routes import health, library, papers, search, sources
 
 
 def create_app(settings: APISettings | None = None) -> FastAPI:
-    settings = settings or get_settings()
+    settings = validate_settings(settings) if settings is not None else get_settings()
     application = FastAPI(
         title="Orion PIO Intelligence API",
         version="v1",
@@ -22,6 +22,7 @@ def create_app(settings: APISettings | None = None) -> FastAPI:
         docs_url="/docs",
         openapi_url="/openapi.json",
     )
+    application.state.settings = settings
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.allowed_origins),
@@ -29,6 +30,19 @@ def create_app(settings: APISettings | None = None) -> FastAPI:
         allow_methods=["GET", "POST"],
         allow_headers=["Accept", "Content-Type", "X-Orion-API-Key"],
     )
+
+    @application.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Cache-Control"] = "no-store"
+        if settings.environment == "production":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+        return response
 
     @application.exception_handler(DatabaseConnectionError)
     @application.exception_handler(DatabaseConfigurationError)

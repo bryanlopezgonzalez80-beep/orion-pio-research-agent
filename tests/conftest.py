@@ -33,6 +33,9 @@ def isolated_environment(tmp_path, monkeypatch):
         "SEMANTIC_SCHOLAR_API_KEY",
         "COURTLISTENER_API_TOKEN",
         "DATABASE_URL",
+        "ORION_API_KEY",
+        "ORION_ALLOWED_ORIGINS",
+        "ORION_ENV",
     ):
         monkeypatch.delenv(name, raising=False)
 
