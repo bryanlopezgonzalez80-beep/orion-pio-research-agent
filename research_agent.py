@@ -7,6 +7,7 @@ import os
 import re
 import time
 from collections import Counter
+from threading import Lock
 from datetime import date, datetime, timedelta
 from typing import Iterable
 from urllib.parse import quote
@@ -24,6 +25,71 @@ load_dotenv()
 APP_VERSION = "3.0.0"
 USER_AGENT = "PIO-Intelligence-Hub/2.0 (research dashboard; personal use)"
 TIMEOUT = 25
+
+_SOURCE_PACING_LOCK = Lock()
+_SOURCE_NEXT_REQUEST_AT: dict[str, float] = {}
+
+
+def source_rate_policy(source: str) -> dict:
+    """Return conservative provider pacing guidance used by Orion."""
+    if source == "OpenAlex":
+        return {
+            "minimum_interval_seconds": 0.0,
+            "guidance": (
+                "Daily usage budget; a free API key increases the budget substantially. "
+                "Responses expose remaining usage through rate-limit headers."
+            ),
+        }
+    if source == "Crossref":
+        polite = bool(os.getenv("CROSSREF_EMAIL"))
+        return {
+            "minimum_interval_seconds": (1.0 / 3.0) if polite else 1.0,
+            "guidance": (
+                "Polite pool: up to 3 list requests/second when mailto is configured."
+                if polite
+                else "Public pool: up to 1 list request/second; configure CROSSREF_EMAIL for the polite pool."
+            ),
+        }
+    if source == "Semantic Scholar":
+        return {
+            "minimum_interval_seconds": 1.0,
+            "guidance": "API-key users start at 1 request/second; unauthenticated access may be throttled.",
+        }
+    if source == "arXiv":
+        return {
+            "minimum_interval_seconds": 3.0,
+            "guidance": "Legacy API guidance: no more than one request every 3 seconds and one connection at a time.",
+        }
+    if source == "Europe PMC":
+        return {
+            "minimum_interval_seconds": 0.25,
+            "guidance": "No fixed public numeric quota is documented; Orion uses conservative pacing and backs off on 429 responses.",
+        }
+    return {
+        "minimum_interval_seconds": 0.0,
+        "guidance": "No automated provider quota applies.",
+    }
+
+
+def pace_source_request(
+    source: str,
+    *,
+    sleep_fn=time.sleep,
+    clock=time.monotonic,
+) -> float:
+    """Reserve a process-wide request slot for a provider and sleep if needed."""
+    interval = float(source_rate_policy(source)["minimum_interval_seconds"])
+    if interval <= 0:
+        return 0.0
+    with _SOURCE_PACING_LOCK:
+        now = clock()
+        scheduled = max(now, _SOURCE_NEXT_REQUEST_AT.get(source, now))
+        wait = max(0.0, scheduled - now)
+        _SOURCE_NEXT_REQUEST_AT[source] = scheduled + interval
+    if wait > 0:
+        sleep_fn(wait)
+    return wait
+
 
 SOURCE_LABELS = {
     "OpenAlex": "OpenAlex",
@@ -353,7 +419,9 @@ def search_openalex(query: str, days: int = 45, per_page: int = 15) -> list[dict
         "filter": f"from_publication_date:{start.isoformat()},to_publication_date:{date.today().isoformat()}",
         "per-page": min(per_page, 50),
         "sort": "publication_date:desc",
+        "api_key": os.getenv("OPENALEX_API_KEY", "") or None,
     }
+    params = {key: value for key, value in params.items() if value is not None}
     data = _get("https://api.openalex.org/works", params=params).json()
     out = []
     for w in data.get("results", []):
@@ -586,11 +654,11 @@ def search_all_sources(query: str, days: int, per_source: int, sources: list[str
             continue
         for index, variant in enumerate(variants, 1):
             try:
+                pace_source_request(source)
                 gathered.extend(fn(variant, days=days, per_page=per_source))
             except Exception as exc:
                 suffix = f" (variant {index}/{len(variants)})" if len(variants) > 1 else ""
                 errors.append(f"{source}{suffix}: {type(exc).__name__}: {exc}")
-            time.sleep(0.15)
     # Re-score against the user's original query so Spanish searches retain
     # meaningful topical relevance even when a result came from the English expansion.
     return deduplicate(

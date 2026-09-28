@@ -166,6 +166,10 @@ def test_spanish_academic_search_expands_and_deduplicates(tmp_path, monkeypatch)
     assert out["query_variants"] == calls
     assert out["unique"] == 1
     assert out["results"][0]["matched_query"] == "desarrollo organizacional y liderazgo"
+    assert out["source_meta"][0]["network_requests"] == 2
+    assert out["source_meta"][0]["cache_hits"] == 0
+    assert out["source_meta"][0]["minimum_interval_seconds"] == 0.0
+    assert out["source_meta"][0]["rate_limited"] is False
 
 
 def test_semantic_scholar_default_requires_key(monkeypatch):
@@ -192,7 +196,15 @@ def test_unavailable_source_is_reported_without_calling_network(tmp_path, monkey
         sleep_fn=lambda _: None, force_refresh=True,
     )
     assert out["results"] == []
-    assert out["source_meta"] == [{"source": "Missing", "status": "unavailable", "count": 0, "cached": False}]
+    meta = out["source_meta"][0]
+    assert meta["source"] == "Missing"
+    assert meta["status"] == "unavailable"
+    assert meta["count"] == 0
+    assert meta["cached"] is False
+    assert meta["network_requests"] == 0
+    assert meta["cache_hits"] == 0
+    assert meta["retries"] == 0
+    assert meta["rate_limited"] is False
 
 
 def test_open_circuit_skips_searcher(tmp_path, monkeypatch):

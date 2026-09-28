@@ -39,7 +39,7 @@ class SourceSpec:
     notes: str = ""
 
 SOURCE_SPECS = (
-    SourceSpec("OpenAlex","academic","Scholarly index",True,True,official_url="https://openalex.org/",notes="Broad academic discovery."),
+    SourceSpec("OpenAlex","academic","Scholarly index",True,True,"OPENALEX_API_KEY","https://openalex.org/","https://openalex.org/settings/api",notes="Broad academic discovery; a free API key increases the daily search budget."),
     SourceSpec("Crossref","academic","DOI metadata registry",True,True,"CROSSREF_EMAIL","https://www.crossref.org/",notes="Metadata-focused; email enables polite-pool identification."),
     SourceSpec("Semantic Scholar","academic","Scholarly index",True,True,"SEMANTIC_SCHOLAR_API_KEY","https://www.semanticscholar.org/","https://www.semanticscholar.org/me/account"),
     SourceSpec("Europe PMC","academic","Biomedical literature index",True,True,official_url="https://europepmc.org/"),
@@ -155,35 +155,51 @@ def _deduplicate(papers):
     return deduplicate(papers)
 
 def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_keep=150, retries=2, cache_ttl_hours=8, force_refresh=False, searchers=None, sleep_fn=time.sleep):
-    from research_agent import academic_query_variants, score_record
+    from research_agent import academic_query_variants, pace_source_request, score_record, source_rate_policy
 
-    started=time.perf_counter(); searchers=searchers or _default_searchers()
+    started=time.perf_counter()
+    using_default_searchers=searchers is None
+    searchers=searchers or _default_searchers()
     query_variants=academic_query_variants(query) or [query]
     selected=list(sources or recommended_academic_sources(query)); gathered=[]; errors=[]; source_meta=[]
     for source in selected:
         fn=searchers.get(source)
+        policy=source_rate_policy(source)
+        empty_meta={
+            "source":source,"status":"unavailable","count":0,"cached":False,
+            "network_requests":0,"cache_hits":0,"retries":0,"rate_limited":False,
+            "minimum_interval_seconds":policy["minimum_interval_seconds"],
+            "rate_guidance":policy["guidance"],
+        }
         if not fn:
             errors.append(f"{source}: source is not available in this build")
-            source_meta.append({"source":source,"status":"unavailable","count":0,"cached":False}); continue
+            source_meta.append(empty_meta); continue
         if not source_available(source):
             errors.append(f"{source}: temporarily paused after repeated failures")
-            source_meta.append({"source":source,"status":"circuit_open","count":0,"cached":False}); continue
+            source_meta.append({**empty_meta,"status":"circuit_open"}); continue
 
         source_results=[]; cached_flags=[]; any_success=False
         network_attempted=False; network_success=False; source_errors=[]
+        network_requests=0; cache_hits=0; retry_count=0; rate_limited=False
         for variant_index, variant in enumerate(query_variants, 1):
             cached=None if force_refresh else get_cache(source,variant,days,per_source)
             if cached is not None:
-                source_results.extend(cached); cached_flags.append(True); any_success=True
+                source_results.extend(cached); cached_flags.append(True); any_success=True; cache_hits+=1
                 continue
 
             cached_flags.append(False); network_attempted=True
             result=None; last_error=None
             for attempt in range(retries+1):
+                if using_default_searchers:
+                    pace_source_request(source, sleep_fn=sleep_fn)
+                network_requests+=1
+                if attempt: retry_count+=1
                 try:
                     result=fn(variant,days=days,per_page=per_source); network_success=True; break
                 except Exception as exc:
                     last_error=exc
+                    if getattr(getattr(exc, "response", None), "status_code", None)==429:
+                        rate_limited=True
                     if attempt<retries:
                         rate_limit_delay=_rate_limit_delay(exc,attempt)
                         sleep_fn(rate_limit_delay if rate_limit_delay is not None else min(3.0,0.45*(2**attempt)+random.random()*0.2))
@@ -207,29 +223,22 @@ def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_k
             "status":"ok" if any_success else "error",
             "count":len(source_results),
             "cached":bool(cached_flags) and all(cached_flags),
+            "network_requests":network_requests,
+            "cache_hits":cache_hits,
+            "retries":retry_count,
+            "rate_limited":rate_limited,
+            "minimum_interval_seconds":policy["minimum_interval_seconds"],
+            "rate_guidance":policy["guidance"],
         })
 
-    # De-duplicate across Spanish + English variants, then score against the
-    # original user query using bilingual topical relevance.
-    unique=[
-        score_record(dict(p),query,days)
-        for p in _deduplicate(gathered)
-    ]
+    unique=[score_record(dict(p),query,days) for p in _deduplicate(gathered)]
     unique=_deduplicate(unique)[:int(max_keep)]
     duration_ms=int((time.perf_counter()-started)*1000)
     log_search(query,"academic",selected,len(gathered),len(unique),duration_ms,errors)
     return {
-        "query":query,
-        "query_variants":query_variants,
-        "query_expanded":len(query_variants)>1,
-        "domain":"academic",
-        "sources":selected,
-        "results":unique,
-        "received":len(gathered),
-        "unique":len(unique),
-        "errors":errors,
-        "source_meta":source_meta,
-        "duration_ms":duration_ms,
+        "query":query,"query_variants":query_variants,"query_expanded":len(query_variants)>1,
+        "domain":"academic","sources":selected,"results":unique,"received":len(gathered),
+        "unique":len(unique),"errors":errors,"source_meta":source_meta,"duration_ms":duration_ms,
     }
 
 def all_topics():

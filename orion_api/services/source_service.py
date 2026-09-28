@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from orion_platform import source_configuration
 from platform_store import get_source_health
+from research_agent import source_rate_policy
 
 
 def list_public_sources() -> list[dict]:
@@ -9,6 +10,7 @@ def list_public_sources() -> list[dict]:
     public = []
     for source in source_configuration():
         known = health.get(source["name"], {})
+        policy = source_rate_policy(source["name"])
         public.append(
             {
                 "name": source["name"],
@@ -19,6 +21,8 @@ def list_public_sources() -> list[dict]:
                 "official_url": source["official_url"],
                 "status": known.get("last_status", "unknown"),
                 "last_checked": known.get("last_checked"),
+                "minimum_interval_seconds": policy["minimum_interval_seconds"],
+                "rate_guidance": policy["guidance"],
             }
         )
     return public

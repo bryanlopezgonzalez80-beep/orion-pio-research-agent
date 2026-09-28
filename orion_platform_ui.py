@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from research_agent import source_rate_policy
 from data_store import get_papers, upsert_papers
 from orion_platform import (
     ACADEMIC_AUTOMATED, PLATFORM_VERSION, SOURCE_BY_NAME, TOPIC_GROUPS, classify_query,
@@ -67,9 +68,34 @@ def render_platform():
                 if out["errors"]:
                     with st.expander("Avisos de fuentes"):
                         st.code("\n".join(out["errors"]))
+                if out.get("source_meta"):
+                    st.markdown("##### Uso de fuentes en esta búsqueda")
+                    usage=pd.DataFrame([{
+                        "Fuente":m.get("source"),
+                        "Estado":m.get("status"),
+                        "Resultados":m.get("count",0),
+                        "Requests":m.get("network_requests",0),
+                        "Caché":m.get("cache_hits",0),
+                        "Reintentos":m.get("retries",0),
+                        "429":m.get("rate_limited",False),
+                        "Pausa mínima (s)":m.get("minimum_interval_seconds",0),
+                    } for m in out["source_meta"]])
+                    st.dataframe(usage,use_container_width=True,hide_index=True)
+                    with st.expander("Guía de límites por fuente"):
+                        for m in out["source_meta"]:
+                            st.write(f"**{m.get('source')}** — {m.get('rate_guidance','')}")
                 if out["results"]:
                     df=pd.DataFrame([_paper_row(p) for p in out["results"]])
                     st.dataframe(df,use_container_width=True,hide_index=True,column_config={"URL":st.column_config.LinkColumn("Fuente")})
+
+            if query.strip() and plan["manual_sources"]:
+                st.markdown("##### Fuentes complementarias")
+                st.caption("Si una API no devuelve resultados o está limitada, abre la misma consulta en estas fuentes.")
+                manual_cols=st.columns(2)
+                for i,src in enumerate(plan["manual_sources"]):
+                    manual_cols[i%2].link_button(
+                        f"Buscar en {src}",source_search_url(src,query),use_container_width=True
+                    )
 
             st.divider()
             st.markdown("#### 📡 Radar acumulado")
@@ -164,7 +190,9 @@ def render_sources():
     table=pd.DataFrame([{
         "Fuente":r["name"],"Dominio":r["domain"],"Automática":r["automated"],
         "Acceso gratuito":r["free_access"],"Credencial":r["credential_env"] or "—",
-        "Configurada":r["credential_configured"],"Autoridad":r["authority"]
+        "Configurada":r["credential_configured"],"Autoridad":r["authority"],
+        "Pausa mínima (s)":source_rate_policy(r["name"])["minimum_interval_seconds"],
+        "Guía":source_rate_policy(r["name"])["guidance"],
     } for r in rows])
     st.dataframe(table,use_container_width=True,hide_index=True)
     st.markdown("#### Acceso oficial")
