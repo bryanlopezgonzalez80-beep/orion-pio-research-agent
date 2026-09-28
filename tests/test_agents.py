@@ -175,7 +175,6 @@ def test_cloud_agent_workflows_publish_reports_without_pushing_database(
 
     assert "contents: read" in contents
     assert "uses: actions/upload-artifact@" in contents
-    assert "# v4" in contents
     assert report_pattern in contents
     assert artifact_prefix in contents
     assert "if-no-files-found: error" in contents

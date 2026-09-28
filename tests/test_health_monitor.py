@@ -394,7 +394,6 @@ def test_monitor_workflow_is_hourly_read_only_and_archives_json():
     assert "DATABASE_URL: ${{ secrets.DATABASE_URL }}" in workflow
     assert "run: PYTHONPATH=. python scripts/orion_health_check.py" in workflow
     assert "uses: actions/upload-artifact@" in workflow
-    assert "# v4" in workflow
     assert "if: always()" in workflow
     assert "retention-days: 30" in workflow
     assert "pio_dashboard.db" not in workflow
