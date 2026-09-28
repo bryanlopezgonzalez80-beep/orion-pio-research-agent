@@ -196,7 +196,15 @@ def test_unavailable_source_is_reported_without_calling_network(tmp_path, monkey
         sleep_fn=lambda _: None, force_refresh=True,
     )
     assert out["results"] == []
-    assert out["source_meta"] == [{"source": "Missing", "status": "unavailable", "count": 0, "cached": False}]
+    meta = out["source_meta"][0]
+    assert meta["source"] == "Missing"
+    assert meta["status"] == "unavailable"
+    assert meta["count"] == 0
+    assert meta["cached"] is False
+    assert meta["network_requests"] == 0
+    assert meta["cache_hits"] == 0
+    assert meta["retries"] == 0
+    assert meta["rate_limited"] is False
 
 
 def test_open_circuit_skips_searcher(tmp_path, monkeypatch):
