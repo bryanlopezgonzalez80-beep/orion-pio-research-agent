@@ -39,7 +39,7 @@ class SourceSpec:
     notes: str = ""
 
 SOURCE_SPECS = (
-    SourceSpec("OpenAlex","academic","Scholarly index",True,True,official_url="https://openalex.org/",notes="Broad academic discovery."),
+    SourceSpec("OpenAlex","academic","Scholarly index",True,True,"OPENALEX_API_KEY","https://openalex.org/","https://openalex.org/settings/api",notes="Broad academic discovery; a free API key increases the daily search budget."),
     SourceSpec("Crossref","academic","DOI metadata registry",True,True,"CROSSREF_EMAIL","https://www.crossref.org/",notes="Metadata-focused; email enables polite-pool identification."),
     SourceSpec("Semantic Scholar","academic","Scholarly index",True,True,"SEMANTIC_SCHOLAR_API_KEY","https://www.semanticscholar.org/","https://www.semanticscholar.org/me/account"),
     SourceSpec("Europe PMC","academic","Biomedical literature index",True,True,official_url="https://europepmc.org/"),
