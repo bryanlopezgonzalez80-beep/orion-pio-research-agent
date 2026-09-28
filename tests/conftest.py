@@ -32,6 +32,7 @@ def isolated_environment(tmp_path, monkeypatch):
         "OPENAI_API_KEY",
         "SEMANTIC_SCHOLAR_API_KEY",
         "COURTLISTENER_API_TOKEN",
+        "DATABASE_URL",
     ):
         monkeypatch.delenv(name, raising=False)
 

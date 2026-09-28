@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from contextlib import contextmanager
 
 import pytest
 
@@ -76,3 +77,21 @@ def test_alert_lifecycle_and_due_calculation(tmp_path, monkeypatch):
         con.execute("UPDATE orion_alerts SET last_run='invalid' WHERE id=?", (daily,))
     assert {a["id"] for a in platform_store.alerts_due(path=path)} == {daily, weekly}
     assert len(platform_store.get_alerts(enabled_only=True, path=path)) == 2
+
+
+def test_postgres_collection_insert_uses_conflict_clause(monkeypatch):
+    statements = []
+
+    class Connection:
+        engine = "postgres"
+
+        def execute(self, sql, params):
+            statements.append((sql, params))
+
+    @contextmanager
+    def fake_connect(path=None):
+        yield Connection()
+
+    monkeypatch.setattr(platform_store, "connect", fake_connect)
+    platform_store.add_to_collection(3, "paper-1")
+    assert "ON CONFLICT(collection_id,paper_id) DO NOTHING" in statements[0][0]

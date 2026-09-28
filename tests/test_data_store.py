@@ -112,6 +112,8 @@ def test_database_error_rolls_back_and_closes_connection(sample_paper, monkeypat
     events = []
 
     class BrokenConnection:
+        engine = "sqlite"
+
         def executemany(self, *args, **kwargs):
             raise sqlite3.OperationalError("disk unavailable")
 
@@ -145,3 +147,28 @@ def test_schema_migration_adds_missing_columns(tmp_path, monkeypatch):
     finally:
         con.close()
     assert set(data_store.PAPER_COLUMNS) <= columns
+
+
+def test_postgres_upsert_uses_greatest_dialect(sample_paper, monkeypatch):
+    events = []
+
+    class PostgresConnection:
+        engine = "postgres"
+
+        def executemany(self, sql, payloads):
+            events.append(sql)
+
+        def commit(self):
+            events.append("commit")
+
+        def rollback(self):
+            events.append("rollback")
+
+        def close(self):
+            events.append("close")
+
+    monkeypatch.setattr(data_store, "connect", PostgresConnection)
+    data_store.upsert_papers([sample_paper])
+    assert "GREATEST(COALESCE(papers.cited_by_count,0)" in events[0]
+    assert "ON CONFLICT(id) DO UPDATE" in events[0]
+    assert events[-2:] == ["commit", "close"]

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional
 
 import os
+from database.connection import connect_database, ensure_postgres_schema, insert_returning_id
+
 DB_PATH = Path(os.getenv("PIO_DB_PATH") or Path(__file__).with_name("pio_dashboard.db"))
 
 PAPER_COLUMNS = {
@@ -44,13 +45,16 @@ PAPER_COLUMNS = {
 
 
 def connect():
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    _init_schema(con)
+    con = connect_database(sqlite_path=DB_PATH)
+    if con.engine == "postgres":
+        ensure_postgres_schema(con)
+        con.commit()
+    else:
+        _init_schema(con)
     return con
 
 
-def _init_schema(con: sqlite3.Connection):
+def _init_schema(con):
     cols = ",\n        ".join(f"{name} {spec}" for name, spec in PAPER_COLUMNS.items())
     con.execute(f"CREATE TABLE IF NOT EXISTS papers (\n        {cols}\n    )")
 
@@ -191,6 +195,8 @@ def upsert_papers(papers: Iterable[dict]):
     if not papers:
         return
     payloads = [_paper_payload(p) for p in papers]
+    con = connect()
+    greatest = "GREATEST" if con.engine == "postgres" else "MAX"
     columns = [k for k in PAPER_COLUMNS.keys() if k not in {"created_at", "updated_at"}]
     col_sql = ",".join(columns)
     val_sql = ",".join(f":{c}" for c in columns)
@@ -210,19 +216,19 @@ def upsert_papers(papers: Iterable[dict]):
             "abstract=CASE WHEN length(excluded.abstract)>length(COALESCE(papers.abstract,'')) THEN excluded.abstract ELSE papers.abstract END",
             "topics=CASE WHEN excluded.topics<>'' THEN excluded.topics ELSE papers.topics END",
             "discovered_via=CASE WHEN excluded.discovered_via<>'' THEN excluded.discovered_via ELSE papers.discovered_via END",
-            "cited_by_count=MAX(COALESCE(papers.cited_by_count,0), excluded.cited_by_count)",
-            "relevance_score=MAX(COALESCE(papers.relevance_score,0), excluded.relevance_score)",
-            "practical_score=MAX(COALESCE(papers.practical_score,0), excluded.practical_score)",
-            "evidence_score=MAX(COALESCE(papers.evidence_score,0), excluded.evidence_score)",
-            "recency_score=MAX(COALESCE(papers.recency_score,0), excluded.recency_score)",
+            f"cited_by_count={greatest}(COALESCE(papers.cited_by_count,0), excluded.cited_by_count)",
+            f"relevance_score={greatest}(COALESCE(papers.relevance_score,0), excluded.relevance_score)",
+            f"practical_score={greatest}(COALESCE(papers.practical_score,0), excluded.practical_score)",
+            f"evidence_score={greatest}(COALESCE(papers.evidence_score,0), excluded.evidence_score)",
+            f"recency_score={greatest}(COALESCE(papers.recency_score,0), excluded.recency_score)",
             "summary=CASE WHEN excluded.summary<>'' THEN excluded.summary ELSE papers.summary END",
             "why_it_matters=CASE WHEN excluded.why_it_matters<>'' THEN excluded.why_it_matters ELSE papers.why_it_matters END",
             "applications=CASE WHEN excluded.applications<>'' THEN excluded.applications ELSE papers.applications END",
             "limitations=CASE WHEN excluded.limitations<>'' THEN excluded.limitations ELSE papers.limitations END",
             "evidence_level=CASE WHEN excluded.evidence_level<>'' THEN excluded.evidence_level ELSE papers.evidence_level END",
             "apa_citation=CASE WHEN excluded.apa_citation<>'' THEN excluded.apa_citation ELSE papers.apa_citation END",
-            "read_full=MAX(COALESCE(papers.read_full,0), excluded.read_full)",
-            "favorite=MAX(COALESCE(papers.favorite,0), excluded.favorite)",
+            f"read_full={greatest}(COALESCE(papers.read_full,0), excluded.read_full)",
+            f"favorite={greatest}(COALESCE(papers.favorite,0), excluded.favorite)",
             "updated_at=CURRENT_TIMESTAMP",
         ]
     )
@@ -231,7 +237,6 @@ def upsert_papers(papers: Iterable[dict]):
         ON CONFLICT(id) DO UPDATE SET
         {update_sql}
     """
-    con = connect()
     try:
         con.executemany(sql, payloads)
         con.commit()
@@ -363,8 +368,11 @@ def get_proposals():
 
 def create_survey(title: str, description: str, questions: list[str], scale_min: int = 1, scale_max: int = 5):
     con = connect()
-    cur = con.execute("INSERT INTO surveys(title,description) VALUES (?,?)", (title, description))
-    survey_id = cur.lastrowid
+    survey_id = insert_returning_id(
+        con,
+        "INSERT INTO surveys(title,description) VALUES (?,?)",
+        (title, description),
+    )
     con.executemany(
         "INSERT INTO survey_questions(survey_id,question_text,scale_min,scale_max) VALUES (?,?,?,?)",
         [(survey_id, q, scale_min, scale_max) for q in questions if q.strip()],
