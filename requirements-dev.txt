@@ -1,3 +1,4 @@
 -r requirements.txt
+# PostgreSQL support is inherited from requirements.txt; tests use fakes by default.
 pytest
 pytest-cov
