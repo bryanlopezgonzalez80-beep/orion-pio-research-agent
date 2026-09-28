@@ -39,9 +39,21 @@ TABLE_KEYS = {
     "orion_settings": ("key",),
 }
 MIGRATION_TABLES = tuple(TABLE_KEYS)
-SERIAL_TABLES = tuple(
-    table for table, keys in TABLE_KEYS.items() if keys == ("id",)
-)
+# These columns are BIGSERIAL in database/schema_postgres.sql. Do not infer
+# sequence ownership from a column name: papers.id is deliberately TEXT.
+SEQUENCE_COLUMNS = {
+    "clients": "id",
+    "projects": "id",
+    "proposals": "id",
+    "generated_assets": "id",
+    "radar_runs": "id",
+    "surveys": "id",
+    "survey_questions": "id",
+    "survey_responses": "id",
+    "orion_search_history": "id",
+    "orion_collections": "id",
+    "orion_alerts": "id",
+}
 
 
 @dataclass
@@ -141,6 +153,35 @@ def verify_counts(source: sqlite3.Connection, destination) -> dict[str, dict[str
     return results
 
 
+def synchronize_sequences(destination) -> list[tuple[str, str]]:
+    """Reset confirmed PostgreSQL sequences after preserving explicit IDs."""
+    synchronized: list[tuple[str, str]] = []
+    for table, column in SEQUENCE_COLUMNS.items():
+        metadata = destination.execute(
+            "SELECT pg_get_serial_sequence(?, ?) AS sequence_name",
+            (table, column),
+        ).fetchone()
+        sequence_name = first_value(metadata)
+        if not sequence_name:
+            continue
+
+        aggregate = destination.execute(
+            f"SELECT COALESCE(MAX({quote_identifier(column)}), 1) AS max_value, "
+            f"COUNT(*) > 0 AS has_rows FROM {quote_identifier(table)}"
+        ).fetchone()
+        if isinstance(aggregate, dict):
+            max_value = aggregate["max_value"]
+            has_rows = aggregate["has_rows"]
+        else:
+            max_value, has_rows = aggregate
+        destination.execute(
+            "SELECT setval(?::regclass, ?, ?)",
+            (sequence_name, int(max_value), bool(has_rows)),
+        )
+        synchronized.append((table, column))
+    return synchronized
+
+
 def migrate(source: sqlite3.Connection, destination) -> dict[str, TableResult]:
     results: dict[str, TableResult] = {}
     try:
@@ -165,13 +206,7 @@ def migrate(source: sqlite3.Connection, destination) -> dict[str, TableResult]:
                 else:
                     result.skipped += 1
 
-        for table in SERIAL_TABLES:
-            destination.execute(
-                "SELECT setval(pg_get_serial_sequence(?, 'id'), "
-                f"COALESCE((SELECT MAX(id) FROM {quote_identifier(table)}), 1), "
-                f"EXISTS(SELECT 1 FROM {quote_identifier(table)}))",
-                (table,),
-            )
+        synchronize_sequences(destination)
 
         verification = verify_counts(source, destination)
         invalid = {
