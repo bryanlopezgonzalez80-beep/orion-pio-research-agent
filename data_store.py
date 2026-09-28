@@ -267,6 +267,46 @@ def get_papers(limit: int = 500, favorites_only: bool = False):
     return [dict(r) for r in rows]
 
 
+def list_papers(
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    query: str | None = None,
+    source: str | None = None,
+    year: int | None = None,
+    favorites_only: bool = False,
+):
+    """Return a filtered page of papers using portable parameterized SQL."""
+    conditions = []
+    params: list[object] = []
+    if favorites_only:
+        conditions.append("favorite=1")
+    if query:
+        conditions.append(
+            "(LOWER(title) LIKE LOWER(?) OR LOWER(COALESCE(abstract,'')) LIKE LOWER(?))"
+        )
+        pattern = f"%{query.strip()}%"
+        params.extend((pattern, pattern))
+    if source:
+        conditions.append("LOWER(source)=LOWER(?)")
+        params.append(source.strip())
+    if year is not None:
+        conditions.append("year=?")
+        params.append(int(year))
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    params.extend((int(limit), int(offset)))
+    con = connect()
+    try:
+        rows = con.execute(
+            f"SELECT * FROM papers {where} "
+            "ORDER BY relevance_score DESC, published_date DESC LIMIT ? OFFSET ?",
+            params,
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        con.close()
+
+
 def get_paper(paper_id: str):
     con = connect()
     row = con.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
