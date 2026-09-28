@@ -165,28 +165,46 @@ def check_database(
         checked_at = now or datetime.now(timezone.utc)
         healthy = 0
         failing = 0
+        inactive = 0
         circuits_open = 0
         sources = []
+        latest_search_ts = _parse_timestamp(latest_search)
+        inactive_before = (
+            latest_search_ts - timedelta(hours=2)
+            if latest_search_ts is not None
+            else None
+        )
         for row in source_rows:
             item = dict(row)
             consecutive = int(item.get("consecutive_failures") or 0)
             circuit_until = _parse_timestamp(item.get("circuit_open_until"))
+            last_checked = _parse_timestamp(item.get("last_checked"))
             circuit_open = bool(circuit_until and circuit_until > checked_at)
-            is_failing = item.get("last_status") == "error" or consecutive > 0
-            healthy += int(not is_failing and not circuit_open)
+            is_inactive = bool(
+                inactive_before is not None
+                and last_checked is not None
+                and last_checked < inactive_before
+                and not circuit_open
+            )
+            is_failing = (
+                not is_inactive
+                and (item.get("last_status") == "error" or consecutive > 0)
+            )
+            healthy += int(not is_failing and not circuit_open and not is_inactive)
             failing += int(is_failing)
+            inactive += int(is_inactive)
             circuits_open += int(circuit_open)
             sources.append(
                 {
                     "source": str(item.get("source") or "unknown"),
-                    "status": str(item.get("last_status") or "unknown"),
+                    "status": (
+                        "inactive"
+                        if is_inactive
+                        else str(item.get("last_status") or "unknown")
+                    ),
                     "consecutive_failures": consecutive,
                     "circuit_open": circuit_open,
-                    "last_checked": (
-                        _parse_timestamp(item.get("last_checked")).isoformat()
-                        if _parse_timestamp(item.get("last_checked"))
-                        else None
-                    ),
+                    "last_checked": last_checked.isoformat() if last_checked else None,
                 }
             )
 
@@ -232,10 +250,11 @@ def check_database(
             ),
             "source_health": _result(
                 source_status,
-                f"{healthy} healthy, {failing} failing, {circuits_open} circuits open",
+                f"{healthy} healthy, {failing} failing, {inactive} inactive, {circuits_open} circuits open",
                 total=source_count,
                 healthy=healthy,
                 failing=failing,
+                inactive=inactive,
                 circuits_open=circuits_open,
                 sources=sources,
             ),
