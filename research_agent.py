@@ -145,6 +145,86 @@ QUERY_ALIASES = {
     "training transfer": ["training transfer", "transfer of training", "learning transfer", "transfer of learning"],
 }
 
+# Deterministic Spanish -> English expansion for common PIO / HR concepts.
+# Orion always keeps the original Spanish query and adds at most one English
+# variant so Spanish-language results remain discoverable while English-heavy
+# scholarly indexes return stronger coverage.
+SPANISH_ACADEMIC_PHRASES = (
+    ("psicología industrial organizacional", "industrial organizational psychology"),
+    ("psicologia industrial organizacional", "industrial organizational psychology"),
+    ("desarrollo organizacional", "organizational development"),
+    ("cambio organizacional", "organizational change"),
+    ("cultura organizacional", "organizational culture"),
+    ("clima organizacional", "organizational climate"),
+    ("clima laboral", "organizational climate"),
+    ("seguridad psicológica", "psychological safety"),
+    ("seguridad psicologica", "psychological safety"),
+    ("compromiso de los empleados", "employee engagement"),
+    ("compromiso laboral", "employee engagement"),
+    ("bienestar laboral", "workplace wellbeing"),
+    ("agotamiento laboral", "employee burnout"),
+    ("estrés laboral", "occupational stress"),
+    ("estres laboral", "occupational stress"),
+    ("satisfacción laboral", "job satisfaction"),
+    ("satisfaccion laboral", "job satisfaction"),
+    ("desempeño laboral", "job performance"),
+    ("desempeno laboral", "job performance"),
+    ("evaluación del desempeño", "performance management"),
+    ("evaluacion del desempeño", "performance management"),
+    ("evaluacion del desempeno", "performance management"),
+    ("gestión del talento", "talent management"),
+    ("gestion del talento", "talent management"),
+    ("manejo del talento", "talent management"),
+    ("selección de personal", "employee selection"),
+    ("seleccion de personal", "employee selection"),
+    ("retención de empleados", "employee retention"),
+    ("retencion de empleados", "employee retention"),
+    ("rotación de personal", "employee turnover"),
+    ("rotacion de personal", "employee turnover"),
+    ("transferencia de capacitación", "training transfer"),
+    ("transferencia de capacitacion", "training transfer"),
+    ("transferencia del aprendizaje", "learning transfer"),
+    ("trabajo híbrido", "hybrid work"),
+    ("trabajo hibrido", "hybrid work"),
+    ("trabajo remoto", "remote work"),
+    ("trabajo en equipo", "team effectiveness"),
+    ("efectividad de equipos", "team effectiveness"),
+    ("eficacia de equipos", "team effectiveness"),
+    ("justicia organizacional", "organizational justice"),
+    ("aprendizaje organizacional", "organizational learning"),
+    ("innovación organizacional", "organizational innovation"),
+    ("innovacion organizacional", "organizational innovation"),
+    ("motivación laboral", "work motivation"),
+    ("motivacion laboral", "work motivation"),
+    ("coaching ejecutivo", "executive coaching"),
+    ("planificación de sucesión", "succession planning"),
+    ("planificacion de sucesion", "succession planning"),
+    ("inteligencia artificial en recursos humanos", "artificial intelligence human resources workplace"),
+    ("recursos humanos", "human resources"),
+    ("liderazgo transformacional", "transformational leadership"),
+    ("liderazgo ético", "ethical leadership"),
+    ("liderazgo etico", "ethical leadership"),
+    ("liderazgo auténtico", "authentic leadership"),
+    ("liderazgo autentico", "authentic leadership"),
+    ("liderazgo", "leadership"),
+    ("capacitación", "training"),
+    ("capacitacion", "training"),
+    ("adiestramiento", "training"),
+    ("reclutamiento", "recruitment"),
+)
+
+SPANISH_QUERY_WORDS = {
+    "y": "and",
+    "empleado": "employee",
+    "empleados": "employees",
+    "equipo": "team",
+    "equipos": "teams",
+    "trabajo": "work",
+    "laboral": "workplace",
+    "organizacional": "organizational",
+    "organizaciones": "organizations",
+}
+
 
 def _normalized(value: str) -> str:
     value = (value or "").casefold()
@@ -152,30 +232,69 @@ def _normalized(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def academic_query_variants(query: str) -> list[str]:
+    """Return the original query plus at most one deterministic English expansion."""
+    original = re.sub(r"\s+", " ", (query or "").strip())
+    if not original:
+        return []
+
+    normalized = _normalized(original)
+    translated = normalized
+    changed = False
+    # Longest phrases first prevents a generic token from replacing part of a
+    # more specific PIO concept.
+    for spanish, english in sorted(
+        SPANISH_ACADEMIC_PHRASES, key=lambda item: len(item[0]), reverse=True
+    ):
+        pattern = rf"(?<!\w){re.escape(spanish)}(?!\w)"
+        translated_next, replacements = re.subn(pattern, english, translated)
+        if replacements:
+            translated = translated_next
+            changed = True
+
+    translated_tokens = []
+    for token in translated.split():
+        replacement = SPANISH_QUERY_WORDS.get(token, token)
+        translated_tokens.append(replacement)
+        if replacement != token:
+            changed = True
+    translated = " ".join(translated_tokens).strip()
+
+    variants = [original]
+    if changed and translated and _normalized(translated) != normalized:
+        variants.append(translated)
+    return variants[:2]
+
+
 def topic_relevance_percent(p: dict, query: str) -> float:
-    """Estimate topical match only. Quality, citations, OA and recency do not affect this score."""
-    query_n = _normalized(query)
-    terms = [
-        t for t in re.findall(r"[a-záéíóúñ0-9]+", query_n)
-        if len(t) >= 3 and t not in QUERY_STOPWORDS
-    ]
-    if not terms:
-        return 0.0
+    """Estimate topical match across the original query and bilingual expansion."""
+    variants = academic_query_variants(query) or [query]
+    normalized_variants = [_normalized(v) for v in variants if _normalized(v)]
 
     title = _normalized(p.get("title") or "")
     topics = _normalized(p.get("topics") or "")
     abstract = _normalized(p.get("abstract") or "")
     journal = _normalized(p.get("journal") or "")
 
-    aliases = QUERY_ALIASES.get(query_n, [query_n])
-    aliases = [_normalized(x) for x in aliases if x]
-
-    def field_score(text: str) -> float:
+    def variant_score(text: str, query_n: str) -> float:
         if not text:
             return 0.0
+        terms = [
+            t for t in re.findall(r"[a-záéíóúñ0-9]+", query_n)
+            if len(t) >= 3 and t not in QUERY_STOPWORDS
+        ]
+        if not terms:
+            return 0.0
+        aliases = [_normalized(x) for x in QUERY_ALIASES.get(query_n, [query_n]) if x]
         coverage = sum(1 for t in terms if t in text) / max(len(terms), 1)
         phrase = 1.0 if any(a and a in text for a in aliases) else 0.0
         return min(1.0, coverage * 0.75 + phrase * 0.45)
+
+    def field_score(text: str) -> float:
+        return max(
+            (variant_score(text, query_n) for query_n in normalized_variants),
+            default=0.0,
+        )
 
     score = (
         0.42 * field_score(title)
@@ -460,16 +579,23 @@ def deduplicate(papers: Iterable[dict]) -> list[dict]:
 
 def search_all_sources(query: str, days: int, per_source: int, sources: list[str]) -> tuple[list[dict], list[str]]:
     gathered, errors = [], []
+    variants = academic_query_variants(query) or [query]
     for source in sources:
         fn = SEARCHERS.get(source)
         if not fn:
             continue
-        try:
-            gathered.extend(fn(query, days=days, per_page=per_source))
-        except Exception as exc:
-            errors.append(f"{source}: {type(exc).__name__}: {exc}")
-        time.sleep(0.15)
-    return deduplicate(gathered), errors
+        for index, variant in enumerate(variants, 1):
+            try:
+                gathered.extend(fn(variant, days=days, per_page=per_source))
+            except Exception as exc:
+                suffix = f" (variant {index}/{len(variants)})" if len(variants) > 1 else ""
+                errors.append(f"{source}{suffix}: {type(exc).__name__}: {exc}")
+            time.sleep(0.15)
+    # Re-score against the user's original query so Spanish searches retain
+    # meaningful topical relevance even when a result came from the English expansion.
+    return deduplicate(
+        score_record(dict(p), query, days) for p in gathered
+    ), errors
 
 
 def get_client():
