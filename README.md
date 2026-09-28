@@ -40,7 +40,7 @@ Si configuraste claves opcionales, añádelas en **GitHub → Settings → Secre
 
 ## Persistencia
 
-El radar automático guarda `pio_dashboard.db` y los reportes en GitHub, por lo que sus actualizaciones sobreviven a reinicios del dashboard. Los cambios manuales hechos dentro de una instancia gratuita de Streamlit (por ejemplo favoritos, CRM o encuestas) pueden no persistir después de que la instancia se reinicie. Para persistencia total de esas funciones conviene migrar la base de datos a un servicio externo en una siguiente fase.
+Cuando `DATABASE_URL` está configurada, los radares automáticos persisten en PostgreSQL y publican sus reportes como artifacts de GitHub Actions; no hacen commits de `pio_dashboard.db`. Sin esa variable, SQLite permanece disponible para desarrollo local. Los cambios dentro de una instancia efímera no deben considerarse persistentes sin un backend PostgreSQL configurado.
 
 ## Orion v3
 
@@ -58,13 +58,13 @@ Orion no guarda contraseñas de servicios externos. Los logins abren los portale
 
 ## Roadmap Cloud
 
-Las Fases 1 y 2 están completadas y la Fase 3 está en curso. Las fases siguientes son planificación y no representan funcionalidades ya implementadas.
+Las Fases 1–3 están completadas. La Fase 4 añade el backend API; las fases posteriores continúan como planificación.
 
 1. **Fase 1 — Hardening del repositorio y automatización (completada)**
 2. **Fase 2 — Suite de pruebas y CI reforzado (completada)**
-3. **Fase 3 — PostgreSQL y migración reversible (actual)**
-4. **Fase 4 — Backend API (próxima)**
-5. Fase 5 — Identidad, autenticación y autorización
+3. **Fase 3 — PostgreSQL y migración reversible (completada)**
+4. **Fase 4 — Backend API (actual)**
+5. **Fase 5 — Identidad, autenticación y autorización (próxima)**
 6. Fase 6 — Almacenamiento de archivos y exportaciones
 7. Fase 7 — Ejecución administrada de agentes
 8. Fase 8 — Observabilidad y alertas
@@ -78,3 +78,7 @@ Fase 2 añade unit tests, pruebas de integración con servicios externos simulad
 ## Database engines
 
 SQLite continúa siendo el motor local y el fallback predeterminado. Si el entorno contiene un `DATABASE_URL` válido con esquema `postgresql://` o `postgres://`, Orion usa PostgreSQL mediante la misma capa de persistencia. Esta capacidad no significa que producción ya esté migrada o configurada. Consulta `docs/POSTGRES_SETUP.md` antes de habilitarla.
+
+## Orion API
+
+La Fase 4 expone una API FastAPI versionada sobre la misma persistencia y lógica de investigación. Se inicia con `uvicorn orion_api.main:app --host 0.0.0.0 --port 8000`. Consulta `docs/API.md` para endpoints, CORS, autenticación opcional, OpenAPI y contenedor.
