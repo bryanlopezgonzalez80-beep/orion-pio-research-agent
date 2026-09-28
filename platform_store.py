@@ -114,7 +114,10 @@ def record_source_success(source, *, path=None):
     with connect(path) as con:
         con.execute("""INSERT INTO orion_source_health(source,last_status,last_error,success_count,failure_count,consecutive_failures,circuit_open_until,last_checked)
           VALUES(?,'ok','',1,0,0,NULL,?) ON CONFLICT(source) DO UPDATE SET
-          last_status='ok',last_error='',success_count=success_count+1,consecutive_failures=0,circuit_open_until=NULL,last_checked=excluded.last_checked""",(source,_iso()))
+          last_status=excluded.last_status,last_error=excluded.last_error,
+          success_count=COALESCE(orion_source_health.success_count,0)+1,
+          consecutive_failures=excluded.consecutive_failures,
+          circuit_open_until=excluded.circuit_open_until,last_checked=excluded.last_checked""",(source,_iso()))
 
 def record_source_failure(source, error, *, path=None, threshold=3, cooldown_minutes=15):
     now=_utcnow()
@@ -124,7 +127,8 @@ def record_source_failure(source, error, *, path=None, threshold=3, cooldown_min
         until=_iso(now+timedelta(minutes=cooldown_minutes)) if n>=threshold else None
         con.execute("""INSERT INTO orion_source_health(source,last_status,last_error,success_count,failure_count,consecutive_failures,circuit_open_until,last_checked)
           VALUES(?,'error',?,0,1,?,?,?) ON CONFLICT(source) DO UPDATE SET
-          last_status='error',last_error=excluded.last_error,failure_count=failure_count+1,
+          last_status=excluded.last_status,last_error=excluded.last_error,
+          failure_count=COALESCE(orion_source_health.failure_count,0)+1,
           consecutive_failures=excluded.consecutive_failures,circuit_open_until=excluded.circuit_open_until,last_checked=excluded.last_checked""",
           (source,str(error)[:1000],n,until,_iso(now)))
 

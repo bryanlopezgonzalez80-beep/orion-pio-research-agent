@@ -33,10 +33,44 @@ def test_source_health_opens_and_resets_circuit(tmp_path, monkeypatch):
         platform_store.record_source_failure("Crossref", "x" * 1500, path=path, threshold=3)
     health = platform_store.get_source_health(path=path)[0]
     assert health["failure_count"] == 3
+    assert health["success_count"] == 0
+    assert health["consecutive_failures"] == 3
+    assert health["last_status"] == "error"
     assert len(health["last_error"]) == 1000
     assert not platform_store.source_available("Crossref", path=path)
     platform_store.record_source_success("Crossref", path=path)
     assert platform_store.source_available("Crossref", path=path)
+    recovered = platform_store.get_source_health(path=path)[0]
+    assert recovered["failure_count"] == 3
+    assert recovered["success_count"] == 1
+    assert recovered["consecutive_failures"] == 0
+    assert recovered["last_status"] == "ok"
+    assert recovered["last_error"] == ""
+
+
+def test_sqlite_source_health_preserves_existing_history(tmp_path):
+    path = tmp_path / "health.db"
+    platform_store.record_source_success("OpenAlex", path=path)
+    platform_store.record_source_success("OpenAlex", path=path)
+    platform_store.record_source_failure("OpenAlex", "temporary", path=path)
+
+    health = platform_store.get_source_health(path=path)[0]
+    assert health["success_count"] == 2
+    assert health["failure_count"] == 1
+    assert health["consecutive_failures"] == 1
+    assert health["last_status"] == "error"
+
+
+def test_sqlite_first_source_failure_creates_health_row(tmp_path):
+    path = tmp_path / "health.db"
+
+    platform_store.record_source_failure("Crossref", "first failure", path=path)
+
+    health = platform_store.get_source_health(path=path)[0]
+    assert health["source"] == "Crossref"
+    assert health["success_count"] == 0
+    assert health["failure_count"] == 1
+    assert health["consecutive_failures"] == 1
 
 
 def test_history_collections_and_stats(tmp_path):
@@ -95,3 +129,52 @@ def test_postgres_collection_insert_uses_conflict_clause(monkeypatch):
     monkeypatch.setattr(platform_store, "connect", fake_connect)
     platform_store.add_to_collection(3, "paper-1")
     assert "ON CONFLICT(collection_id,paper_id) DO NOTHING" in statements[0][0]
+
+
+def test_postgres_failure_upsert_qualifies_existing_counter(monkeypatch):
+    statements = []
+
+    class Cursor:
+        def fetchone(self):
+            return {"consecutive_failures": 0}
+
+    class Connection:
+        engine = "postgres"
+
+        def execute(self, sql, params):
+            statements.append((" ".join(sql.split()), params))
+            return Cursor()
+
+    @contextmanager
+    def fake_connect(path=None):
+        yield Connection()
+
+    monkeypatch.setattr(platform_store, "connect", fake_connect)
+    platform_store.record_source_failure("Crossref", "provider down")
+
+    upsert = statements[-1][0]
+    assert "failure_count=COALESCE(orion_source_health.failure_count,0)+1" in upsert
+    assert "failure_count=failure_count+1" not in upsert
+
+
+def test_postgres_success_upsert_qualifies_existing_counter(monkeypatch):
+    statements = []
+
+    class Connection:
+        engine = "postgres"
+
+        def execute(self, sql, params):
+            statements.append((" ".join(sql.split()), params))
+
+    @contextmanager
+    def fake_connect(path=None):
+        yield Connection()
+
+    monkeypatch.setattr(platform_store, "connect", fake_connect)
+    platform_store.record_source_success("OpenAlex")
+
+    upsert = statements[-1][0]
+    assert "success_count=COALESCE(orion_source_health.success_count,0)+1" in upsert
+    assert "success_count=success_count+1" not in upsert
+    assert "last_status=excluded.last_status" in upsert
+    assert "last_error=excluded.last_error" in upsert
