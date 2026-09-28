@@ -15,14 +15,14 @@ python -m pip install -r requirements-dev.txt
 The standard local and CI suite excludes optional network diagnostics:
 
 ```bash
-PYTHONPATH=. python -m pytest -m "not network" -q
+PYTHONPATH=. python -m pytest -m "not network and not postgres" -q
 ```
 
 Run coverage for the central modules with the same 90% regression floor used by CI:
 
 ```bash
-PYTHONPATH=. python -m pytest -m "not network" -q \
-  --cov=research_agent --cov=data_store --cov=platform_store \
+PYTHONPATH=. python -m pytest -m "not network and not postgres" -q \
+  --cov=database --cov=research_agent --cov=data_store --cov=platform_store \
   --cov=orion_platform --cov=export_utils \
   --cov-report=term-missing --cov-fail-under=90
 ```
@@ -35,8 +35,9 @@ The Phase 2 baseline is 94% total coverage. The principal intentional gaps are o
 - `integration`: SQLite or multi-module tests using temporary resources and mocks.
 - `smoke`: basic application startup/import checks.
 - `network`: optional manual diagnostics that contact real services; never part of standard CI.
+- `postgres`: optional integration tests that require a real PostgreSQL instance; never part of standard CI.
 
-Run a marker directly with `python -m pytest -m unit -q`. Run a network diagnostic only by explicit choice with `python -m pytest -m network`; these tests may be slow, rate-limited, or require service configuration.
+Run a marker directly with `python -m pytest -m unit -q`. Run `network` or `postgres` diagnostics only by explicit choice; these tests may be slow, rate-limited, or require service configuration.
 
 ## Adding tests
 
