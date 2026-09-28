@@ -67,13 +67,30 @@ PRACTICAL_TERMS = {
 }
 
 
-def _get(url: str, *, params=None, headers=None):
+def _retry_after_seconds(response, attempt: int) -> float:
+    """Return a bounded delay for HTTP 429 without exposing response content."""
+    raw = (getattr(response, "headers", None) or {}).get("Retry-After")
+    if raw:
+        try:
+            return min(10.0, max(0.0, float(raw)))
+        except (TypeError, ValueError):
+            pass
+    return min(8.0, 0.75 * (2 ** max(0, attempt)))
+
+
+def _get(url: str, *, params=None, headers=None, retries: int = 2, sleep_fn=time.sleep):
     h = {"User-Agent": USER_AGENT, "Accept": "application/json, text/xml, application/atom+xml;q=0.9, */*;q=0.8"}
     if headers:
         h.update(headers)
-    r = requests.get(url, params=params, headers=h, timeout=TIMEOUT)
-    r.raise_for_status()
-    return r
+    attempts = max(1, int(retries) + 1)
+    for attempt in range(attempts):
+        r = requests.get(url, params=params, headers=h, timeout=TIMEOUT)
+        if getattr(r, "status_code", None) == 429 and attempt + 1 < attempts:
+            sleep_fn(_retry_after_seconds(r, attempt))
+            continue
+        r.raise_for_status()
+        return r
+    raise RuntimeError("unreachable HTTP retry state")
 
 
 def clean_text(value) -> str:
