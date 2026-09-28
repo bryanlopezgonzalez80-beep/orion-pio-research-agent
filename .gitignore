@@ -12,3 +12,9 @@ coverage.xml
 htmlcov/
 .DS_Store
 .streamlit/secrets.toml
+
+# SQLite runtime/private files
+*.db-shm
+*.db-wal
+*.db-journal
+pio_private.db
