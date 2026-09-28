@@ -353,7 +353,9 @@ def search_openalex(query: str, days: int = 45, per_page: int = 15) -> list[dict
         "filter": f"from_publication_date:{start.isoformat()},to_publication_date:{date.today().isoformat()}",
         "per-page": min(per_page, 50),
         "sort": "publication_date:desc",
+        "api_key": os.getenv("OPENALEX_API_KEY", "") or None,
     }
+    params = {key: value for key, value in params.items() if value is not None}
     data = _get("https://api.openalex.org/works", params=params).json()
     out = []
     for w in data.get("results", []):
