@@ -24,13 +24,17 @@ OPENAI_API_KEY="..."
 OPENAI_MODEL="gpt-5.6-luna"
 SEMANTIC_SCHOLAR_API_KEY="..."
 CROSSREF_EMAIL="..."
+COURTLISTENER_API_TOKEN="..."
 ```
 
 No subas `.env` ni `secrets.toml` al repositorio.
 
 ## Radar automático
 
-El workflow `.github/workflows/weekly-radar.yml` corre los viernes a las 08:00 AST y también puede ejecutarse manualmente desde **Actions → Orion PIO Weekly Radar → Run workflow**.
+- **Daily Radar:** 07:00 AST todos los días mediante `.github/workflows/daily-radar.yml`.
+- **Weekly Radar:** 08:00 AST todos los viernes mediante `.github/workflows/weekly-radar.yml`.
+
+Ambos procesos se ejecutan en GitHub Actions, sin depender de una computadora local. También pueden iniciarse manualmente desde la pestaña **Actions** con **Run workflow**.
 
 Si configuraste claves opcionales, añádelas en **GitHub → Settings → Secrets and variables → Actions**.
 
@@ -51,3 +55,18 @@ La capa v3 añade:
 
 ### Principio de seguridad
 Orion no guarda contraseñas de servicios externos. Los logins abren los portales oficiales y las API keys se configuran únicamente mediante variables de entorno/Secrets.
+
+## Roadmap Cloud
+
+Solo la Fase 1 está en curso. Las fases siguientes son planificación y no representan funcionalidades ya implementadas.
+
+1. **Fase 1 — Hardening del repositorio y automatización (actual)**
+2. Fase 2 — Diseño de arquitectura cloud
+3. Fase 3 — Base de datos administrada
+4. Fase 4 — API de aplicación
+5. Fase 5 — Identidad, autenticación y autorización
+6. Fase 6 — Almacenamiento de archivos y exportaciones
+7. Fase 7 — Ejecución administrada de agentes
+8. Fase 8 — Observabilidad y alertas
+9. Fase 9 — Escalabilidad, rendimiento y costos
+10. Fase 10 — Preparación para producción y recuperación
