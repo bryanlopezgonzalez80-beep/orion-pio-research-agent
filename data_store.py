@@ -190,7 +190,7 @@ def upsert_papers(papers: Iterable[dict]):
     papers = list(papers)
     if not papers:
         return
-    con = connect()
+    payloads = [_paper_payload(p) for p in papers]
     columns = [k for k in PAPER_COLUMNS.keys() if k not in {"created_at", "updated_at"}]
     col_sql = ",".join(columns)
     val_sql = ",".join(f":{c}" for c in columns)
@@ -231,9 +231,15 @@ def upsert_papers(papers: Iterable[dict]):
         ON CONFLICT(id) DO UPDATE SET
         {update_sql}
     """
-    con.executemany(sql, [_paper_payload(p) for p in papers])
-    con.commit()
-    con.close()
+    con = connect()
+    try:
+        con.executemany(sql, payloads)
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
 
 
 def get_papers(limit: int = 500, favorites_only: bool = False):

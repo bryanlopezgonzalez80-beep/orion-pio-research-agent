@@ -1,4 +1,7 @@
+import pytest
 from streamlit.testing.v1 import AppTest
+
+pytestmark = pytest.mark.smoke
 
 def test_streamlit_app_loads_without_exceptions():
     at = AppTest.from_file("../app.py", default_timeout=30)

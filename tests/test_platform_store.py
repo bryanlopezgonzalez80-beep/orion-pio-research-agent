@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+import platform_store
+
+pytestmark = pytest.mark.integration
+
+
+def test_cache_key_is_normalized_and_cache_round_trip(tmp_path):
+    path = tmp_path / "cache.db"
+    assert platform_store.make_cache_key("OpenAlex", " Leadership ", 30, 5) == platform_store.make_cache_key("OpenAlex", "leadership", 30, 5)
+    platform_store.set_cache("OpenAlex", "Leadership", 30, 5, [{"id": "ñ"}], path=path)
+    assert platform_store.get_cache("OpenAlex", "leadership", 30, 5, path=path) == [{"id": "ñ"}]
+
+
+def test_expired_cache_is_ignored_and_purged(tmp_path):
+    path = tmp_path / "cache.db"
+    platform_store.set_cache("OpenAlex", "old", 30, 5, [], ttl_hours=-1, path=path)
+    assert platform_store.get_cache("OpenAlex", "old", 30, 5, path=path) is None
+    assert platform_store.purge_expired_cache(path=path) == 1
+
+
+def test_source_health_opens_and_resets_circuit(tmp_path, monkeypatch):
+    path = tmp_path / "health.db"
+    fixed = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(platform_store, "_utcnow", lambda: fixed)
+    assert platform_store.source_available("Crossref", path=path)
+    for _ in range(3):
+        platform_store.record_source_failure("Crossref", "x" * 1500, path=path, threshold=3)
+    health = platform_store.get_source_health(path=path)[0]
+    assert health["failure_count"] == 3
+    assert len(health["last_error"]) == 1000
+    assert not platform_store.source_available("Crossref", path=path)
+    platform_store.record_source_success("Crossref", path=path)
+    assert platform_store.source_available("Crossref", path=path)
+
+
+def test_history_collections_and_stats(tmp_path):
+    path = tmp_path / "platform.db"
+    platform_store.log_search("liderazgo ñ", "academic", ["OpenAlex"], 4, 3, 20, [], path=path)
+    history = platform_store.get_search_history(path=path)
+    assert history[0]["query"] == "liderazgo ñ"
+    cid = platform_store.create_collection(" Favoritos ", " Primera ", path=path)
+    assert platform_store.create_collection("Favoritos", "Actualizada", path=path) == cid
+    platform_store.add_to_collection(cid, "paper-1", path=path)
+    platform_store.add_to_collection(cid, "paper-1", path=path)
+    collection = platform_store.get_collections(path=path)[0]
+    assert collection["item_count"] == 1
+    assert collection["description"] == "Actualizada"
+    stats = platform_store.platform_stats(path=path)
+    assert stats["searches"] == stats["collections"] == 1
+
+
+def test_empty_collection_and_invalid_alert_are_rejected(tmp_path):
+    path = tmp_path / "platform.db"
+    with pytest.raises(ValueError, match="empty"):
+        platform_store.create_collection(" ", path=path)
+    with pytest.raises(ValueError, match="cadence"):
+        platform_store.create_alert("A", "query", cadence="hourly", path=path)
+
+
+def test_alert_lifecycle_and_due_calculation(tmp_path, monkeypatch):
+    path = tmp_path / "alerts.db"
+    now = datetime(2026, 2, 8, 12, tzinfo=timezone.utc)
+    monkeypatch.setattr(platform_store, "_utcnow", lambda: now)
+    daily = platform_store.create_alert("Daily", "leadership", "academic", ["OpenAlex"], "daily", path=path)
+    weekly = platform_store.create_alert("Weekly", "Ley 80", "legal_pr", cadence="weekly", path=path)
+    assert {a["id"] for a in platform_store.alerts_due(path=path)} == {daily, weekly}
+    platform_store.mark_alert_run(daily, path=path)
+    assert {a["id"] for a in platform_store.alerts_due(path=path)} == {weekly}
+    with platform_store.connect(path) as con:
+        con.execute("UPDATE orion_alerts SET last_run=? WHERE id=?", ((now - timedelta(days=8)).isoformat(), weekly))
+        con.execute("UPDATE orion_alerts SET last_run='invalid' WHERE id=?", (daily,))
+    assert {a["id"] for a in platform_store.alerts_due(path=path)} == {daily, weekly}
+    assert len(platform_store.get_alerts(enabled_only=True, path=path)) == 2
