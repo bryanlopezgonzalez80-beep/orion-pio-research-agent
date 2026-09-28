@@ -60,6 +60,35 @@ def test_openalex_parser_handles_complete_and_sparse_records(monkeypatch, fake_r
     assert papers[1]["authors"] == ""
 
 
+def test_openalex_optional_key_is_sent(monkeypatch, fake_response):
+    captured = {}
+    monkeypatch.setenv("OPENALEX_API_KEY", "openalex-test-key")
+
+    def fake_get(*args, **kwargs):
+        captured.update(kwargs)
+        return fake_response({"results": []})
+
+    monkeypatch.setattr(research_agent, "_get", fake_get)
+    assert research_agent.search_openalex("leadership") == []
+    assert captured["params"]["api_key"] == "openalex-test-key"
+
+
+def test_provider_rate_policies_and_pacing(monkeypatch):
+    monkeypatch.delenv("CROSSREF_EMAIL", raising=False)
+    assert research_agent.source_rate_policy("Crossref")["minimum_interval_seconds"] == 1.0
+    monkeypatch.setenv("CROSSREF_EMAIL", "researcher@example.test")
+    assert research_agent.source_rate_policy("Crossref")["minimum_interval_seconds"] == pytest.approx(1 / 3)
+    assert research_agent.source_rate_policy("Semantic Scholar")["minimum_interval_seconds"] == 1.0
+    assert research_agent.source_rate_policy("arXiv")["minimum_interval_seconds"] == 3.0
+
+    research_agent._SOURCE_NEXT_REQUEST_AT.clear()
+    sleeps = []
+    now = lambda: 100.0
+    assert research_agent.pace_source_request("arXiv", sleep_fn=sleeps.append, clock=now) == 0
+    assert research_agent.pace_source_request("arXiv", sleep_fn=sleeps.append, clock=now) == 3.0
+    assert sleeps == [3.0]
+
+
 def test_crossref_parser_handles_missing_fields(monkeypatch, fake_response):
     payload = {"message": {"items": [{
         "title": ["Cambio &amp; cultura"], "author": [{"given": "Zoë", "family": "Ruiz"}],
@@ -196,7 +225,7 @@ def test_search_all_sources_collects_errors_without_sleep(monkeypatch):
     papers, errors = research_agent.search_all_sources("q", 5, 2, ["Good", "Unknown", "Bad"])
     assert len(papers) == 1
     assert errors == ["Bad: Timeout: offline"]
-    assert sleeps == [0.15, 0.15]
+    assert sleeps == []
 
 
 def test_ai_helpers_without_secret_and_with_fake_client(monkeypatch, sample_paper):
