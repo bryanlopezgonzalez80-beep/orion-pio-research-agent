@@ -249,6 +249,48 @@ def test_source_failures_are_warning_without_exposing_last_error():
     assert "last_error" not in " ".join(sql for sql, _ in connection.statements)
 
 
+def test_stale_source_error_is_inactive_not_warning():
+    sources = [
+        {
+            "source": "Semantic Scholar",
+            "last_status": "error",
+            "success_count": 1,
+            "failure_count": 3,
+            "consecutive_failures": 3,
+            "circuit_open_until": None,
+            "last_checked": (NOW - timedelta(hours=10)).isoformat(),
+        },
+        {
+            "source": "OpenAlex",
+            "last_status": "ok",
+            "success_count": 4,
+            "failure_count": 1,
+            "consecutive_failures": 0,
+            "circuit_open_until": None,
+            "last_checked": (NOW - timedelta(minutes=30)).isoformat(),
+        },
+    ]
+    connection = FakeConnection(
+        latest_search=(NOW - timedelta(minutes=15)).isoformat(),
+        sources=sources,
+    )
+
+    checks = monitor.check_database(
+        environ={"DATABASE_URL": FAKE_DATABASE_URL},
+        connector=lambda config: connection,
+        table_lister=postgres_tables,
+        now=NOW,
+    )
+
+    source = checks["source_health"]
+    assert source["status"] == "OK"
+    assert source["metrics"]["healthy"] == 1
+    assert source["metrics"]["failing"] == 0
+    assert source["metrics"]["inactive"] == 1
+    semantic = next(item for item in source["metrics"]["sources"] if item["source"] == "Semantic Scholar")
+    assert semantic["status"] == "inactive"
+
+
 def test_open_circuit_is_critical():
     connection = FakeConnection(
         sources=[
