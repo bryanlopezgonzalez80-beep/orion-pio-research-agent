@@ -273,6 +273,62 @@ def test_research_service_uses_orion_and_persists_real_results(monkeypatch, samp
     assert persisted == [sample_paper]
 
 
+def test_research_service_falls_back_to_accumulated_radar_and_manual_links(
+    monkeypatch, sample_paper
+):
+    calls = []
+
+    def list_papers(**kwargs):
+        calls.append(kwargs.get("query"))
+        if kwargs.get("query") is None:
+            return [sample_paper]
+        return []
+
+    monkeypatch.setattr(paper_service, "list_papers", list_papers)
+    monkeypatch.setattr(
+        research_service,
+        "route_query",
+        lambda query: {
+            "domain": "academic",
+            "manual_sources": ["Google Scholar", "APA PsycNet"],
+        },
+    )
+    monkeypatch.setattr(
+        research_service,
+        "execute_academic_search",
+        lambda query, max_keep: {
+            "domain": "academic",
+            "sources": ["OpenAlex", "Crossref"],
+            "results": [],
+            "errors": ["rate limited"],
+            "duration_ms": 15,
+            "source_meta": [
+                {
+                    "source": "OpenAlex",
+                    "status": "error",
+                    "network_requests": 3,
+                    "cache_hits": 0,
+                    "retries": 2,
+                    "rate_limited": True,
+                }
+            ],
+        },
+    )
+
+    result = research_service.search("liderazgo emergente", 10)
+
+    assert result["origin"] == "radar_fallback"
+    assert result["results"] == [sample_paper]
+    assert result["metadata"]["fallback_used"] is True
+    assert result["metadata"]["fallback_reason"] == "no_direct_results"
+    assert result["metadata"]["source_meta"][0]["rate_limited"] is True
+    assert {link["name"] for link in result["metadata"]["manual_links"]} == {
+        "Google Scholar",
+        "APA PsycNet",
+    }
+    assert all(link["url"].startswith("https://") for link in result["metadata"]["manual_links"])
+
+
 def test_research_service_routes_legal_queries_to_real_manual_sources(monkeypatch):
     monkeypatch.setattr(paper_service, "list_papers", lambda **kwargs: [])
     monkeypatch.setattr(
@@ -370,6 +426,7 @@ def authenticated_api(monkeypatch, sample_paper):
     [
         ("get", "/api/v1/papers", None),
         ("get", "/api/v1/papers/doi:10.1234/orion", None),
+        ("get", "/api/v1/radar", None),
         ("get", "/api/v1/sources", None),
         ("post", "/api/v1/search", {"query": "leadership"}),
         ("get", "/api/v1/library", None),
