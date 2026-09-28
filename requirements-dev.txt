@@ -2,3 +2,4 @@
 # PostgreSQL support is inherited from requirements.txt; tests use fakes by default.
 pytest
 pytest-cov
+httpx>=0.27,<1

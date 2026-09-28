@@ -1,0 +1,32 @@
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query, status
+
+from ..schemas import PaperListResponse, PaperResponse
+from ..services import paper_service
+
+router = APIRouter(prefix="/papers", tags=["papers"])
+
+
+@router.get("", response_model=PaperListResponse)
+def papers(
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+    query: Annotated[str | None, Query(min_length=2, max_length=300)] = None,
+    source: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    year: Annotated[int | None, Query(ge=1800, le=2200)] = None,
+) -> PaperListResponse:
+    items = paper_service.list_papers(
+        limit=limit, offset=offset, query=query, source=source, year=year
+    )
+    return PaperListResponse(items=items, limit=limit, offset=offset, count=len(items))
+
+
+@router.get("/{paper_id:path}", response_model=PaperResponse)
+def paper_detail(paper_id: str) -> dict:
+    paper = paper_service.get_paper(paper_id)
+    if paper is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found"
+        )
+    return paper
