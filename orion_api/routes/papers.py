@@ -1,11 +1,16 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from ..dependencies import require_read_quota
 from ..schemas import PaperListResponse, PaperResponse
 from ..services import paper_service
 
-router = APIRouter(prefix="/papers", tags=["papers"])
+router = APIRouter(
+    prefix="/papers",
+    tags=["papers"],
+    dependencies=[Depends(require_read_quota)],
+)
 
 
 @router.get("", response_model=PaperListResponse)

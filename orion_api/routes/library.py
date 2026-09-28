@@ -1,14 +1,17 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from ..dependencies import require_read_quota, require_write_quota
 from ..schemas import LibraryUpdate, PaperListResponse, PaperResponse
 from ..services import paper_service
 
 router = APIRouter(prefix="/library", tags=["library"])
 
 
-@router.get("", response_model=PaperListResponse)
+@router.get(
+    "", response_model=PaperListResponse, dependencies=[Depends(require_read_quota)]
+)
 def library(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
@@ -19,7 +22,9 @@ def library(
     return PaperListResponse(items=items, limit=limit, offset=offset, count=len(items))
 
 
-@router.post("", response_model=PaperResponse)
+@router.post(
+    "", response_model=PaperResponse, dependencies=[Depends(require_write_quota)]
+)
 def update_library(
     request: LibraryUpdate,
 ) -> dict:
