@@ -151,3 +151,34 @@ def test_cloud_agent_workflows_pass_database_secret_without_exposing_it(workflow
     assert "OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}" in contents
     assert "SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}" in contents
     assert "DATABASE_URL=" not in contents
+
+
+@pytest.mark.parametrize(
+    ("workflow", "report_pattern", "artifact_prefix"),
+    [
+        (
+            Path(".github/workflows/daily-radar.yml"),
+            "reports/daily_*",
+            "orion-daily-radar-",
+        ),
+        (
+            Path(".github/workflows/weekly-radar.yml"),
+            "reports/weekly_*",
+            "orion-weekly-radar-",
+        ),
+    ],
+)
+def test_cloud_agent_workflows_publish_reports_without_pushing_database(
+    workflow, report_pattern, artifact_prefix
+):
+    contents = workflow.read_text(encoding="utf-8")
+
+    assert "contents: read" in contents
+    assert "actions/upload-artifact@v4" in contents
+    assert report_pattern in contents
+    assert artifact_prefix in contents
+    assert "if-no-files-found: error" in contents
+    assert "pio_dashboard.db" not in contents
+    assert "git push" not in contents
+    assert "git commit" not in contents
+    assert "git add" not in contents

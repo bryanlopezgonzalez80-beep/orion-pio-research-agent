@@ -7,7 +7,7 @@ on:
     - cron: "0 11 * * *"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: orion-daily-radar
@@ -33,14 +33,12 @@ jobs:
           CROSSREF_EMAIL: ${{ secrets.CROSSREF_EMAIL }}
           COURTLISTENER_API_TOKEN: ${{ secrets.COURTLISTENER_API_TOKEN }}
         run: python daily_agent.py
-      - name: Commit refreshed database and reports
-        run: |
-          git config user.name "orion-research-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add pio_dashboard.db reports/ || true
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "chore: Orion daily research refresh"
-            git push
-          fi
+      - name: Upload daily radar reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: orion-daily-radar-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            reports/daily_*.json
+            reports/daily_*.md
+          if-no-files-found: error
+          retention-days: 30

@@ -7,7 +7,7 @@ on:
     - cron: "0 12 * * 5"
 
 permissions:
-  contents: write
+  contents: read
 
 # Avoid overlapping refreshes while allowing an active run to finish safely.
 concurrency:
@@ -41,14 +41,10 @@ jobs:
           CROSSREF_EMAIL: ${{ secrets.CROSSREF_EMAIL }}
         run: python weekly_agent.py
 
-      - name: Commit refreshed research database and report
-        run: |
-          git config user.name "orion-pio-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add pio_dashboard.db reports/ || true
-          if git diff --cached --quiet; then
-            echo "No research changes to commit."
-          else
-            git commit -m "chore: weekly PIO radar refresh"
-            git push
-          fi
+      - name: Upload weekly radar report
+        uses: actions/upload-artifact@v4
+        with:
+          name: orion-weekly-radar-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/weekly_*.md
+          if-no-files-found: error
+          retention-days: 30
