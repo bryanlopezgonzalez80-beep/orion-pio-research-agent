@@ -160,7 +160,7 @@ with radar_tab:
     sources = st.multiselect("Fuentes automáticas", DEFAULT_SOURCES, default=DEFAULT_SOURCES)
     topics = st.multiselect("Temas", DEFAULT_TOPICS, default=[])
     custom = st.text_input("Tema o búsqueda adicional", placeholder="ej. leadership development transfer training")
-    st.caption("Selecciona uno o varios temas, o escribe una búsqueda libre. Los resultados de esta corrida se muestran separados de la biblioteca histórica.")
+    st.caption("Selecciona temas o escribe una búsqueda libre en español o inglés. Cada búsqueda añade resultados al Radar acumulado; las búsquedas nuevas no borran las anteriores.")
 
     if st.button("🚀 Ejecutar radar multifuente", type="primary", use_container_width=True):
         queries = list(topics)
@@ -179,9 +179,12 @@ with radar_tab:
                 all_errors.extend([f"{q} → {e}" for e in errors])
                 progress.progress(i / total_steps)
             unique = deduplicate(all_results)[:max_keep]
-            # Preserve only this run for the Radar view; the database remains the historical library.
-            st.session_state["current_search_results"] = unique
-            st.session_state["current_search_queries"] = queries
+            # Keep the Radar cumulative: new results are added instead of replacing
+            # what the user already discovered in this session.
+            previous = st.session_state.get("current_search_results", [])
+            st.session_state["current_search_results"] = deduplicate(previous + unique)
+            previous_queries = st.session_state.get("current_search_queries", [])
+            st.session_state["current_search_queries"] = list(dict.fromkeys(previous_queries + queries))
             st.session_state["current_search_timestamp"] = datetime.now().isoformat(timespec="seconds")
             upsert_papers(unique)
             log_radar_run(sources, queries, len(all_results), len(unique), all_errors)
@@ -200,11 +203,13 @@ with radar_tab:
             cols[i % 3].link_button(name, url, use_container_width=True)
 
     st.divider()
-    st.markdown("#### Resultados de esta búsqueda")
-    current = st.session_state.get("current_search_results", [])
+    st.markdown("#### Radar acumulado")
+    current = st.session_state.get("current_search_results")
+    if current is None:
+        current = get_papers(150)
     current_queries = st.session_state.get("current_search_queries", [])
     if current_queries:
-        st.caption("Consulta actual: " + " · ".join(current_queries))
+        st.caption("Consultas activadas en esta sesión: " + " · ".join(current_queries))
     min_topic = st.slider("Coincidencia temática mínima (%)", 0, 100, 60, 5, key="radar_topic_min")
     source_filter = st.multiselect("Filtrar por origen", DEFAULT_SOURCES, default=[])
     filtered = [
@@ -225,7 +230,7 @@ with radar_tab:
     if current and not filtered:
         st.info("La búsqueda sí recuperó registros, pero ninguno supera el umbral temático actual. Baja el umbral si quieres revisar coincidencias débiles.")
     elif not current:
-        st.info("Ejecuta una búsqueda para ver aquí únicamente los resultados de esa corrida.")
+        st.info("Ejecuta una búsqueda para añadir estudios al Radar acumulado.")
     else:
         st.caption(f"{len(filtered)} resultados superan el umbral de relevancia temática.")
         for i, p in enumerate(filtered[:30]):
