@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
+import orion_platform
 import platform_store
 from orion_platform import SOURCE_SPECS, all_topics, classify_query, execute_academic_search, recommended_academic_sources, route_query, source_search_url
+
+pytestmark = pytest.mark.integration
 
 def test_topic_catalog_is_broad():
     topics=all_topics()
@@ -94,3 +99,43 @@ def test_semantic_scholar_default_requires_key(monkeypatch):
     assert "Semantic Scholar" not in recommended_academic_sources("leadership effectiveness")
     monkeypatch.setenv("SEMANTIC_SCHOLAR_API_KEY", "test-key")
     assert "Semantic Scholar" in recommended_academic_sources("leadership effectiveness")
+
+
+def test_ambiguous_and_bilingual_routing_stays_conservative():
+    assert classify_query("organizational justice and employee voice") == "academic"
+    assert classify_query("clima laboral y desarrollo organizacional") == "academic"
+    assert classify_query("employment law and workplace policy") == "legal_general"
+    assert classify_query("Ley 100 discriminación") == "legal_pr"
+    assert classify_query("ADA federal court accommodation") == "legal_us"
+    assert classify_query("derecho internacional y tratado") == "legal_intl"
+    assert route_query("employment law")["automated_sources"] == []
+
+
+def test_unavailable_source_is_reported_without_calling_network(tmp_path, monkeypatch):
+    monkeypatch.setenv("ORION_DB_PATH", str(tmp_path / "test.db"))
+    out = execute_academic_search(
+        "leadership", sources=["Missing"], searchers={}, retries=0,
+        sleep_fn=lambda _: None, force_refresh=True,
+    )
+    assert out["results"] == []
+    assert out["source_meta"] == [{"source": "Missing", "status": "unavailable", "count": 0, "cached": False}]
+
+
+def test_open_circuit_skips_searcher(tmp_path, monkeypatch):
+    monkeypatch.setenv("ORION_DB_PATH", str(tmp_path / "test.db"))
+    called = []
+    monkeypatch.setattr(orion_platform, "source_available", lambda source: False)
+    out = execute_academic_search(
+        "leadership", sources=["OpenAlex"],
+        searchers={"OpenAlex": lambda *a, **k: called.append(True)},
+        retries=0, sleep_fn=lambda _: None, force_refresh=True,
+    )
+    assert called == []
+    assert out["source_meta"][0]["status"] == "circuit_open"
+
+
+def test_source_configuration_reports_only_configured_credentials(monkeypatch):
+    monkeypatch.setenv("CROSSREF_EMAIL", "test@example.test")
+    rows = {row["name"]: row for row in orion_platform.source_configuration()}
+    assert rows["Crossref"]["credential_configured"] is True
+    assert rows["Semantic Scholar"]["credential_configured"] is False

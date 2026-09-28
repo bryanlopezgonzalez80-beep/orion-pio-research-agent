@@ -58,15 +58,19 @@ Orion no guarda contraseñas de servicios externos. Los logins abren los portale
 
 ## Roadmap Cloud
 
-Solo la Fase 1 está en curso. Las fases siguientes son planificación y no representan funcionalidades ya implementadas.
+La Fase 1 está completada y la Fase 2 está en curso. Las fases siguientes son planificación y no representan funcionalidades ya implementadas.
 
-1. **Fase 1 — Hardening del repositorio y automatización (actual)**
-2. Fase 2 — Diseño de arquitectura cloud
-3. Fase 3 — Base de datos administrada
-4. Fase 4 — API de aplicación
-5. Fase 5 — Identidad, autenticación y autorización
-6. Fase 6 — Almacenamiento de archivos y exportaciones
-7. Fase 7 — Ejecución administrada de agentes
-8. Fase 8 — Observabilidad y alertas
-9. Fase 9 — Escalabilidad, rendimiento y costos
+1. **Fase 1 — Hardening del repositorio y automatización (completada)**
+2. **Fase 2 — Suite de pruebas y CI reforzado (actual)**
+3. **Fase 3 — Diseño de arquitectura cloud (próxima)**
+4. Fase 4 — Base de datos administrada
+5. Fase 5 — API de aplicación
+6. Fase 6 — Identidad, autenticación y autorización
+7. Fase 7 — Almacenamiento de archivos y exportaciones
+8. Fase 8 — Ejecución administrada de agentes
+9. Fase 9 — Observabilidad, escalabilidad y costos
 10. Fase 10 — Preparación para producción y recuperación
+
+### Calidad en Fase 2
+
+Fase 2 añade unit tests, pruebas de integración con servicios externos simulados, smoke tests de Streamlit, medición de coverage y un CI que bloquea regresiones de compilación, pruebas o cobertura. La suite normal es determinista y no necesita internet ni secretos. Consulta `docs/TESTING.md` para ejecutarla localmente.
