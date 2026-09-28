@@ -18,6 +18,7 @@ The application fails during startup unless all of these conditions hold:
 
 - `ORION_ENV=production`;
 - `ORION_API_KEY` exists and contains at least 32 characters;
+- `ORION_API_KEY_SECONDARY`, when present for rotation, contains at least 32 characters and differs from the primary;
 - `ORION_ALLOWED_ORIGINS` is explicitly configured;
 - every origin uses HTTPS;
 - no origin is `localhost`, a `.localhost` hostname, `127.0.0.1`, or `::1`;
@@ -27,7 +28,7 @@ Configuration errors describe the missing or invalid setting but never echo its 
 
 ## Authentication model
 
-Clients send the shared internal credential through `X-Orion-API-Key`. Orion compares it using `hmac.compare_digest`. The value must never appear in URLs, query parameters, application logs, screenshots, issue reports, examples, or OpenAPI content.
+Clients send the shared internal credential through `X-Orion-API-Key`. Orion compares it using `hmac.compare_digest`. `ORION_API_KEY` is the primary credential. An optional `ORION_API_KEY_SECONDARY` enables a temporary overlap during rotation; it must contain at least 32 characters and differ from the primary. The application never returns which credential matched. Credential values must never appear in URLs, query parameters, application logs, screenshots, issue reports, examples, OpenAPI content, fingerprints, or database records.
 
 Public endpoints:
 
@@ -49,18 +50,39 @@ The shared key is an integration credential, not user identity or fine-grained a
 
 ## Secret management and rotation
 
-Store `ORION_API_KEY`, `DATABASE_URL`, and provider credentials only in Render or GitHub Secrets. Never commit them to `.env`, configuration files, Docker images, artifacts, test fixtures, or documentation.
+Store `ORION_API_KEY`, `ORION_API_KEY_SECONDARY`, `DATABASE_URL`, and provider credentials only in Render or GitHub Secrets. Never commit them to `.env`, configuration files, Docker images, artifacts, test fixtures, or documentation.
 
-To rotate `ORION_API_KEY`:
+### Zero-downtime key rotation
 
-1. Generate a new high-entropy value of at least 32 characters in an approved secret manager.
-2. Coordinate the change window with every authorized client.
-3. Replace the value in Render without exposing it in logs or chat.
-4. Update the authorized client through its secret-management interface.
-5. Verify public health and an authenticated request.
-6. Revoke the previous value and review access logs for unexpected failures.
+Use placeholder names `OLD` and `NEW`; never place real values in source code, tickets, documentation, or chat.
 
-Phase 8A supports one active shared key, so rotation requires coordination rather than an overlap period.
+Initial state:
+
+- `ORION_API_KEY=OLD`
+- `ORION_API_KEY_SECONDARY` unset
+
+Rotation procedure:
+
+1. Generate `NEW` outside the codebase using an approved secret manager.
+2. In Render, keep `ORION_API_KEY=OLD`, set `ORION_API_KEY_SECONDARY=NEW`, and deploy. Both credentials are then accepted.
+3. Change the GPT Site secret from `OLD` to `NEW`. Validate authenticated Site and API operations.
+4. In Render, set `ORION_API_KEY=NEW`, remove `ORION_API_KEY_SECONDARY`, and deploy. `OLD` is then revoked.
+
+If validation fails during step 3, restore the GPT Site secret to `OLD`; the overlap configuration still accepts it. If the final deployment fails, restore the overlap configuration (`OLD` primary and `NEW` secondary), deploy, and investigate before attempting the cutover again. Never swap or remove the old credential until the Site has been validated with the new one.
+
+### API rate limits
+
+Authenticated traffic uses separate sliding-window quotas per credential slot and operation category:
+
+- search: `ORION_RATE_LIMIT_SEARCH_PER_MINUTE`, default 20;
+- library writes: `ORION_RATE_LIMIT_WRITE_PER_MINUTE`, default 60;
+- reads: `ORION_RATE_LIMIT_READ_PER_MINUTE`, default 120.
+
+Values must be positive integers no greater than 10,000. Authentication occurs before quota consumption, so missing or invalid credentials return `401` without creating state. Exceeded quotas return `429` with a `Retry-After` header and no credential, IP, or internal identifier.
+
+The limiter is thread-safe and stores at most six in-memory buckets: primary and secondary credentials across read, write, and search. It uses monotonic time and removes expired timestamps. Public health and documentation endpoints are not limited.
+
+This limiter is intentionally per process. If Orion later runs multiple API instances, Phase 9 must evaluate a distributed limiter so the quota is consistent across instances.
 
 ## CORS and response headers
 

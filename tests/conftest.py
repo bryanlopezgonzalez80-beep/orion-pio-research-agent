@@ -34,8 +34,12 @@ def isolated_environment(tmp_path, monkeypatch):
         "COURTLISTENER_API_TOKEN",
         "DATABASE_URL",
         "ORION_API_KEY",
+        "ORION_API_KEY_SECONDARY",
         "ORION_ALLOWED_ORIGINS",
         "ORION_ENV",
+        "ORION_RATE_LIMIT_SEARCH_PER_MINUTE",
+        "ORION_RATE_LIMIT_WRITE_PER_MINUTE",
+        "ORION_RATE_LIMIT_READ_PER_MINUTE",
     ):
         monkeypatch.delenv(name, raising=False)
 

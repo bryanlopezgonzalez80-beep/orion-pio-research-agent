@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, FastAPI, Request, status
+from collections.abc import Callable
+
+from fastapi import APIRouter, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -8,12 +10,16 @@ from database.config import DatabaseConfigurationError
 from database.connection import DatabaseConnectionError
 
 from .config import APISettings, get_settings, validate_settings
-from .dependencies import require_api_key
 from .errors import ExternalRateLimit, ExternalSearchError, ExternalSearchTimeout
+from .rate_limit import InMemoryRateLimiter, RateLimitCategory
 from .routes import health, library, papers, search, sources
 
 
-def create_app(settings: APISettings | None = None) -> FastAPI:
+def create_app(
+    settings: APISettings | None = None,
+    *,
+    rate_limit_clock: Callable[[], float] | None = None,
+) -> FastAPI:
     settings = validate_settings(settings) if settings is not None else get_settings()
     application = FastAPI(
         title="Orion PIO Intelligence API",
@@ -23,6 +29,17 @@ def create_app(settings: APISettings | None = None) -> FastAPI:
         openapi_url="/openapi.json",
     )
     application.state.settings = settings
+    rate_limits = {
+        RateLimitCategory.READ: settings.rate_limit_read_per_minute,
+        RateLimitCategory.WRITE: settings.rate_limit_write_per_minute,
+        RateLimitCategory.SEARCH: settings.rate_limit_search_per_minute,
+    }
+    limiter_options = (
+        {"clock": rate_limit_clock} if rate_limit_clock is not None else {}
+    )
+    application.state.rate_limiter = InMemoryRateLimiter(
+        rate_limits, **limiter_options
+    )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.allowed_origins),
@@ -83,7 +100,7 @@ def create_app(settings: APISettings | None = None) -> FastAPI:
     application.include_router(health.router)
     versioned = APIRouter()
     versioned.include_router(health.router)
-    protected = APIRouter(dependencies=[Depends(require_api_key)])
+    protected = APIRouter()
     protected.include_router(papers.router)
     protected.include_router(search.router)
     protected.include_router(sources.router)
