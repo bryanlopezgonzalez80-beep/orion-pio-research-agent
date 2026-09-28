@@ -5,7 +5,7 @@ import os
 from datetime import date
 from pathlib import Path
 
-from data_store import log_radar_run, save_ai_analysis, upsert_papers
+from data_store import log_radar_run, save_ai_analysis, upsert_papers, verify_database_backend
 from research_agent import DEFAULT_SOURCES, DEFAULT_TOPICS, analyze_paper, deduplicate, search_all_sources
 
 ROOT = Path(__file__).resolve().parent
@@ -14,6 +14,7 @@ REPORTS.mkdir(exist_ok=True)
 
 
 def main():
+    verify_database_backend()
     topics = DEFAULT_TOPICS[:10]
     sources = DEFAULT_SOURCES
     all_results, errors = [], []
