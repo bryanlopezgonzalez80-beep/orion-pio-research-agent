@@ -25,6 +25,7 @@ Interactive documentation is available at `/docs`; the OpenAPI document is `/ope
 | `ORION_ENV` | `development` by default; set explicitly to `production` only after production requirements are configured. |
 | `ORION_ALLOWED_ORIGINS` | Comma-separated browser origins. Development defaults locally; production requires explicit HTTPS, non-local origins. Wildcards are rejected. |
 | `ORION_API_KEY` | Optional only in development. Production requires at least 32 characters. Protected endpoints use `X-Orion-API-Key`; health, docs, and OpenAPI remain public. |
+| `ORION_API_KEY_SECONDARY` | Optional overlap credential for zero-downtime rotation. |
 
 The future GPT Site should be added as an explicit HTTPS origin in `ORION_ALLOWED_ORIGINS`. Phase 4 does not connect or deploy that Site.
 
@@ -38,8 +39,9 @@ The canonical application routes use `/api/v1`. `/health` is also exposed withou
 | GET | `/api/v1/health` | Versioned health endpoint. |
 | GET | `/api/v1/papers` | Paged papers with optional `query`, `source`, and `year` filters. |
 | GET | `/api/v1/papers/{paper_id}` | Paper detail; IDs are text and may contain DOI-style punctuation or slashes. |
+| GET | `/api/v1/radar` | Accumulated persisted research radar; new searches add results instead of replacing earlier findings. |
 | GET | `/api/v1/sources` | Public source catalog and sanitized known status. |
-| POST | `/api/v1/search` | Search local papers first, then real Orion research when appropriate. |
+| POST | `/api/v1/search` | Search local papers first, then real Orion research when appropriate. Academic queries may be entered in Spanish or English; supported Spanish PIO/RR. HH. concepts are expanded to an English scholarly variant and deduplicated. |
 | GET | `/api/v1/library` | Paged favorite papers. |
 | POST | `/api/v1/library` | Mark or unmark an existing paper as favorite. |
 
@@ -51,7 +53,7 @@ curl -X POST http://localhost:8000/api/v1/search \
   -d '{"query":"psychological safety", "limit":20}'
 ```
 
-If `ORION_API_KEY` is configured, add `-H 'X-Orion-API-Key: ...'` to data requests. This protects papers, sources, search, and both library operations. `/health`, `/api/v1/health`, `/docs`, and `/openapi.json` remain public. When the variable is absent, the dependency allows local development without a key. No real key belongs in source control, logs, examples, or OpenAPI.
+If `ORION_API_KEY` is configured, add `-H 'X-Orion-API-Key: ...'` to data requests. This protects papers, radar, sources, search, and both library operations. `/health`, `/api/v1/health`, `/docs`, and `/openapi.json` remain public. When the variable is absent, the dependency allows local development without a key. No real key belongs in source control, logs, examples, or OpenAPI.
 
 Production fails closed during startup if the API key or explicit CORS origins are missing or unsafe. See `docs/SECURITY.md` before setting `ORION_ENV=production` in Render.
 
