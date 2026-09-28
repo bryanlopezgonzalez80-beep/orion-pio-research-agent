@@ -115,6 +115,23 @@ def test_papers_reject_unsafe_pagination_and_filters(client, params):
     assert client.get("/api/v1/papers", params=params).status_code == 422
 
 
+def test_radar_is_accumulated_and_new_results_do_not_replace_old(client, sample_paper):
+    first = dict(sample_paper, id="radar:first", title="First radar result")
+    second = dict(sample_paper, id="radar:second", title="Second radar result")
+    data_store.upsert_papers([first])
+
+    before = client.get("/api/v1/radar", params={"limit": 100})
+    data_store.upsert_papers([second])
+    after = client.get("/api/v1/radar", params={"limit": 100})
+
+    assert before.status_code == 200
+    assert after.status_code == 200
+    before_ids = {paper["id"] for paper in before.json()["items"]}
+    after_ids = {paper["id"] for paper in after.json()["items"]}
+    assert "radar:first" in before_ids
+    assert {"radar:first", "radar:second"} <= after_ids
+
+
 def test_paper_detail_supports_text_id_with_slash(client, sample_paper):
     data_store.upsert_papers([sample_paper])
 
@@ -193,6 +210,36 @@ def test_research_service_prefers_existing_library(monkeypatch, sample_paper):
 
     assert result["origin"] == "library"
     assert result["results"] == [sample_paper]
+    assert external_called == []
+
+
+def test_research_service_reuses_english_library_match_for_spanish_query(
+    monkeypatch, sample_paper
+):
+    queries = []
+    external_called = []
+
+    def list_papers(**kwargs):
+        queries.append(kwargs.get("query"))
+        if kwargs.get("query") == "organizational development and leadership":
+            return [sample_paper]
+        return []
+
+    monkeypatch.setattr(paper_service, "list_papers", list_papers)
+    monkeypatch.setattr(
+        research_service,
+        "execute_academic_search",
+        lambda *args, **kwargs: external_called.append(True),
+    )
+
+    result = research_service.search("desarrollo organizacional y liderazgo", 10)
+
+    assert queries == [
+        "desarrollo organizacional y liderazgo",
+        "organizational development and leadership",
+    ]
+    assert result["origin"] == "library"
+    assert result["metadata"]["query_expanded"] is True
     assert external_called == []
 
 

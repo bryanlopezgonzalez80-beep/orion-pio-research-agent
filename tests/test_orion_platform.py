@@ -134,6 +134,40 @@ def test_alert_is_due(tmp_path,monkeypatch):
     assert any(a["id"]==aid for a in platform_store.alerts_due())
 
 
+def test_spanish_academic_search_expands_and_deduplicates(tmp_path, monkeypatch):
+    monkeypatch.setenv("ORION_DB_PATH", str(tmp_path / "test.db"))
+    calls = []
+
+    def bilingual_searcher(query, days, per_page):
+        calls.append(query)
+        return [
+            {
+                "id": "same-paper",
+                "title": "Organizational development and leadership",
+                "published_date": "2026-09-01",
+                "relevance_score": 1,
+            }
+        ]
+
+    out = execute_academic_search(
+        "desarrollo organizacional y liderazgo",
+        sources=["OpenAlex"],
+        searchers={"OpenAlex": bilingual_searcher},
+        retries=0,
+        sleep_fn=lambda _: None,
+        force_refresh=True,
+    )
+
+    assert calls == [
+        "desarrollo organizacional y liderazgo",
+        "organizational development and leadership",
+    ]
+    assert out["query_expanded"] is True
+    assert out["query_variants"] == calls
+    assert out["unique"] == 1
+    assert out["results"][0]["matched_query"] == "desarrollo organizacional y liderazgo"
+
+
 def test_semantic_scholar_default_requires_key(monkeypatch):
     monkeypatch.delenv("SEMANTIC_SCHOLAR_API_KEY", raising=False)
     assert "Semantic Scholar" not in recommended_academic_sources("leadership effectiveness")

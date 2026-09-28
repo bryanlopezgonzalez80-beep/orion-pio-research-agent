@@ -37,11 +37,13 @@ def render_platform():
 
     with search_tab:
         prefill=st.session_state.pop("orion_prefill","")
-        query=st.text_input("¿Qué quieres investigar?",value=prefill,placeholder="ej. psychological safety leadership")
+        query=st.text_input("¿Qué quieres investigar?",value=prefill,placeholder="ej. seguridad psicológica y liderazgo")
         domain_options={"Auto":"auto","Académico / PIO":"academic","Derecho PR":"legal_pr","Derecho federal / EE. UU.":"legal_us","Derecho internacional":"legal_intl"}
         domain_label=st.selectbox("Dominio",list(domain_options))
         plan=route_query(query or "industrial organizational psychology",domain_options[domain_label])
         st.caption(f"Router: **{plan['domain']}** · fuentes sugeridas: {', '.join(plan['automated_sources']+plan['manual_sources'])}")
+        if plan["domain"]=="academic":
+            st.caption("Puedes buscar en español o inglés. Para temas PIO/RR. HH. en español, Orion consulta también una expansión académica en inglés y deduplica los resultados.")
 
         if plan["domain"]=="academic":
             c1,c2,c3=st.columns(3)
@@ -68,6 +70,21 @@ def render_platform():
                 if out["results"]:
                     df=pd.DataFrame([_paper_row(p) for p in out["results"]])
                     st.dataframe(df,use_container_width=True,hide_index=True,column_config={"URL":st.column_config.LinkColumn("Fuente")})
+
+            st.divider()
+            st.markdown("#### 📡 Radar acumulado")
+            st.caption("El Radar conserva los estudios guardados por búsquedas anteriores; una búsqueda nueva se añade y no reemplaza lo que ya estaba visible.")
+            radar_papers=get_papers(200)
+            if radar_papers:
+                radar_df=pd.DataFrame([_paper_row(p) for p in radar_papers])
+                st.dataframe(
+                    radar_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={"URL":st.column_config.LinkColumn("Fuente")},
+                )
+            else:
+                st.info("El Radar se llenará con los estudios encontrados por tus búsquedas.")
         else:
             st.info("Para fuentes jurídicas sin API pública estable, Orion abre búsquedas dirigidas en portales oficiales/fiables en vez de simular resultados.")
             if query.strip():

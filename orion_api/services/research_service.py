@@ -4,19 +4,33 @@ from typing import Any
 
 import data_store
 from orion_platform import execute_academic_search, route_query
+from research_agent import academic_query_variants
 
 from . import paper_service
 
 
 def search(query: str, limit: int) -> dict[str, Any]:
-    existing = paper_service.list_papers(limit=limit, offset=0, query=query)
+    query_variants = academic_query_variants(query) or [query]
+    existing_by_id: dict[str, dict] = {}
+    for variant in query_variants:
+        for paper in paper_service.list_papers(limit=limit, offset=0, query=variant):
+            existing_by_id.setdefault(paper["id"], paper)
+            if len(existing_by_id) >= limit:
+                break
+        if len(existing_by_id) >= limit:
+            break
+    existing = list(existing_by_id.values())[:limit]
     if existing:
         return {
             "query": query,
             "origin": "library",
             "results": existing,
             "count": len(existing),
-            "metadata": {"external_search": False},
+            "metadata": {
+                "external_search": False,
+                "query_expanded": len(query_variants) > 1,
+                "query_variants": query_variants,
+            },
         }
 
     plan = route_query(query)
@@ -48,5 +62,7 @@ def search(query: str, limit: int) -> dict[str, Any]:
             "error_count": len(outcome["errors"]),
             "duration_ms": outcome["duration_ms"],
             "external_search": True,
+            "query_expanded": bool(outcome.get("query_expanded")),
+            "query_variants": outcome.get("query_variants", [query]),
         },
     }
