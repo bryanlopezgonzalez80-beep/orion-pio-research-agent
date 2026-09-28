@@ -30,6 +30,7 @@ def isolated_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("ORION_DB_PATH", str(platform_path))
     for name in (
         "OPENAI_API_KEY",
+        "OPENALEX_API_KEY",
         "SEMANTIC_SCHOLAR_API_KEY",
         "COURTLISTENER_API_TOKEN",
         "DATABASE_URL",
