@@ -66,8 +66,8 @@ Las Fases 1–5 están completadas. La Fase 7 incorpora monitoring y observabili
 4. **Fase 4 — Backend API (completada)**
 5. **Fase 5 — Autenticación de API para integración (completada)**
 6. Fase 6 — Almacenamiento de archivos y exportaciones
-7. **Fase 7 — Monitoring & Observability (actual)**
-8. Fase 8 — Alertas y respuesta operacional
+7. **Fase 7 — Monitoring & Observability (completada)**
+8. **Fase 8A — Production Security Hardening (actual)**
 9. Fase 9 — Escalabilidad, rendimiento y costos
 10. Fase 10 — Preparación para producción y recuperación
 
@@ -86,3 +86,7 @@ La Fase 4 expone una API FastAPI versionada sobre la misma persistencia y lógic
 ## Orion Monitoring
 
 La Fase 7 comprueba cada hora la API, PostgreSQL, persistencia, actividad de radares y salud de fuentes mediante GitHub Actions, sin depender de una computadora local. Consulta `docs/MONITORING.md` para métricas, severidades, límites y operación segura.
+
+## Seguridad de producción
+
+Antes de habilitar el modo de producción, configura `ORION_ENV`, una clave interna robusta y orígenes CORS HTTPS explícitos. Orion falla cerrado si esta configuración es incompleta. Consulta `docs/SECURITY.md` para autenticación, headers, rotación y respuesta a incidentes.

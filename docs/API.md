@@ -22,8 +22,9 @@ Interactive documentation is available at `/docs`; the OpenAPI document is `/ope
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Optional PostgreSQL connection. Never expose it to clients or logs. |
-| `ORION_ALLOWED_ORIGINS` | Comma-separated browser origins. Defaults to local development origins; wildcard origins are rejected. |
-| `ORION_API_KEY` | Optional shared internal key. When configured, every `/api/v1` data endpoint requires `X-Orion-API-Key`; health, docs, and OpenAPI remain public. |
+| `ORION_ENV` | `development` by default; set explicitly to `production` only after production requirements are configured. |
+| `ORION_ALLOWED_ORIGINS` | Comma-separated browser origins. Development defaults locally; production requires explicit HTTPS, non-local origins. Wildcards are rejected. |
+| `ORION_API_KEY` | Optional only in development. Production requires at least 32 characters. Protected endpoints use `X-Orion-API-Key`; health, docs, and OpenAPI remain public. |
 
 The future GPT Site should be added as an explicit HTTPS origin in `ORION_ALLOWED_ORIGINS`. Phase 4 does not connect or deploy that Site.
 
@@ -51,6 +52,8 @@ curl -X POST http://localhost:8000/api/v1/search \
 ```
 
 If `ORION_API_KEY` is configured, add `-H 'X-Orion-API-Key: ...'` to data requests. This protects papers, sources, search, and both library operations. `/health`, `/api/v1/health`, `/docs`, and `/openapi.json` remain public. When the variable is absent, the dependency allows local development without a key. No real key belongs in source control, logs, examples, or OpenAPI.
+
+Production fails closed during startup if the API key or explicit CORS origins are missing or unsafe. See `docs/SECURITY.md` before setting `ORION_ENV=production` in Render.
 
 ## Validation and errors
 
