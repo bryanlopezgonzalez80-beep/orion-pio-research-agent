@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -316,7 +319,7 @@ def test_collect_health_sets_warning_and_critical_overall():
 
 
 def test_main_writes_valid_json_and_returns_failure_for_critical(tmp_path, monkeypatch, capsys):
-    output = tmp_path / "health.json"
+    output = tmp_path / "artifacts" / "health.json"
     report = {
         "generated_at": NOW.isoformat(),
         "overall": "CRITICAL",
@@ -332,6 +335,7 @@ def test_main_writes_valid_json_and_returns_failure_for_critical(tmp_path, monke
     stdout = capsys.readouterr().out
 
     assert exit_code == 1
+    assert output.parent.is_dir()
     assert parsed == report
     assert "ORION SYSTEM HEALTH" in stdout
     assert "Overall............... CRITICAL" in stdout
@@ -346,6 +350,7 @@ def test_monitor_workflow_is_hourly_read_only_and_archives_json():
     assert "workflow_dispatch:" in workflow
     assert "contents: read" in workflow
     assert "DATABASE_URL: ${{ secrets.DATABASE_URL }}" in workflow
+    assert "run: PYTHONPATH=. python scripts/orion_health_check.py" in workflow
     assert "actions/upload-artifact@v4" in workflow
     assert "if: always()" in workflow
     assert "retention-days: 30" in workflow
@@ -354,3 +359,21 @@ def test_monitor_workflow_is_hourly_read_only_and_archives_json():
     assert "git push" not in workflow
     assert "git commit" not in workflow
     assert "git add" not in workflow
+
+
+def test_monitor_script_imports_from_repository_root_with_pythonpath():
+    env = dict(os.environ)
+    env["PYTHONPATH"] = "."
+
+    result = subprocess.run(
+        [sys.executable, "scripts/orion_health_check.py", "--help"],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "--output" in result.stdout
+    assert "ModuleNotFoundError" not in result.stderr

@@ -32,7 +32,7 @@ jobs:
       - name: Check Orion system health
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python scripts/orion_health_check.py --output artifacts/orion-health.json
+        run: PYTHONPATH=. python scripts/orion_health_check.py --output artifacts/orion-health.json
 
       - name: Upload health report
         if: always()
