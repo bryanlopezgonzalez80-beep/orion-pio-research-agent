@@ -21,7 +21,7 @@ Interactive documentation is available at `/docs`; the OpenAPI document is `/ope
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Optional PostgreSQL connection. Never expose it to clients or logs. |
+| `DATABASE_URL` | Optional PostgreSQL connection. Never expose it to clients or logs. |\n| `OPENALEX_API_KEY` | Optional OpenAlex key. Recommended for production discovery because it raises the daily usage budget and enables usage tracking. |
 | `ORION_ENV` | `development` by default; set explicitly to `production` only after production requirements are configured. |
 | `ORION_ALLOWED_ORIGINS` | Comma-separated browser origins. Development defaults locally; production requires explicit HTTPS, non-local origins. Wildcards are rejected. |
 | `ORION_API_KEY` | Optional only in development. Production requires at least 32 characters. Protected endpoints use `X-Orion-API-Key`; health, docs, and OpenAPI remain public. |
@@ -81,3 +81,12 @@ Supply configuration through the deployment platform's secret system. Do not bak
 ## Production next steps
 
 Phase 5 should replace or complement the optional shared key with identity, authorization, key rotation, per-client rate limiting, audit logging, observability, and deployment controls. A reverse proxy or managed API gateway should enforce request-size and traffic limits before production exposure.
+
+
+## Radar reliability and source telemetry
+
+Academic search responses include `metadata.source_meta` with per-source request count, cache hits, retries, rate-limit observations, pacing guidance, and result count. They also include directed links for Google Scholar, APA PsycNet, SIOP, and SSRN.
+
+If an academic live search returns no direct result but the persisted research library is non-empty, the API returns accumulated Radar items with `origin="radar_fallback"` and `metadata.fallback_used=true`. Clients must label these as accumulated Radar content rather than direct matches to the current query.
+
+See `docs/SOURCE_LIMITS.md` for current provider pacing guidance.
