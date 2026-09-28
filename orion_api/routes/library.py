@@ -1,8 +1,7 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
-from ..dependencies import require_api_key
 from ..schemas import LibraryUpdate, PaperListResponse, PaperResponse
 from ..services import paper_service
 
@@ -22,7 +21,7 @@ def library(
 
 @router.post("", response_model=PaperResponse)
 def update_library(
-    request: LibraryUpdate, _: None = Depends(require_api_key)
+    request: LibraryUpdate,
 ) -> dict:
     paper = paper_service.update_favorite(request.paper_id, request.favorite)
     if paper is None:
