@@ -91,12 +91,15 @@ def classify_query(query):
     return "academic"
 
 def recommended_academic_sources(query):
-    q=normalize_query(query); sources=["OpenAlex","Crossref"]
+    from research_agent import academic_query_variants
+
+    variants=academic_query_variants(query) or [query]
+    q=" ".join(normalize_query(v) for v in variants); sources=["OpenAlex","Crossref"]
     # Semantic Scholar is excellent, but unauthenticated requests have tight rate limits.
     # Promote it to the default route only when a key is configured; it remains user-selectable.
     if os.getenv("SEMANTIC_SCHOLAR_API_KEY"): sources.append("Semantic Scholar")
     if any(t in q for t in ("wellbeing","burnout","stress","health","mental","fatigue","sleep")): sources.append("Europe PMC")
-    if any(t in q for t in ("ai ","machine learning","algorithm","automation","computational","large language")): sources.append("arXiv")
+    if any(t in q for t in ("ai ","artificial intelligence","machine learning","algorithm","automation","computational","large language")): sources.append("arXiv")
     return list(dict.fromkeys(sources))
 
 def route_query(query, domain="auto"):
@@ -152,7 +155,10 @@ def _deduplicate(papers):
     return deduplicate(papers)
 
 def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_keep=150, retries=2, cache_ttl_hours=8, force_refresh=False, searchers=None, sleep_fn=time.sleep):
+    from research_agent import academic_query_variants, score_record
+
     started=time.perf_counter(); searchers=searchers or _default_searchers()
+    query_variants=academic_query_variants(query) or [query]
     selected=list(sources or recommended_academic_sources(query)); gathered=[]; errors=[]; source_meta=[]
     for source in selected:
         fn=searchers.get(source)
@@ -162,28 +168,69 @@ def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_k
         if not source_available(source):
             errors.append(f"{source}: temporarily paused after repeated failures")
             source_meta.append({"source":source,"status":"circuit_open","count":0,"cached":False}); continue
-        cached=None if force_refresh else get_cache(source,query,days,per_source)
-        if cached is not None:
-            gathered.extend(cached); source_meta.append({"source":source,"status":"ok","count":len(cached),"cached":True}); continue
-        result=None; last_error=None
-        for attempt in range(retries+1):
-            try:
-                result=fn(query,days=days,per_page=per_source); record_source_success(source); break
-            except Exception as exc:
-                last_error=exc
-                if attempt<retries:
-                    rate_limit_delay=_rate_limit_delay(exc,attempt)
-                    sleep_fn(rate_limit_delay if rate_limit_delay is not None else min(3.0,0.45*(2**attempt)+random.random()*0.2))
-        if result is None:
-            msg=f"{source}: {type(last_error).__name__}: {last_error}"
-            errors.append(msg); record_source_failure(source,msg)
-            source_meta.append({"source":source,"status":"error","count":0,"cached":False}); continue
-        set_cache(source,query,days,per_source,result,ttl_hours=cache_ttl_hours)
-        gathered.extend(result); source_meta.append({"source":source,"status":"ok","count":len(result),"cached":False})
-    unique=_deduplicate(gathered)[:int(max_keep)]
+
+        source_results=[]; cached_flags=[]; any_success=False
+        network_attempted=False; network_success=False; source_errors=[]
+        for variant_index, variant in enumerate(query_variants, 1):
+            cached=None if force_refresh else get_cache(source,variant,days,per_source)
+            if cached is not None:
+                source_results.extend(cached); cached_flags.append(True); any_success=True
+                continue
+
+            cached_flags.append(False); network_attempted=True
+            result=None; last_error=None
+            for attempt in range(retries+1):
+                try:
+                    result=fn(variant,days=days,per_page=per_source); network_success=True; break
+                except Exception as exc:
+                    last_error=exc
+                    if attempt<retries:
+                        rate_limit_delay=_rate_limit_delay(exc,attempt)
+                        sleep_fn(rate_limit_delay if rate_limit_delay is not None else min(3.0,0.45*(2**attempt)+random.random()*0.2))
+            if result is None:
+                suffix=f" (variant {variant_index}/{len(query_variants)})" if len(query_variants)>1 else ""
+                source_errors.append(f"{source}{suffix}: {type(last_error).__name__}: {last_error}")
+                continue
+
+            any_success=True
+            set_cache(source,variant,days,per_source,result,ttl_hours=cache_ttl_hours)
+            source_results.extend(result)
+
+        if network_success:
+            record_source_success(source)
+        elif network_attempted and source_errors:
+            record_source_failure(source,source_errors[-1])
+
+        errors.extend(source_errors); gathered.extend(source_results)
+        source_meta.append({
+            "source":source,
+            "status":"ok" if any_success else "error",
+            "count":len(source_results),
+            "cached":bool(cached_flags) and all(cached_flags),
+        })
+
+    # De-duplicate across Spanish + English variants, then score against the
+    # original user query using bilingual topical relevance.
+    unique=[
+        score_record(dict(p),query,days)
+        for p in _deduplicate(gathered)
+    ]
+    unique=_deduplicate(unique)[:int(max_keep)]
     duration_ms=int((time.perf_counter()-started)*1000)
     log_search(query,"academic",selected,len(gathered),len(unique),duration_ms,errors)
-    return {"query":query,"domain":"academic","sources":selected,"results":unique,"received":len(gathered),"unique":len(unique),"errors":errors,"source_meta":source_meta,"duration_ms":duration_ms}
+    return {
+        "query":query,
+        "query_variants":query_variants,
+        "query_expanded":len(query_variants)>1,
+        "domain":"academic",
+        "sources":selected,
+        "results":unique,
+        "received":len(gathered),
+        "unique":len(unique),
+        "errors":errors,
+        "source_meta":source_meta,
+        "duration_ms":duration_ms,
+    }
 
 def all_topics():
     return [topic for topics in TOPIC_GROUPS.values() for topic in topics]
