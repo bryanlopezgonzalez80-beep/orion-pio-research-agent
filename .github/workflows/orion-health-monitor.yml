@@ -1,0 +1,44 @@
+name: Orion System Health Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orion-system-health-monitor
+  cancel-in-progress: false
+
+jobs:
+  health-monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install monitor dependencies
+        run: pip install "requests>=2.32" "psycopg[binary]>=3.2"
+
+      - name: Check Orion system health
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/orion_health_check.py --output artifacts/orion-health.json
+
+      - name: Upload health report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orion-system-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/orion-health.json
+          if-no-files-found: error
+          retention-days: 30

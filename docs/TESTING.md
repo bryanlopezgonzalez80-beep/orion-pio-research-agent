@@ -24,6 +24,7 @@ Run coverage for the central modules with the same 90% regression floor used by 
 PYTHONPATH=. python -m pytest -m "not network and not postgres" -q \
   --cov=database --cov=research_agent --cov=data_store --cov=platform_store \
   --cov=orion_platform --cov=export_utils --cov=orion_api \
+  --cov=scripts.orion_health_check \
   --cov-report=term-missing --cov-fail-under=90
 ```
 
