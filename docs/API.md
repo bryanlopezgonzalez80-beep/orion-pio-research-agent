@@ -90,3 +90,27 @@ Academic search responses include `metadata.source_meta` with per-source request
 If an academic live search returns no direct result but the persisted research library is non-empty, the API returns accumulated Radar items with `origin="radar_fallback"` and `metadata.fallback_used=true`. Clients must label these as accumulated Radar content rather than direct matches to the current query.
 
 See `docs/SOURCE_LIMITS.md` for current provider pacing guidance.
+
+
+## Comprehensive PIO Radar
+
+### GET `/api/v1/radar/coverage`
+
+Protected read endpoint. Returns safe coverage metadata:
+
+- total catalog topics and domains;
+- persisted paper count;
+- latest comprehensive coverage-run status;
+- whether an in-process manual refresh is running.
+
+No provider credentials are returned.
+
+### POST `/api/v1/radar/refresh`
+
+Protected write endpoint. Queues one comprehensive PIO refresh as a background task and returns HTTP 202 immediately. A second request while the same API process is already refreshing returns HTTP 409.
+
+The refresh uses the same trusted academic indexes and provider pacing rules as scheduled discovery. It is intentionally broad but cannot guarantee literal coverage of every page on the public internet. Secondary/manual platforms such as Google Scholar, APA PsycNet, SIOP, and SSRN remain directed links rather than scraped sources.
+
+### Scheduled coverage
+
+The daily GitHub workflow runs the comprehensive coverage engine every day at 07:00 Puerto Rico time. The catalog intentionally overlaps terminology across core I-O psychology, leadership, OD/change, culture/climate, teams, staffing, performance, learning, wellbeing, DEI, technology, work arrangements, human factors, and Puerto Rico/Latin America. Results are deduplicated before persistence.
