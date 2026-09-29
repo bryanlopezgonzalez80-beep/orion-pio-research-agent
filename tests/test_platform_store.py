@@ -89,6 +89,22 @@ def test_history_collections_and_stats(tmp_path):
     assert stats["searches"] == stats["collections"] == 1
 
 
+def test_settings_round_trip_json_values(tmp_path):
+    path = tmp_path / "settings.db"
+    assert platform_store.get_setting("missing", {"default": True}, path=path) == {
+        "default": True
+    }
+    platform_store.set_setting(
+        "deep_harvest.cursor",
+        {"month": "2026-08-01", "count": 4},
+        path=path,
+    )
+    assert platform_store.get_setting("deep_harvest.cursor", path=path) == {
+        "month": "2026-08-01",
+        "count": 4,
+    }
+
+
 def test_empty_collection_and_invalid_alert_are_rejected(tmp_path):
     path = tmp_path / "platform.db"
     with pytest.raises(ValueError, match="empty"):
