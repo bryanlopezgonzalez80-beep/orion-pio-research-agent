@@ -23,3 +23,34 @@ After every academic search:
 5. Always show `metadata.manual_links` under "Fuentes complementarias" so the user can open Google Scholar, APA PsycNet, SIOP, and SSRN for the same query.
 6. Never show an empty Radar while persisted Radar articles exist.
 7. If both live search and persisted Radar are empty, show the manual links and an explicit source-status explanation instead of a blank state.
+
+
+## Comprehensive PIO coverage interface
+
+Add a compact control to the Radar/Explore area labeled:
+
+**Actualizar seguimiento diario**
+
+Behavior:
+1. On click, call `POST /api/v1/radar/refresh` through the existing server-side proxy and existing `ORION_API_KEY`.
+2. Treat HTTP 202 as queued successfully. Show: "Actualización integral iniciada. Orión está recorriendo el catálogo PIO y las fuentes automáticas."
+3. Treat HTTP 409 as already running. Show: "Ya hay una actualización integral en progreso."
+4. While queued/running, poll `GET /api/v1/radar/coverage` every 8-12 seconds. Do not poll more aggressively.
+5. Display:
+   - persisted papers;
+   - catalog topics;
+   - catalog domains;
+   - latest run status;
+   - topics completed / total;
+   - provider records seen;
+   - unique papers processed;
+   - source counts when present.
+6. When the latest run finishes, refresh `GET /api/v1/radar?limit=100` and keep the Radar cumulative.
+7. A manual refresh must never clear existing Radar cards while it runs.
+8. If the refresh fails, keep existing Radar content and show a recoverable warning.
+9. Do not expose stack traces, provider credentials, API keys, DATABASE_URL, or secrets.
+
+Copy note shown near the control:
+"Orión maximiza cobertura dentro de índices académicos confiables y sus límites de acceso. Ningún motor puede garantizar literalmente todo lo publicado en Internet. Las fuentes complementarias siguen disponibles para ampliar la búsqueda."
+
+Keep the complementary links (Google Scholar, APA PsycNet, SIOP, SSRN) visible for user queries. Do not scrape those platforms from the browser or server unless an official supported API is added later.
