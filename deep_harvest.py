@@ -10,6 +10,7 @@ import os
 import time
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
+from typing import Callable
 
 from data_store import upsert_papers
 from orion_platform import TOPIC_GROUPS, execute_academic_search, route_query, source_search_url
@@ -264,6 +265,7 @@ def run_live_sweep(
     days: int = 45,
     per_source: int = 25,
     max_runtime_seconds: int = 20 * 60,
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> dict:
     """Sweep the full PIO taxonomy and persist results incrementally."""
     queries = coverage_queries()
@@ -301,6 +303,30 @@ def run_live_sweep(
     unique_seen: dict[str, dict] = {}
     stopped_for_budget = False
 
+    def emit_progress(phase: str = "taxonomy") -> None:
+        if progress_callback is None:
+            return
+        payload = {
+            "phase": phase,
+            "queries_processed": processed,
+            "queries_total": len(queries),
+            "queries_remaining": max(0, len(queries) - processed),
+            "received": received,
+            "unique_seen": len(unique_seen),
+            "source_totals": {
+                name: dict(values) for name, values in source_totals.items()
+            },
+            "journal_watch_processed": 0,
+            "journal_watch_total": len(PIO_JOURNALS),
+        }
+        try:
+            progress_callback(payload)
+        except Exception:
+            # Progress reporting must never abort academic harvesting.
+            pass
+
+    emit_progress("taxonomy")
+
     for query in ordered_queries:
         if time.monotonic() - started >= taxonomy_budget_seconds:
             stopped_for_budget = True
@@ -320,6 +346,7 @@ def run_live_sweep(
         except Exception as exc:
             errors.append(f"{query}: {type(exc).__name__}: {exc}")
             processed += 1
+            emit_progress("taxonomy")
             continue
 
         processed += 1
@@ -335,6 +362,7 @@ def run_live_sweep(
                 paper_id = str(paper.get("id") or "")
                 if paper_id:
                     unique_seen[paper_id] = paper
+        emit_progress("taxonomy")
 
     journal_watch_received = 0
     journal_watch_unique = 0
@@ -372,6 +400,26 @@ def run_live_sweep(
                 )
             finally:
                 journal_watch_processed += 1
+                if progress_callback is not None:
+                    try:
+                        progress_callback(
+                            {
+                                "phase": "journals",
+                                "queries_processed": processed,
+                                "queries_total": len(queries),
+                                "queries_remaining": max(0, len(queries) - processed),
+                                "received": received + journal_watch_received,
+                                "unique_seen": len(unique_seen),
+                                "source_totals": {
+                                    name: dict(values)
+                                    for name, values in source_totals.items()
+                                },
+                                "journal_watch_processed": journal_watch_processed,
+                                "journal_watch_total": len(PIO_JOURNALS),
+                            }
+                        )
+                    except Exception:
+                        pass
         journal_unique = deduplicate(journal_batch)
         if journal_unique:
             upsert_papers(journal_unique)
@@ -534,8 +582,12 @@ def run_historical_backfill(
     return result
 
 
-def run_deep_harvest(*, include_backfill: bool = True) -> dict:
-    live = run_live_sweep()
+def run_deep_harvest(
+    *,
+    include_backfill: bool = True,
+    progress_callback: Callable[[dict], None] | None = None,
+) -> dict:
+    live = run_live_sweep(progress_callback=progress_callback)
     backfill = run_historical_backfill() if include_backfill else None
     result = {
         "completed_at": _utcnow().isoformat(timespec="seconds"),
