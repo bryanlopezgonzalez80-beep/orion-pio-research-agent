@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS papers (
   metadata_sources_count INTEGER DEFAULT 1,
   metadata_provenance TEXT DEFAULT '{}',
   evidence_flags TEXT DEFAULT '[]',
+  abstract_available INTEGER DEFAULT 0,
   apa_citation TEXT,
   geography_primary TEXT,
   geography_tags TEXT,
@@ -49,7 +50,14 @@ CREATE TABLE IF NOT EXISTS papers (
   access_status TEXT DEFAULT 'UNKNOWN',
   best_access_url TEXT,
   access_provider TEXT,
+  access_type TEXT,
   requires_login INTEGER DEFAULT 0,
+  institutional_access_possible INTEGER DEFAULT 0,
+  open_access INTEGER DEFAULT 0,
+  pdf_available INTEGER DEFAULT 0,
+  html_available INTEGER DEFAULT 0,
+  doi_url TEXT,
+  alternative_access_options TEXT DEFAULT '[]',
   fulltext_available INTEGER DEFAULT 0,
   read_full INTEGER DEFAULT 0 CHECK (read_full IN (0, 1)),
   favorite INTEGER DEFAULT 0 CHECK (favorite IN (0, 1)),
@@ -65,6 +73,7 @@ ALTER TABLE papers ADD COLUMN IF NOT EXISTS doi_verified INTEGER DEFAULT 0;
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS metadata_sources_count INTEGER DEFAULT 1;
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS metadata_provenance TEXT DEFAULT '{}';
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS evidence_flags TEXT DEFAULT '[]';
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS abstract_available INTEGER DEFAULT 0;
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS geography_primary TEXT;
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS geography_tags TEXT;
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS geography_confidence DOUBLE PRECISION DEFAULT 0;
@@ -80,7 +89,14 @@ ALTER TABLE papers ADD COLUMN IF NOT EXISTS geo_latam_caribbean INTEGER DEFAULT 
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS access_status TEXT DEFAULT 'UNKNOWN';
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS best_access_url TEXT;
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS access_provider TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS access_type TEXT;
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS requires_login INTEGER DEFAULT 0;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS institutional_access_possible INTEGER DEFAULT 0;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS open_access INTEGER DEFAULT 0;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS pdf_available INTEGER DEFAULT 0;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS html_available INTEGER DEFAULT 0;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS doi_url TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS alternative_access_options TEXT DEFAULT '[]';
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS fulltext_available INTEGER DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_papers_date ON papers(published_date);
 CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi);

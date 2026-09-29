@@ -194,10 +194,10 @@ def set_checkpoint(month, provider, task_type, task_key, status, *, records_rece
     with connect(path) as con:
         con.execute(
             """INSERT INTO orion_harvest_checkpoints(month,provider,task_type,task_key,status,attempts,records_received,last_error,updated_at)
-               VALUES(?,?,?,?,?,1,?,?,?) ON CONFLICT(month,provider,task_type,task_key) DO UPDATE SET
-               status=excluded.status,attempts=orion_harvest_checkpoints.attempts+1,
+               VALUES(?,?,?,?,?,CASE WHEN ?='RUNNING' THEN 1 ELSE 0 END,?,?,?) ON CONFLICT(month,provider,task_type,task_key) DO UPDATE SET
+               status=excluded.status,attempts=orion_harvest_checkpoints.attempts+CASE WHEN excluded.status='RUNNING' THEN 1 ELSE 0 END,
                records_received=excluded.records_received,last_error=excluded.last_error,updated_at=excluded.updated_at""",
-            (month, provider, task_type, task_key, status, int(records_received), str(error)[:500], _iso()),
+            (month, provider, task_type, task_key, status, status, int(records_received), str(error)[:500], _iso()),
         )
 
 
@@ -207,6 +207,38 @@ def checkpoint_summary(*, path=None):
             "SELECT month,status,COUNT(*) AS total FROM orion_harvest_checkpoints GROUP BY month,status ORDER BY month DESC,status"
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def enqueue_enrichment(paper_ids, *, path=None):
+    now = _iso()
+    rows = [
+        {"paper_id": str(paper_id), "created_at": now, "updated_at": now}
+        for paper_id in dict.fromkeys(paper_ids)
+        if str(paper_id or "").strip()
+    ]
+    if not rows:
+        return 0
+    with connect(path) as con:
+        con.executemany(
+            """INSERT INTO orion_enrichment_queue(paper_id,status,attempts,last_error,created_at,updated_at)
+               VALUES(:paper_id,'PENDING',0,'',:created_at,:updated_at)
+               ON CONFLICT(paper_id) DO NOTHING""",
+            rows,
+        )
+    return len(rows)
+
+
+def enrichment_summary(*, path=None):
+    with connect(path) as con:
+        rows = con.execute(
+            "SELECT status,COUNT(*) AS total FROM orion_enrichment_queue GROUP BY status ORDER BY status"
+        ).fetchall()
+    counts = {str(row["status"]): int(row["total"] or 0) for row in rows}
+    return {
+        "completed": counts.get("COMPLETED", 0),
+        "pending": sum(counts.get(status, 0) for status in ("PENDING", "RUNNING", "FAILED_RETRYABLE")),
+        "by_status": counts,
+    }
 
 def log_search(query, domain, sources:Iterable[str], found, unique_saved, duration_ms, errors, *, path=None):
     with connect(path) as con:
