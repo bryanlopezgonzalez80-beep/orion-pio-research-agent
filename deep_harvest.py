@@ -54,7 +54,17 @@ GEOGRAPHIC_QUERIES = [
     "organizational psychology Latin America",
     "psicología organizacional América Latina",
     "industrial organizational psychology United States",
+    "work psychology Europe",
+    "work psychology Asia Pacific",
+    "organizational psychology Africa",
+    "organizational behavior Middle East",
+    "work psychology Australia New Zealand",
     "workplace psychology international employees",
+    "psicología industrial organizacional",
+    "psicología del trabajo organizaciones",
+    "psicologia organizacional trabalho",
+    "psychologie du travail organisation",
+    "Arbeits und Organisationspsychologie",
 ]
 
 # Historical Crossref backfill uses fewer, broader anchors and cursor paging.
