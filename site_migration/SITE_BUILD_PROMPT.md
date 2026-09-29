@@ -20,7 +20,7 @@ After every academic search:
 2. Always refresh the accumulated Radar from `GET /api/v1/radar`; a new search must never clear previously persisted articles.
 3. If the search response has `origin=radar_fallback` or `metadata.fallback_used=true`, show those cards under a clear label such as "Radar acumulado — no son coincidencias directas de la consulta".
 4. Render `metadata.source_meta` as a compact source-usage table showing source, status, results, network requests, cache hits, retries, 429 status, and pacing interval.
-5. Always show `metadata.manual_links` under "Fuentes complementarias" so the user can open Google Scholar, APA PsycNet, SIOP, and SSRN for the same query.
+5. Always show every link returned in `metadata.manual_links` under "Fuentes complementarias". Current academic sources include Google Scholar, APA PsycNet, SIOP, SSRN, Academy of Management, and DOAJ; do not hard-code the UI to only four providers.
 6. Never show an empty Radar while persisted Radar articles exist.
 7. If both live search and persisted Radar are empty, show the manual links and an explicit source-status explanation instead of a blank state.
 
