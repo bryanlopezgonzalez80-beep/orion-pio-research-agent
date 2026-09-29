@@ -60,6 +60,19 @@ def test_comprehensive_refresh_persists_chunks_and_progress(monkeypatch, sample_
         }
 
     monkeypatch.setattr(coverage_engine, "execute_academic_search", fake_search)
+    monkeypatch.setattr(coverage_engine, "pace_source_request", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(
+        coverage_engine,
+        "search_crossref_range",
+        lambda query, start_date, end_date, per_page: [
+            dict(
+                sample_paper,
+                id=f"historical:{query}",
+                title=f"Historical study about {query}",
+                topic_relevance_percent=100,
+            )
+        ],
+    )
 
     result = coverage_engine.run_comprehensive_refresh(
         trigger="manual",
@@ -68,10 +81,11 @@ def test_comprehensive_refresh_persists_chunks_and_progress(monkeypatch, sample_
         per_source=5,
     )
 
-    assert created == [("manual", 3)]
+    assert created == [("manual", 6)]
     assert result["status"] == "success"
-    assert result["topics_completed"] == 3
-    assert result["unique_processed"] == 3
-    assert len(saved) == 3
+    assert result["topics_completed"] == 6
+    assert result["topics_total"] == 6
+    assert result["unique_processed"] == 6
+    assert len(saved) == 6
     assert updates[-1][1]["status"] == "success"
     assert updates[-1][1]["completed"] is True
