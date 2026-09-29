@@ -12,9 +12,9 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 
 from data_store import upsert_papers
-from orion_platform import TOPIC_GROUPS, execute_academic_search
+from orion_platform import TOPIC_GROUPS, execute_academic_search, route_query, source_search_url
 from platform_store import get_setting, set_setting
-from research_agent import deduplicate, search_crossref_window, source_search_links
+from research_agent import deduplicate, search_crossref_window
 
 STATE_PREFIX = "deep_harvest"
 BACKFILL_FLOOR_YEAR = int(os.getenv("ORION_BACKFILL_FLOOR_YEAR", "1950"))
@@ -210,9 +210,9 @@ def run_live_sweep(
         "stopped_for_runtime_budget": stopped_for_budget,
         "openalex_queries_this_run": len(openalex_queries),
         "source_totals": {name: dict(values) for name, values in source_totals.items()},
-        "secondary_sources": [
-            name for name, _ in source_search_links("industrial organizational psychology")
-        ],
+        "secondary_sources": list(
+            route_query("industrial organizational psychology", "academic")["manual_sources"]
+        ),
     }
     set_setting(f"{STATE_PREFIX}.last_live_sweep", result)
     return result
@@ -327,7 +327,12 @@ def harvest_status() -> dict:
         "openalex_key_configured": bool(os.getenv("OPENALEX_API_KEY")),
         "semantic_scholar_key_configured": bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY")),
         "secondary_sources": [
-            {"name": name, "url": url}
-            for name, url in source_search_links("industrial organizational psychology")
+            {
+                "name": name,
+                "url": source_search_url(name, "industrial organizational psychology"),
+            }
+            for name in route_query(
+                "industrial organizational psychology", "academic"
+            )["manual_sources"]
         ],
     }
