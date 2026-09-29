@@ -503,24 +503,44 @@ def search_crossref_range(
     start_date: date,
     end_date: date,
     per_page: int = 200,
+    max_pages: int = 1,
 ) -> list[dict]:
     if end_date < start_date:
         raise ValueError("end_date must be on or after start_date")
-    params = {
-        "query.bibliographic": query,
-        "filter": (
-            f"from-pub-date:{start_date.isoformat()},"
-            f"until-pub-date:{end_date.isoformat()}"
-        ),
-        "rows": min(per_page, 200),
-        "sort": "published",
-        "order": "desc",
-        "mailto": os.getenv("CROSSREF_EMAIL", "") or None,
-    }
-    params = {key: value for key, value in params.items() if value is not None}
-    data = _get("https://api.crossref.org/works", params=params).json().get("message", {})
-    days = max(1, (date.today() - start_date).days)
-    return _parse_crossref_items(data.get("items", []), query, days)
+    rows = min(max(1, int(per_page)), 1000)
+    pages = max(1, int(max_pages))
+    cursor = "*" if pages > 1 else None
+    out: list[dict] = []
+
+    for page_index in range(pages):
+        if page_index:
+            pace_source_request("Crossref")
+        params = {
+            "query.bibliographic": query,
+            "filter": (
+                f"from-pub-date:{start_date.isoformat()},"
+                f"until-pub-date:{end_date.isoformat()}"
+            ),
+            "rows": rows,
+            "sort": "published",
+            "order": "desc",
+            "cursor": cursor,
+            "mailto": os.getenv("CROSSREF_EMAIL", "") or None,
+        }
+        params = {key: value for key, value in params.items() if value is not None}
+        message = _get("https://api.crossref.org/works", params=params).json().get("message", {})
+        items = message.get("items", []) or []
+        days = max(1, (date.today() - start_date).days)
+        out.extend(_parse_crossref_items(items, query, days))
+
+        if len(items) < rows:
+            break
+        next_cursor = message.get("next-cursor")
+        if not next_cursor or pages == 1:
+            break
+        cursor = next_cursor
+
+    return out
 
 
 def search_crossref(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
