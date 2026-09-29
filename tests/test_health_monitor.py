@@ -291,6 +291,35 @@ def test_stale_source_error_is_inactive_not_warning():
     assert semantic["status"] == "inactive"
 
 
+def test_explicit_inactive_provider_is_not_counted_healthy():
+    sources = [
+        {
+            "source": "Semantic Scholar",
+            "last_status": "inactive",
+            "success_count": 0,
+            "failure_count": 3,
+            "consecutive_failures": 0,
+            "circuit_open_until": None,
+            "last_checked": NOW.isoformat(),
+        }
+    ]
+    connection = FakeConnection(sources=sources)
+
+    checks = monitor.check_database(
+        environ={"DATABASE_URL": FAKE_DATABASE_URL},
+        connector=lambda config: connection,
+        table_lister=postgres_tables,
+        now=NOW,
+    )
+
+    source = checks["source_health"]
+    assert source["status"] == "OK"
+    assert source["metrics"]["healthy"] == 0
+    assert source["metrics"]["failing"] == 0
+    assert source["metrics"]["inactive"] == 1
+    assert source["metrics"]["sources"][0]["status"] == "inactive"
+
+
 def test_targeted_search_does_not_make_daily_providers_inactive():
     sources = [
         {

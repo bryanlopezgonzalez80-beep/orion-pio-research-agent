@@ -179,10 +179,13 @@ def check_database(
             last_checked = _parse_timestamp(item.get("last_checked"))
             circuit_open = bool(circuit_until and circuit_until > checked_at)
             is_inactive = bool(
-                inactive_before is not None
-                and last_checked is not None
-                and last_checked < inactive_before
-                and not circuit_open
+                item.get("last_status") == "inactive"
+                or (
+                    inactive_before is not None
+                    and last_checked is not None
+                    and last_checked < inactive_before
+                    and not circuit_open
+                )
             )
             is_failing = (
                 not is_inactive
