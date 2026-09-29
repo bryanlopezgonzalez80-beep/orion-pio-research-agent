@@ -195,6 +195,31 @@ def mark_alert_run(alert_id, *, path=None):
     with connect(path) as con:
         con.execute("UPDATE orion_alerts SET last_run=? WHERE id=?",(_iso(),int(alert_id)))
 
+def get_setting(key, default=None, *, path=None):
+    with connect(path) as con:
+        row = con.execute(
+            "SELECT value_json FROM orion_settings WHERE key=?",
+            (str(key),),
+        ).fetchone()
+    if not row:
+        return default
+    try:
+        return json.loads(first_value(row))
+    except Exception:
+        return default
+
+
+def set_setting(key, value, *, path=None):
+    with connect(path) as con:
+        con.execute(
+            """INSERT INTO orion_settings(key,value_json,updated_at)
+               VALUES(?,?,?)
+               ON CONFLICT(key) DO UPDATE SET
+               value_json=excluded.value_json,updated_at=excluded.updated_at""",
+            (str(key), json.dumps(value, ensure_ascii=False), _iso()),
+        )
+
+
 def platform_stats(*, path=None):
     with connect(path) as con:
         return {

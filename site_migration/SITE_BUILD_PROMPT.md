@@ -20,6 +20,75 @@ After every academic search:
 2. Always refresh the accumulated Radar from `GET /api/v1/radar`; a new search must never clear previously persisted articles.
 3. If the search response has `origin=radar_fallback` or `metadata.fallback_used=true`, show those cards under a clear label such as "Radar acumulado — no son coincidencias directas de la consulta".
 4. Render `metadata.source_meta` as a compact source-usage table showing source, status, results, network requests, cache hits, retries, 429 status, and pacing interval.
-5. Always show `metadata.manual_links` under "Fuentes complementarias" so the user can open Google Scholar, APA PsycNet, SIOP, and SSRN for the same query.
+5. Always show every link returned in `metadata.manual_links` under "Fuentes complementarias". Current academic sources include Google Scholar, APA PsycNet, SIOP, SSRN, Academy of Management, and DOAJ; do not hard-code the UI to only four providers.
 6. Never show an empty Radar while persisted Radar articles exist.
 7. If both live search and persisted Radar are empty, show the manual links and an explicit source-status explanation instead of a blank state.
+
+
+## Deep Harvest / Seguimiento diario
+
+Add a visible **Seguimiento diario** block to Explore / Radar without removing existing functionality.
+
+### Status
+On load, call:
+- `GET /api/v1/radar/status`
+
+Show:
+- total PIO coverage queries;
+- last deep-harvest completion time;
+- live queries processed / total;
+- records received / unique seen;
+- historical backfill cursor and months processed;
+- per-source totals when available;
+- manual refresh state.
+
+Do not expose secrets or internal exception text.
+
+### Actualizar ahora
+Add a button:
+**Actualizar Radar ahora**
+
+On click:
+1. `POST /api/v1/radar/refresh`
+2. If response is `202`, immediately show queued/running state.
+3. Poll `GET /api/v1/radar/status` at a calm interval (for example 5–10 seconds; never a tight loop).
+4. While state is queued/running, disable the button and show progress using `queries_processed / queries_total`.
+5. When state becomes completed, stop polling and refresh `GET /api/v1/radar?limit=100`.
+6. If state becomes failed, keep the accumulated Radar visible and show a generic retry message.
+7. If the refresh response says `already_running`, attach to the existing status instead of starting another job.
+
+The manual button triggers the complete **live** PIO taxonomy sweep. Historical backfill remains part of the scheduled daily cloud job, not the interactive request.
+
+### Coverage language
+Never say Orion contains "every article on the internet." Use:
+**Cobertura multifuente de alta amplitud**
+and, where useful:
+**Orion recopila el máximo contenido disponible mediante fuentes automatizables y ofrece enlaces dirigidos para fuentes restringidas o sin API autorizada.**
+
+### Source categories
+Clearly distinguish:
+- scholarly metadata/index sources (Crossref, OpenAlex, Semantic Scholar);
+- biomedical indexes (PubMed/NCBI, Europe PMC);
+- preprint source (arXiv — label as preprint, not peer reviewed by default);
+- complementary/manual sources (Google Scholar, APA PsycNet, SIOP, SSRN, Academy of Management, DOAJ).
+
+Do not imply that every record from a trusted index has passed peer review.
+
+### Historical search
+If a normal `POST /api/v1/search` response has `metadata.historical_search=true`, show a subtle badge:
+**Búsqueda histórica ampliada**
+
+### Acceptance tests
+Before publish, verify:
+1. Radar still loads automatically.
+2. "Actualizar Radar ahora" returns quickly and enters queued/running state.
+3. Status polling stops at completed or failed.
+4. Articles discovered during the refresh remain after page reload.
+5. Repeated clicks cannot launch concurrent refreshes.
+6. The old accumulated Radar remains visible during refresh and on partial provider failure.
+7. PubMed appears in the source catalog.
+8. Restricted/manual sources remain links only and are not scraped.
+9. No key, provider credential, database URL, or protected header appears in client code.
+10. Mobile layout keeps status/progress readable.
+
+Do not publish this Site change until the backend PR containing `/api/v1/radar/status` and `/api/v1/radar/refresh` is merged and deployed.

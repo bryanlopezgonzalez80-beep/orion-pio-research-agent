@@ -9,6 +9,7 @@ from orion_api.config import APISettings, DEFAULT_ALLOWED_ORIGINS, get_settings
 from orion_api.errors import ExternalRateLimit, ExternalSearchError, ExternalSearchTimeout
 from orion_api.main import create_app
 from orion_api.routes import health as health_route
+from orion_api.routes import radar as radar_route
 from orion_api.services import paper_service, research_service
 
 pytestmark = pytest.mark.integration
@@ -130,6 +131,50 @@ def test_radar_is_accumulated_and_new_results_do_not_replace_old(client, sample_
     after_ids = {paper["id"] for paper in after.json()["items"]}
     assert "radar:first" in before_ids
     assert {"radar:first", "radar:second"} <= after_ids
+
+
+def test_radar_status_and_manual_refresh_are_nonblocking(client, monkeypatch):
+    state = {}
+    monkeypatch.setattr(
+        radar_route,
+        "harvest_status",
+        lambda: {"coverage_query_count": 99, "backfill_cursor": "2026-01-01"},
+    )
+    monkeypatch.setattr(
+        radar_route,
+        "get_setting",
+        lambda key, default=None: state.get(key, default),
+    )
+    monkeypatch.setattr(
+        radar_route,
+        "set_setting",
+        lambda key, value: state.__setitem__(key, value),
+    )
+    monkeypatch.setattr(
+        radar_route,
+        "run_deep_harvest",
+        lambda include_backfill=False: {
+            "live": {
+                "queries_processed": 99,
+                "queries_total": 99,
+                "received": 123,
+                "unique_seen": 88,
+                "errors": [],
+            }
+        },
+    )
+
+    status = client.get("/api/v1/radar/status")
+    refresh = client.post("/api/v1/radar/refresh")
+    after = client.get("/api/v1/radar/status")
+
+    assert status.status_code == 200
+    assert status.json()["coverage_query_count"] == 99
+    assert refresh.status_code == 202
+    assert refresh.json()["status"] == "queued"
+    # TestClient executes Starlette background tasks before returning.
+    assert after.json()["manual_refresh"]["state"] == "completed"
+    assert after.json()["manual_refresh"]["queries_processed"] == 99
 
 
 def test_paper_detail_supports_text_id_with_slash(client, sample_paper):
@@ -296,7 +341,7 @@ def test_research_service_falls_back_to_accumulated_radar_and_manual_links(
     monkeypatch.setattr(
         research_service,
         "execute_academic_search",
-        lambda query, max_keep: {
+        lambda query, max_keep=None, **kwargs: {
             "domain": "academic",
             "sources": ["OpenAlex", "Crossref"],
             "results": [],
@@ -321,6 +366,7 @@ def test_research_service_falls_back_to_accumulated_radar_and_manual_links(
     assert result["results"] == [sample_paper]
     assert result["metadata"]["fallback_used"] is True
     assert result["metadata"]["fallback_reason"] == "no_direct_results"
+    assert result["metadata"]["historical_search"] is True
     assert result["metadata"]["source_meta"][0]["rate_limited"] is True
     assert {link["name"] for link in result["metadata"]["manual_links"]} == {
         "Google Scholar",
@@ -427,6 +473,7 @@ def authenticated_api(monkeypatch, sample_paper):
         ("get", "/api/v1/papers", None),
         ("get", "/api/v1/papers/doi:10.1234/orion", None),
         ("get", "/api/v1/radar", None),
+        ("get", "/api/v1/radar/status", None),
         ("get", "/api/v1/sources", None),
         ("post", "/api/v1/search", {"query": "leadership"}),
         ("get", "/api/v1/library", None),

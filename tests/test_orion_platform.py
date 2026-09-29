@@ -172,6 +172,25 @@ def test_spanish_academic_search_expands_and_deduplicates(tmp_path, monkeypatch)
     assert out["source_meta"][0]["rate_limited"] is False
 
 
+def test_health_topics_route_to_pubmed_and_europe_pmc():
+    sources = recommended_academic_sources("employee burnout and occupational stress")
+    assert "PubMed" in sources
+    assert "Europe PMC" in sources
+
+
+def test_academic_route_exposes_trusted_complementary_sources():
+    plan = route_query("leadership effectiveness", "academic")
+    assert {"Google Scholar", "APA PsycNet", "SIOP", "SSRN"} <= set(
+        plan["manual_sources"]
+    )
+    assert {"Academy of Management", "DOAJ"} <= set(plan["manual_sources"])
+    for source in plan["manual_sources"]:
+        assert source_search_url(source, "leadership").startswith("https://")
+    assert source_search_url("DOAJ", "psychological safety").startswith(
+        "https://doaj.org/search?"
+    )
+
+
 def test_semantic_scholar_default_requires_key(monkeypatch):
     monkeypatch.delenv("SEMANTIC_SCHOLAR_API_KEY", raising=False)
     assert "Semantic Scholar" not in recommended_academic_sources("leadership effectiveness")

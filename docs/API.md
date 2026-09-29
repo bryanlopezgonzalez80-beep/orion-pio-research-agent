@@ -21,7 +21,13 @@ Interactive documentation is available at `/docs`; the OpenAPI document is `/ope
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Optional PostgreSQL connection. Never expose it to clients or logs. |\n| `OPENALEX_API_KEY` | Optional OpenAlex key. Recommended for production discovery because it raises the daily usage budget and enables usage tracking. |
+| `DATABASE_URL` | Optional PostgreSQL connection. Never expose it to clients or logs. |
+| `OPENALEX_API_KEY` | Optional OpenAlex key. Orion works without it and rotates OpenAlex queries when anonymous. |
+| `NCBI_EMAIL` | Optional contact identity for NCBI E-utilities; `CROSSREF_EMAIL` is used as a fallback. |
+| `NCBI_API_KEY` | Optional PubMed/NCBI key. Not required; raises the supported E-utilities request rate. |
+| `ORION_OPENALEX_QUERIES_PER_RUN` | Anonymous OpenAlex query budget per deep sweep; defaults to 12. |
+| `ORION_BACKFILL_MONTHS_PER_RUN` | Historical Crossref month windows processed per daily run; defaults to 4. |
+| `ORION_BACKFILL_FLOOR_YEAR` | Oldest year targeted by automatic historical backfill; defaults to 1950. |
 | `ORION_ENV` | `development` by default; set explicitly to `production` only after production requirements are configured. |
 | `ORION_ALLOWED_ORIGINS` | Comma-separated browser origins. Development defaults locally; production requires explicit HTTPS, non-local origins. Wildcards are rejected. |
 | `ORION_API_KEY` | Optional only in development. Production requires at least 32 characters. Protected endpoints use `X-Orion-API-Key`; health, docs, and OpenAPI remain public. |
@@ -40,6 +46,8 @@ The canonical application routes use `/api/v1`. `/health` is also exposed withou
 | GET | `/api/v1/papers` | Paged papers with optional `query`, `source`, and `year` filters. |
 | GET | `/api/v1/papers/{paper_id}` | Paper detail; IDs are text and may contain DOI-style punctuation or slashes. |
 | GET | `/api/v1/radar` | Accumulated persisted research radar; new searches add results instead of replacing earlier findings. |
+| GET | `/api/v1/radar/status` | Deep-harvest coverage, historical cursor, source configuration flags, secondary-source links, and last manual refresh state. |
+| POST | `/api/v1/radar/refresh` | Queue a non-blocking full live PIO taxonomy sweep. Returns `202`; clients poll `/radar/status` for completion. |
 | GET | `/api/v1/sources` | Public source catalog and sanitized known status. |
 | POST | `/api/v1/search` | Search local papers first, then real Orion research when appropriate. Academic queries may be entered in Spanish or English; supported Spanish PIO/RR. HH. concepts are expanded to an English scholarly variant and deduplicated. |
 | GET | `/api/v1/library` | Paged favorite papers. |
@@ -90,3 +98,19 @@ Academic search responses include `metadata.source_meta` with per-source request
 If an academic live search returns no direct result but the persisted research library is non-empty, the API returns accumulated Radar items with `origin="radar_fallback"` and `metadata.fallback_used=true`. Clients must label these as accumulated Radar content rather than direct matches to the current query.
 
 See `docs/SOURCE_LIMITS.md` for current provider pacing guidance.
+
+
+## Deep harvest API behavior
+
+The daily cloud job and manual refresh endpoint share the same high-recall engine.
+
+- The live sweep covers Orion's full PIO taxonomy plus umbrella and geographic queries. Crossref, PubMed, and Europe PMC are queried across the taxonomy. arXiv is added to technology/AI topics. Semantic Scholar is included when its key is configured.
+- OpenAlex is deliberately rotated when no OpenAlex key exists so anonymous provider budget is not exhausted. Orion does not require an OpenAlex key.
+- Daily automation also advances a resumable historical Crossref backfill in month-sized windows.
+- `POST /api/v1/radar/refresh` starts the live sweep only; it does not run historical backfill in the request-triggered job. The route returns quickly and the worker persists articles query-by-query.
+- `GET /api/v1/radar/status` is the polling/status surface. A client should show queued/running/completed/failed state and then refresh `GET /api/v1/radar` after completion.
+- The manual refresh worker is best-effort within the current single API process. The scheduled GitHub Actions daily harvest remains the durable source of continuity; distributed job locking/queues belong to the scalability phase.
+
+Search itself also widens to a historical provider pass when neither the local library nor the recent live search finds a match. This reduces the chance that a valid older PIO topic appears empty.
+
+The system aims for maximum practical and lawful coverage. It does not scrape licensed databases or services that do not expose an authorized API, and it never claims that every indexed record is peer reviewed merely because its metadata came from a trusted index.

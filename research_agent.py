@@ -55,6 +55,16 @@ def source_rate_policy(source: str) -> dict:
             "minimum_interval_seconds": 1.0,
             "guidance": "API-key users start at 1 request/second; unauthenticated access may be throttled.",
         }
+    if source == "PubMed":
+        keyed = bool(os.getenv("NCBI_API_KEY"))
+        return {
+            "minimum_interval_seconds": 0.1 if keyed else (1.0 / 3.0),
+            "guidance": (
+                "NCBI E-utilities: up to 10 requests/second with an API key."
+                if keyed
+                else "NCBI E-utilities: keep at or below 3 requests/second without an API key."
+            ),
+        }
     if source == "arXiv":
         return {
             "minimum_interval_seconds": 3.0,
@@ -94,7 +104,8 @@ def pace_source_request(
 SOURCE_LABELS = {
     "OpenAlex": "OpenAlex",
     "Crossref": "Crossref",
-    "Europe PMC": "Europe PMC / PubMed",
+    "Europe PMC": "Europe PMC",
+    "PubMed": "PubMed / NCBI",
     "Semantic Scholar": "Semantic Scholar",
     "arXiv": "arXiv",
 }
@@ -176,6 +187,13 @@ def parse_date(value) -> str:
         m = re.search(r"\d{4}-\d{2}-\d{2}", value)
         if m:
             return m.group(0)
+        cleaned = re.sub(r"\s+", " ", value.strip())
+        for fmt in ("%Y %b %d", "%Y %B %d", "%Y %b", "%Y %B"):
+            try:
+                parsed = datetime.strptime(cleaned, fmt)
+                return parsed.date().isoformat()
+            except ValueError:
+                pass
         m = re.search(r"\d{4}", value)
         if m:
             return f"{m.group(0)}-01-01"
@@ -495,6 +513,168 @@ def search_crossref(query: str, days: int = 45, per_page: int = 15) -> list[dict
     return out
 
 
+def search_crossref_window(
+    query: str,
+    start_date: date,
+    end_date: date,
+    *,
+    max_records: int = 500,
+    page_size: int = 200,
+) -> list[dict]:
+    """Retrieve a bounded historical Crossref window using cursor pagination."""
+    if end_date < start_date:
+        raise ValueError("end_date must be on or after start_date")
+    rows = max(1, min(int(page_size), 1000))
+    cap = max(1, int(max_records))
+    cursor = "*"
+    out: list[dict] = []
+    scoring_days = max(1, (date.today() - start_date).days + 1)
+
+    while len(out) < cap:
+        pace_source_request("Crossref")
+        params = {
+            "query.bibliographic": query,
+            "filter": (
+                f"from-pub-date:{start_date.isoformat()},"
+                f"until-pub-date:{end_date.isoformat()}"
+            ),
+            "rows": min(rows, cap - len(out)),
+            "cursor": cursor,
+            "mailto": os.getenv("CROSSREF_EMAIL", "") or None,
+        }
+        params = {k: v for k, v in params.items() if v is not None}
+        message = _get("https://api.crossref.org/works", params=params).json().get("message", {})
+        items = message.get("items") or []
+        for it in items:
+            authors = []
+            for a in it.get("author", [])[:8]:
+                name = " ".join(
+                    x for x in [a.get("given", ""), a.get("family", "")] if x
+                ).strip()
+                if name:
+                    authors.append(name)
+            title = clean_text((it.get("title") or [""])[0])
+            if not title:
+                continue
+            doi = normalize_doi(it.get("DOI") or "")
+            published = _crossref_date(it)
+            p = {
+                "id": stable_id("Crossref", doi, doi, title),
+                "title": title,
+                "authors": ", ".join(authors),
+                "year": int((published or "0")[:4] or 0),
+                "published_date": published,
+                "source": "Crossref",
+                "journal": clean_text((it.get("container-title") or [""])[0]),
+                "work_type": clean_text(it.get("type")),
+                "doi": doi,
+                "url": it.get("URL") or (f"https://doi.org/{doi}" if doi else ""),
+                "oa_url": "",
+                "pdf_url": "",
+                "abstract": clean_text(it.get("abstract")),
+                "topics": ", ".join(
+                    clean_text(s) for s in (it.get("subject") or [])[:6]
+                ),
+                "discovered_via": "Crossref historical backfill",
+                "cited_by_count": int(it.get("is-referenced-by-count") or 0),
+            }
+            out.append(score_record(p, query, scoring_days))
+            if len(out) >= cap:
+                break
+
+        next_cursor = message.get("next-cursor")
+        if not items or len(items) < params["rows"] or not next_cursor:
+            break
+        cursor = next_cursor
+
+    return deduplicate(out)[:cap]
+
+
+def search_crossref_journal_window(
+    journal: str,
+    start_date: date,
+    end_date: date,
+    *,
+    max_records: int = 250,
+    page_size: int = 200,
+) -> list[dict]:
+    """Retrieve all bounded Crossref records for an exact journal title window."""
+    if end_date < start_date:
+        raise ValueError("end_date must be on or after start_date")
+    rows = max(1, min(int(page_size), 1000))
+    cap = max(1, int(max_records))
+    cursor = "*"
+    out: list[dict] = []
+    scoring_days = max(1, (date.today() - start_date).days + 1)
+
+    while len(out) < cap:
+        pace_source_request("Crossref")
+        params = {
+            "filter": (
+                f"container-title:{journal},"
+                f"from-pub-date:{start_date.isoformat()},"
+                f"until-pub-date:{end_date.isoformat()}"
+            ),
+            "rows": min(rows, cap - len(out)),
+            "cursor": cursor,
+            "mailto": os.getenv("CROSSREF_EMAIL", "") or None,
+        }
+        params = {k: v for k, v in params.items() if v is not None}
+        message = _get("https://api.crossref.org/works", params=params).json().get(
+            "message", {}
+        )
+        items = message.get("items") or []
+        for it in items:
+            authors = []
+            for a in it.get("author", [])[:8]:
+                name = " ".join(
+                    x for x in [a.get("given", ""), a.get("family", "")] if x
+                ).strip()
+                if name:
+                    authors.append(name)
+            title = clean_text((it.get("title") or [""])[0])
+            if not title:
+                continue
+            container = clean_text((it.get("container-title") or [""])[0])
+            # Crossref documents container-title as an exact-value filter, but
+            # keep this defensive check so a provider anomaly cannot pollute
+            # the curated journal stream.
+            if container and container.casefold() != journal.casefold():
+                continue
+            doi = normalize_doi(it.get("DOI") or "")
+            published = _crossref_date(it)
+            p = {
+                "id": stable_id("Crossref", doi, doi, title),
+                "title": title,
+                "authors": ", ".join(authors),
+                "year": int((published or "0")[:4] or 0),
+                "published_date": published,
+                "source": "Crossref",
+                "journal": container or journal,
+                "work_type": clean_text(it.get("type")),
+                "doi": doi,
+                "url": it.get("URL") or (f"https://doi.org/{doi}" if doi else ""),
+                "oa_url": "",
+                "pdf_url": "",
+                "abstract": clean_text(it.get("abstract")),
+                "topics": ", ".join(
+                    clean_text(s) for s in (it.get("subject") or [])[:6]
+                ),
+                "discovered_via": "Crossref PIO journal watch",
+                "cited_by_count": int(it.get("is-referenced-by-count") or 0),
+            }
+            out.append(score_record(p, journal, scoring_days))
+            if len(out) >= cap:
+                break
+
+        next_cursor = message.get("next-cursor")
+        if not items or len(items) < params["rows"] or not next_cursor:
+            break
+        cursor = next_cursor
+
+    return deduplicate(out)[:cap]
+
+
 def search_europe_pmc(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
     start = date.today() - timedelta(days=days)
     q = f'({query}) AND FIRST_PDATE:[{start.isoformat()} TO {date.today().isoformat()}]'
@@ -504,21 +684,121 @@ def search_europe_pmc(query: str, days: int = 45, per_page: int = 15) -> list[di
     for it in ((data.get("resultList") or {}).get("result") or []):
         title = clean_text(it.get("title"))
         doi = normalize_doi(it.get("doi") or "")
-        pmid = it.get("pmid") or it.get("pmcid") or it.get("id") or ""
-        url = f"https://europepmc.org/article/{it.get('source','MED')}/{pmid}" if pmid else (f"https://doi.org/{doi}" if doi else "")
+        pmid_value = str(it.get("pmid") or "").strip()
+        pmcid_value = str(it.get("pmcid") or "").strip()
+        native_id = pmid_value or pmcid_value or str(it.get("id") or "").strip()
+        url = f"https://europepmc.org/article/{it.get('source','MED')}/{native_id}" if native_id else (f"https://doi.org/{doi}" if doi else "")
         published = parse_date(it.get("firstPublicationDate") or it.get("firstIndexDate") or it.get("journalInfo", {}).get("printPublicationDate"))
         year = int((published or str(it.get("pubYear") or 0))[:4] or 0)
         journal = clean_text(((it.get("journalInfo") or {}).get("journal") or {}).get("title") or it.get("journalTitle"))
         authors = clean_text(it.get("authorString"))
         abstract = clean_text(it.get("abstractText"))
         is_oa = str(it.get("isOpenAccess", "")).upper() == "Y"
-        pmcid = it.get("pmcid") or ""
+        pmcid = pmcid_value
         pdf = f"https://europepmc.org/articles/{pmcid}?pdf=render" if is_oa and pmcid else ""
+        shared_id = (
+            f"doi:{doi}" if doi else
+            f"pmid:{pmid_value}" if pmid_value else
+            f"pmcid:{pmcid_value.casefold()}" if pmcid_value else
+            stable_id("Europe PMC", native_id, "", title)
+        )
         p = {
-            "id": stable_id("Europe PMC", str(pmid), doi, title), "title": title, "authors": authors, "year": year,
+            "id": shared_id, "title": title, "authors": authors, "year": year,
             "published_date": published, "source": "Europe PMC", "journal": journal, "work_type": clean_text(it.get("pubType")),
             "doi": doi, "url": url, "oa_url": url if is_oa else "", "pdf_url": pdf, "abstract": abstract,
             "topics": "", "discovered_via": "Europe PMC / PubMed", "cited_by_count": int(it.get("citedByCount") or 0),
+        }
+        out.append(score_record(p, query, days))
+    return out
+
+
+def search_pubmed(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
+    """Search PubMed through NCBI E-utilities using only public metadata."""
+    start = date.today() - timedelta(days=days)
+    today = date.today()
+    term = (
+        f'({query}) AND ("{start.strftime("%Y/%m/%d")}"[Date - Publication] : '
+        f'"{today.strftime("%Y/%m/%d")}"[Date - Publication])'
+    )
+    common = {
+        "tool": "orion_pio_research",
+        "email": os.getenv("NCBI_EMAIL", "") or os.getenv("CROSSREF_EMAIL", "") or None,
+        "api_key": os.getenv("NCBI_API_KEY", "") or None,
+    }
+    common = {k: v for k, v in common.items() if v}
+    search_params = {
+        "db": "pubmed",
+        "term": term,
+        "retmode": "json",
+        "retmax": min(int(per_page), 50),
+        "sort": "pub date",
+        **common,
+    }
+    search_data = _get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+        params=search_params,
+    ).json()
+    ids = ((search_data.get("esearchresult") or {}).get("idlist") or [])
+    if not ids:
+        return []
+
+    # NCBI counts each E-utility call separately. Reserve the second request
+    # here because one logical PubMed search uses ESearch + ESummary.
+    pace_source_request("PubMed")
+    summary_params = {
+        "db": "pubmed",
+        "id": ",".join(ids),
+        "retmode": "json",
+        **common,
+    }
+    summary = _get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+        params=summary_params,
+    ).json().get("result") or {}
+
+    out = []
+    for pmid in summary.get("uids") or ids:
+        it = summary.get(str(pmid)) or {}
+        title = clean_text(it.get("title"))
+        if not title:
+            continue
+        article_ids = it.get("articleids") or []
+        doi = normalize_doi(
+            next(
+                (
+                    item.get("value")
+                    for item in article_ids
+                    if str(item.get("idtype", "")).casefold() == "doi"
+                ),
+                "",
+            )
+        )
+        authors = ", ".join(
+            clean_text(author.get("name"))
+            for author in (it.get("authors") or [])[:8]
+            if author.get("name")
+        )
+        published = parse_date(it.get("pubdate") or it.get("epubdate"))
+        year = int((published or "0")[:4] or 0)
+        url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+        shared_id = f"doi:{doi}" if doi else f"pmid:{pmid}"
+        p = {
+            "id": shared_id,
+            "title": title,
+            "authors": authors,
+            "year": year,
+            "published_date": published,
+            "source": "PubMed",
+            "journal": clean_text(it.get("fulljournalname") or it.get("source")),
+            "work_type": ", ".join(clean_text(x) for x in (it.get("pubtype") or [])[:6]),
+            "doi": doi,
+            "url": url,
+            "oa_url": "",
+            "pdf_url": "",
+            "abstract": "",
+            "topics": "",
+            "discovered_via": "PubMed / NCBI",
+            "cited_by_count": 0,
         }
         out.append(score_record(p, query, days))
     return out
@@ -601,6 +881,7 @@ SEARCHERS = {
     "OpenAlex": search_openalex,
     "Crossref": search_crossref,
     "Europe PMC": search_europe_pmc,
+    "PubMed": search_pubmed,
     "Semantic Scholar": search_semantic_scholar,
     "arXiv": search_arxiv,
 }

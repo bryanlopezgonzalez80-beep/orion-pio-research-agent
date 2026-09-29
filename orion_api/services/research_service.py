@@ -60,6 +60,23 @@ def search(query: str, limit: int) -> dict[str, Any]:
 
     outcome = execute_academic_search(query, max_keep=limit)
     results = outcome["results"][:limit]
+    historical_search = False
+
+    # If the recent window is empty, widen discovery to the historical
+    # literature before falling back to unrelated accumulated Radar items.
+    if not results:
+        historical_search = True
+        historical = execute_academic_search(
+            query,
+            days=46_000,
+            per_source=min(max(limit, 10), 30),
+            max_keep=limit,
+            cache_ttl_hours=24,
+        )
+        if historical.get("results"):
+            outcome = historical
+            results = historical["results"][:limit]
+
     if results:
         data_store.upsert_papers(results)
         return {
@@ -74,6 +91,7 @@ def search(query: str, limit: int) -> dict[str, Any]:
                 "error_count": len(outcome["errors"]),
                 "duration_ms": outcome["duration_ms"],
                 "external_search": True,
+                "historical_search": historical_search,
                 "query_expanded": bool(outcome.get("query_expanded")),
                 "query_variants": outcome.get("query_variants", [query]),
                 "manual_sources": manual_sources,
@@ -98,6 +116,7 @@ def search(query: str, limit: int) -> dict[str, Any]:
             "error_count": len(outcome["errors"]),
             "duration_ms": outcome["duration_ms"],
             "external_search": True,
+            "historical_search": historical_search,
             "query_expanded": bool(outcome.get("query_expanded")),
             "query_variants": outcome.get("query_variants", [query]),
             "manual_sources": manual_sources,
