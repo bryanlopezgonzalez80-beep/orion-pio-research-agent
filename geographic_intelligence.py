@@ -306,7 +306,11 @@ def enrich_paper(paper: dict, *, matched_query: str | None = None) -> dict:
     if matched_query:
         enriched["matched_query"] = matched_query
     enriched.update(classify_geography(enriched))
-    enriched["evidence_type"] = classify_evidence_type(enriched)
+    existing_type = str(enriched.get("evidence_type") or "").strip()
+    enriched["evidence_type"] = (
+        existing_type if existing_type and existing_type.casefold() != "unknown"
+        else classify_evidence_type(enriched)
+    )
     return enriched
 
 

@@ -9,7 +9,7 @@ from dataclasses import dataclass, asdict
 from typing import Callable, Iterable
 from urllib.parse import quote_plus
 
-from platform_store import get_cache, log_search, record_source_failure, record_source_success, set_cache, source_available
+from platform_store import get_cache, log_search, record_source_failure, record_source_metrics, record_source_success, set_cache, source_available
 
 PLATFORM_VERSION = "3.0.0"
 
@@ -183,6 +183,7 @@ def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_k
     query_variants=academic_query_variants(query) or [query]
     selected=list(sources or recommended_academic_sources(query)); gathered=[]; errors=[]; source_meta=[]
     for source in selected:
+        source_started=time.perf_counter()
         fn=searchers.get(source)
         policy=source_rate_policy(source)
         empty_meta={
@@ -250,6 +251,13 @@ def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_k
             "minimum_interval_seconds":policy["minimum_interval_seconds"],
             "rate_guidance":policy["guidance"],
         })
+        record_source_metrics(
+            source, requests=network_requests, successes=1 if any_success else 0,
+            failures=1 if source_errors else 0, rate_limits=1 if rate_limited else 0,
+            latency_ms=int((time.perf_counter()-source_started)*1000),
+            records_received=len(source_results), unique_records=len(_deduplicate(source_results)),
+            health_status=("RATE_LIMITED" if rate_limited else "HEALTHY" if any_success else "DEGRADED"),
+        )
 
     unique=[score_record(dict(p),query,days) for p in _deduplicate(gathered)]
     unique=_deduplicate(unique)[:int(max_keep)]

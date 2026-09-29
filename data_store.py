@@ -37,6 +37,14 @@ PAPER_COLUMNS = {
     "limitations": "TEXT",
     "evidence_level": "TEXT",
     "evidence_type": "TEXT",
+    "peer_review_status": "TEXT DEFAULT 'UNKNOWN'",
+    "publication_type": "TEXT",
+    "retraction_status": "TEXT DEFAULT 'UNKNOWN'",
+    "correction_status": "TEXT DEFAULT 'UNKNOWN'",
+    "doi_verified": "INTEGER DEFAULT 0",
+    "metadata_sources_count": "INTEGER DEFAULT 1",
+    "metadata_provenance": "TEXT DEFAULT '{}'",
+    "evidence_flags": "TEXT DEFAULT '[]'",
     "apa_citation": "TEXT",
     "geography_primary": "TEXT",
     "geography_tags": "TEXT",
@@ -50,6 +58,11 @@ PAPER_COLUMNS = {
     "geo_pr": "INTEGER DEFAULT 0",
     "geo_us": "INTEGER DEFAULT 0",
     "geo_latam_caribbean": "INTEGER DEFAULT 0",
+    "access_status": "TEXT DEFAULT 'UNKNOWN'",
+    "best_access_url": "TEXT",
+    "access_provider": "TEXT",
+    "requires_login": "INTEGER DEFAULT 0",
+    "fulltext_available": "INTEGER DEFAULT 0",
     "read_full": "INTEGER DEFAULT 0",
     "favorite": "INTEGER DEFAULT 0",
     "created_at": "TEXT DEFAULT CURRENT_TIMESTAMP",
@@ -91,6 +104,18 @@ def _init_schema(con):
             if "CURRENT_TIMESTAMP" in add_spec:
                 add_spec = "TEXT"
             con.execute(f"ALTER TABLE papers ADD COLUMN {name} {add_spec}")
+
+    con.execute(
+        """CREATE TABLE IF NOT EXISTS paper_external_ids (
+            paper_id TEXT NOT NULL,
+            id_type TEXT NOT NULL,
+            external_id TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(id_type, external_id),
+            FOREIGN KEY(paper_id) REFERENCES papers(id) ON DELETE CASCADE
+        )"""
+    )
 
     con.execute(
         """
@@ -201,19 +226,18 @@ def _init_schema(con):
 
 
 def _paper_payload(p: dict) -> dict:
-    from geographic_intelligence import enrich_paper
+    from evidence_pipeline import enrich_record
 
-    p = enrich_paper(p)
+    p = enrich_record(p)
     payload = {k: p.get(k) for k in PAPER_COLUMNS.keys() if k not in {"created_at", "updated_at"}}
     payload["title"] = payload.get("title") or "Sin título"
-    for key in ("source", "journal", "work_type", "doi", "url", "oa_url", "pdf_url", "abstract", "topics", "discovered_via", "summary", "why_it_matters", "applications", "limitations", "evidence_level", "evidence_type", "apa_citation", "authors", "published_date", "geography_primary", "study_location", "author_affiliation_location", "publication_location"):
+    for key in ("source", "journal", "work_type", "doi", "url", "oa_url", "pdf_url", "abstract", "topics", "discovered_via", "summary", "why_it_matters", "applications", "limitations", "evidence_level", "evidence_type", "apa_citation", "authors", "published_date", "geography_primary", "study_location", "author_affiliation_location", "publication_location", "peer_review_status", "publication_type", "retraction_status", "correction_status", "access_status", "best_access_url", "access_provider"):
         payload[key] = payload.get(key) or ""
-    for key in ("geography_tags", "affiliation_locations", "geographic_mentions"):
+    for key in ("geography_tags", "affiliation_locations", "geographic_mentions", "evidence_flags"):
         payload[key] = json.dumps(payload.get(key) or [], ensure_ascii=False)
-    payload["geography_basis"] = json.dumps(
-        payload.get("geography_basis") or {}, ensure_ascii=False
-    )
-    for key in ("year", "cited_by_count", "read_full", "favorite", "geo_pr", "geo_us", "geo_latam_caribbean"):
+    for key in ("geography_basis", "metadata_provenance"):
+        payload[key] = json.dumps(payload.get(key) or {}, ensure_ascii=False)
+    for key in ("year", "cited_by_count", "read_full", "favorite", "geo_pr", "geo_us", "geo_latam_caribbean", "doi_verified", "metadata_sources_count", "requires_login", "fulltext_available"):
         payload[key] = int(payload.get(key) or 0)
     for key in ("relevance_score", "practical_score", "evidence_score", "recency_score", "geography_confidence"):
         payload[key] = float(payload.get(key) or 0)
@@ -257,6 +281,14 @@ def upsert_papers(papers: Iterable[dict]):
             "limitations=CASE WHEN excluded.limitations<>'' THEN excluded.limitations ELSE papers.limitations END",
             "evidence_level=CASE WHEN excluded.evidence_level<>'' THEN excluded.evidence_level ELSE papers.evidence_level END",
             "evidence_type=CASE WHEN excluded.evidence_type<>'' AND excluded.evidence_type<>'unknown' THEN excluded.evidence_type ELSE papers.evidence_type END",
+            "peer_review_status=CASE WHEN excluded.peer_review_status NOT IN ('','UNKNOWN') THEN excluded.peer_review_status ELSE papers.peer_review_status END",
+            "publication_type=CASE WHEN excluded.publication_type<>'' THEN excluded.publication_type ELSE papers.publication_type END",
+            "retraction_status=CASE WHEN excluded.retraction_status NOT IN ('','UNKNOWN') THEN excluded.retraction_status ELSE papers.retraction_status END",
+            "correction_status=CASE WHEN excluded.correction_status NOT IN ('','UNKNOWN') THEN excluded.correction_status ELSE papers.correction_status END",
+            f"doi_verified={greatest}(COALESCE(papers.doi_verified,0), excluded.doi_verified)",
+            f"metadata_sources_count={greatest}(COALESCE(papers.metadata_sources_count,1), excluded.metadata_sources_count)",
+            "metadata_provenance=CASE WHEN excluded.metadata_provenance<>'{}' THEN excluded.metadata_provenance ELSE papers.metadata_provenance END",
+            "evidence_flags=CASE WHEN excluded.evidence_flags<>'[]' THEN excluded.evidence_flags ELSE papers.evidence_flags END",
             "apa_citation=CASE WHEN excluded.apa_citation<>'' THEN excluded.apa_citation ELSE papers.apa_citation END",
             "geography_primary=CASE WHEN excluded.geography_confidence>=COALESCE(papers.geography_confidence,0) AND excluded.geography_primary<>'' THEN excluded.geography_primary ELSE papers.geography_primary END",
             "geography_tags=CASE WHEN excluded.geography_confidence>=COALESCE(papers.geography_confidence,0) AND excluded.geography_tags<>'[]' THEN excluded.geography_tags ELSE papers.geography_tags END",
@@ -270,6 +302,11 @@ def upsert_papers(papers: Iterable[dict]):
             f"geo_pr={greatest}(COALESCE(papers.geo_pr,0), excluded.geo_pr)",
             f"geo_us={greatest}(COALESCE(papers.geo_us,0), excluded.geo_us)",
             f"geo_latam_caribbean={greatest}(COALESCE(papers.geo_latam_caribbean,0), excluded.geo_latam_caribbean)",
+            "access_status=CASE WHEN excluded.access_status NOT IN ('','UNKNOWN') THEN excluded.access_status ELSE papers.access_status END",
+            "best_access_url=CASE WHEN excluded.best_access_url<>'' THEN excluded.best_access_url ELSE papers.best_access_url END",
+            "access_provider=CASE WHEN excluded.access_provider<>'' THEN excluded.access_provider ELSE papers.access_provider END",
+            f"requires_login={greatest}(COALESCE(papers.requires_login,0), excluded.requires_login)",
+            f"fulltext_available={greatest}(COALESCE(papers.fulltext_available,0), excluded.fulltext_available)",
             f"read_full={greatest}(COALESCE(papers.read_full,0), excluded.read_full)",
             f"favorite={greatest}(COALESCE(papers.favorite,0), excluded.favorite)",
             "updated_at=CURRENT_TIMESTAMP",
@@ -282,6 +319,26 @@ def upsert_papers(papers: Iterable[dict]):
     """
     try:
         con.executemany(sql, payloads)
+        from evidence_pipeline import external_ids
+        external_rows = []
+        for paper, payload in zip(papers, payloads):
+            for id_type, external_id in external_ids(paper).items():
+                external_rows.append(
+                    {
+                        "paper_id": payload["id"], "id_type": id_type,
+                        "external_id": external_id,
+                        "source": str(paper.get("source") or ""),
+                    }
+                )
+        if external_rows:
+            con.executemany(
+                """INSERT INTO paper_external_ids(paper_id,id_type,external_id,source)
+                   VALUES(:paper_id,:id_type,:external_id,:source)
+                   ON CONFLICT(id_type,external_id) DO UPDATE SET
+                   paper_id=excluded.paper_id,
+                   source=CASE WHEN excluded.source<>'' THEN excluded.source ELSE paper_external_ids.source END""",
+                external_rows,
+            )
         con.commit()
     except Exception:
         con.rollback()
@@ -309,6 +366,11 @@ def list_papers(
     source: str | None = None,
     year: int | None = None,
     geography: str | None = None,
+    peer_reviewed: bool | None = None,
+    open_access: bool | None = None,
+    full_text: bool | None = None,
+    evidence_type: str | None = None,
+    retracted: bool | None = None,
     favorites_only: bool = False,
 ):
     """Return a filtered page of papers using portable parameterized SQL."""
@@ -347,6 +409,21 @@ def list_papers(
             raise ValueError("Unsupported geography filter")
         conditions.append(f"{column}=?")
         params.append(1)
+    if peer_reviewed is not None:
+        conditions.append("peer_review_status=?" if peer_reviewed else "peer_review_status<>?")
+        params.append("CONFIRMED")
+    if open_access is not None:
+        conditions.append("access_status=?" if open_access else "access_status<>?")
+        params.append("OPEN_ACCESS")
+    if full_text is not None:
+        conditions.append("fulltext_available=?")
+        params.append(1 if full_text else 0)
+    if evidence_type:
+        conditions.append("UPPER(evidence_type)=UPPER(?)")
+        params.append(evidence_type.strip())
+    if retracted is not None:
+        conditions.append("retraction_status=?" if retracted else "retraction_status<>?")
+        params.append("RETRACTED")
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     params.extend((int(limit), int(offset)))
     con = connect()
@@ -512,5 +589,14 @@ def db_stats():
         stats[table] = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
     stats["favorites"] = con.execute("SELECT COUNT(*) FROM papers WHERE favorite=1").fetchone()[0]
     stats["read_full"] = con.execute("SELECT COUNT(*) FROM papers WHERE read_full=1").fetchone()[0]
+    stats["puerto_rico"] = con.execute("SELECT COUNT(*) FROM papers WHERE geo_pr=1").fetchone()[0]
+    stats["united_states"] = con.execute("SELECT COUNT(*) FROM papers WHERE geo_us=1").fetchone()[0]
+    stats["latam_caribbean"] = con.execute("SELECT COUNT(*) FROM papers WHERE geo_latam_caribbean=1").fetchone()[0]
+    stats["with_abstract"] = con.execute("SELECT COUNT(*) FROM papers WHERE LENGTH(COALESCE(abstract,''))>0").fetchone()[0]
+    stats["with_doi"] = con.execute("SELECT COUNT(*) FROM papers WHERE LENGTH(COALESCE(doi,''))>0").fetchone()[0]
+    stats["open_access"] = con.execute("SELECT COUNT(*) FROM papers WHERE access_status='OPEN_ACCESS'").fetchone()[0]
+    stats["requires_login"] = con.execute("SELECT COUNT(*) FROM papers WHERE requires_login=1").fetchone()[0]
+    stats["retracted"] = con.execute("SELECT COUNT(*) FROM papers WHERE retraction_status='RETRACTED'").fetchone()[0]
+    stats["multi_source_metadata"] = con.execute("SELECT COUNT(*) FROM papers WHERE metadata_sources_count>1").fetchone()[0]
     con.close()
     return stats

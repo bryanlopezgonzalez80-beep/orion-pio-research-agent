@@ -12,10 +12,11 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
-from data_store import upsert_papers
+from data_store import db_stats, upsert_papers
+from source_registry import public_source_registry
 from geographic_intelligence import geography_status, run_geographic_booster
 from orion_platform import TOPIC_GROUPS, execute_academic_search, route_query, source_search_url
-from platform_store import get_setting, set_setting
+from platform_store import checkpoint_summary, get_checkpoint, get_setting, get_source_metrics, set_checkpoint, set_setting
 from research_agent import (
     deduplicate,
     search_crossref_journal_window,
@@ -498,7 +499,10 @@ def run_historical_backfill(
         int(
             months_per_run
             if months_per_run is not None
-            else os.getenv("ORION_BACKFILL_MONTHS_PER_RUN", "4")
+                else os.getenv(
+                    "ORION_BACKFILL_TARGET_MONTHS_PER_RUN",
+                    os.getenv("ORION_BACKFILL_MONTHS_PER_RUN", "12"),
+                )
         ),
     )
     cursor = _parse_cursor(get_setting(f"{STATE_PREFIX}.backfill_cursor"))
@@ -515,39 +519,53 @@ def run_historical_backfill(
 
         month_results: list[dict] = []
         month_errors: list[str] = []
-        for query in BACKFILL_QUERIES:
+        tasks = [
+            ("query", query, search_crossref_window, records_per_query_month)
+            for query in BACKFILL_QUERIES
+        ] + [
+            ("journal", journal, search_crossref_journal_window, 250)
+            for journal in PIO_JOURNALS
+        ]
+        month_key = month_start.isoformat()
+        completed_tasks = 0
+        for task_type, task_key, fetch, max_records in tasks:
+            checkpoint = get_checkpoint(month_key, "Crossref", task_type, task_key)
+            if checkpoint and checkpoint.get("status") == "COMPLETED":
+                completed_tasks += 1
+                continue
+            set_checkpoint(month_key, "Crossref", task_type, task_key, "RUNNING")
             try:
-                papers = search_crossref_window(
-                    query,
+                papers = fetch(
+                    task_key,
                     month_start,
                     month_end,
-                    max_records=records_per_query_month,
+                    max_records=max_records,
                     page_size=200,
                 )
                 month_results.extend(papers)
-            except Exception as exc:
-                msg = f"{query}: {type(exc).__name__}: {exc}"
-                month_errors.append(msg)
-                errors.append(f"{month_start.isoformat()}: {msg}")
-
-        for journal in PIO_JOURNALS:
-            try:
-                papers = search_crossref_journal_window(
-                    journal,
-                    month_start,
-                    month_end,
-                    max_records=250,
-                    page_size=200,
+                if papers:
+                    unique_task = deduplicate(papers)
+                    upsert_papers(unique_task)
+                    unique_ids.update(str(p.get("id") or "") for p in unique_task if p.get("id"))
+                set_checkpoint(
+                    month_key, "Crossref", task_type, task_key, "COMPLETED",
+                    records_received=len(papers),
                 )
-                month_results.extend(papers)
+                completed_tasks += 1
             except Exception as exc:
-                msg = f"journal watch {journal}: {type(exc).__name__}: {exc}"
+                safe_detail = str(exc)[:200]
+                msg = f"{task_type} {task_key}: {type(exc).__name__}: {safe_detail}"
                 month_errors.append(msg)
                 errors.append(f"{month_start.isoformat()}: {msg}")
+                rate_limited = "429" in safe_detail or "rate limit" in safe_detail.casefold()
+                set_checkpoint(
+                    month_key, "Crossref", task_type, task_key,
+                    "RATE_LIMITED" if rate_limited else "FAILED_RETRYABLE",
+                    error=type(exc).__name__,
+                )
 
         unique = deduplicate(month_results)
         if unique:
-            upsert_papers(unique)
             unique_ids.update(str(p.get("id") or "") for p in unique if p.get("id"))
         total_received += len(month_results)
         windows.append(
@@ -557,13 +575,15 @@ def run_historical_backfill(
                 "received": len(month_results),
                 "unique": len(unique),
                 "errors": len(month_errors),
+                "tasks_total": len(tasks),
+                "tasks_completed": completed_tasks,
             }
         )
 
         # Do not skip a historical window after a transient provider failure.
         # Successful records are already persisted, so retrying the same month
         # on the next run is safe and improves completeness.
-        if month_errors:
+        if completed_tasks < len(tasks):
             break
         cursor = month_start
         set_setting(f"{STATE_PREFIX}.backfill_cursor", cursor.isoformat())
@@ -578,6 +598,7 @@ def run_historical_backfill(
         "unique_seen": len(unique_ids),
         "windows": windows,
         "errors": errors,
+        "checkpoint_summary": checkpoint_summary(),
     }
     set_setting(f"{STATE_PREFIX}.last_backfill", result)
     return result
@@ -604,6 +625,7 @@ def run_deep_harvest(
 
 
 def harvest_status() -> dict:
+    corpus = db_stats()
     return {
         "coverage_query_count": len(coverage_queries()),
         "last_run": get_setting(f"{STATE_PREFIX}.last_run"),
@@ -613,6 +635,14 @@ def harvest_status() -> dict:
         "openalex_key_configured": bool(os.getenv("OPENALEX_API_KEY")),
         "semantic_scholar_key_configured": bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY")),
         "geography": geography_status(),
+        "corpus": {
+            "total_papers_persisted": corpus.get("papers", 0),
+            **{key: value for key, value in corpus.items() if key not in {"papers"}},
+        },
+        "historical_target_months": int(os.getenv("ORION_BACKFILL_TARGET_MONTHS_PER_RUN", "12")),
+        "checkpoints": checkpoint_summary(),
+        "provider_registry": public_source_registry(),
+        "provider_health": get_source_metrics(),
         "secondary_sources": [
             {
                 "name": name,

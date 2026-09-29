@@ -64,6 +64,22 @@ def init_schema(con):
       last_error TEXT NOT NULL DEFAULT '', success_count INTEGER NOT NULL DEFAULT 0,
       failure_count INTEGER NOT NULL DEFAULT 0, consecutive_failures INTEGER NOT NULL DEFAULT 0,
       circuit_open_until TEXT, last_checked TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS orion_source_metrics(
+      source TEXT PRIMARY KEY, requests INTEGER NOT NULL DEFAULT 0,
+      successes INTEGER NOT NULL DEFAULT 0, failures INTEGER NOT NULL DEFAULT 0,
+      rate_limits INTEGER NOT NULL DEFAULT 0, latency_ms INTEGER NOT NULL DEFAULT 0,
+      records_received INTEGER NOT NULL DEFAULT 0, unique_records INTEGER NOT NULL DEFAULT 0,
+      last_success TEXT, last_failure TEXT, health_status TEXT NOT NULL DEFAULT 'INACTIVE');
+    CREATE TABLE IF NOT EXISTS orion_harvest_checkpoints(
+      month TEXT NOT NULL, provider TEXT NOT NULL, task_type TEXT NOT NULL,
+      task_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING',
+      attempts INTEGER NOT NULL DEFAULT 0, records_received INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL,
+      PRIMARY KEY(month,provider,task_type,task_key));
+    CREATE TABLE IF NOT EXISTS orion_enrichment_queue(
+      paper_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'PENDING',
+      attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at TEXT,
+      last_error TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS orion_collections(
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
       description TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
@@ -135,6 +151,62 @@ def record_source_failure(source, error, *, path=None, threshold=3, cooldown_min
 def get_source_health(*, path=None):
     with connect(path) as con:
         return [dict(r) for r in con.execute("SELECT * FROM orion_source_health ORDER BY source").fetchall()]
+
+
+def record_source_metrics(source, *, requests=0, successes=0, failures=0, rate_limits=0, latency_ms=0, records_received=0, unique_records=0, health_status="HEALTHY", path=None):
+    now = _iso()
+    with connect(path) as con:
+        con.execute(
+            """INSERT INTO orion_source_metrics(source,requests,successes,failures,rate_limits,latency_ms,records_received,unique_records,last_success,last_failure,health_status)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source) DO UPDATE SET
+               requests=orion_source_metrics.requests+excluded.requests,
+               successes=orion_source_metrics.successes+excluded.successes,
+               failures=orion_source_metrics.failures+excluded.failures,
+               rate_limits=orion_source_metrics.rate_limits+excluded.rate_limits,
+               latency_ms=excluded.latency_ms,
+               records_received=orion_source_metrics.records_received+excluded.records_received,
+               unique_records=orion_source_metrics.unique_records+excluded.unique_records,
+               last_success=CASE WHEN excluded.successes>0 THEN excluded.last_success ELSE orion_source_metrics.last_success END,
+               last_failure=CASE WHEN excluded.failures>0 THEN excluded.last_failure ELSE orion_source_metrics.last_failure END,
+               health_status=excluded.health_status""",
+            (source, int(requests), int(successes), int(failures), int(rate_limits), int(latency_ms), int(records_received), int(unique_records), now if successes else None, now if failures else None, health_status),
+        )
+
+
+def get_source_metrics(*, path=None):
+    with connect(path) as con:
+        return [dict(row) for row in con.execute("SELECT * FROM orion_source_metrics ORDER BY source").fetchall()]
+
+
+def get_checkpoint(month, provider, task_type, task_key, *, path=None):
+    with connect(path) as con:
+        row = con.execute(
+            "SELECT * FROM orion_harvest_checkpoints WHERE month=? AND provider=? AND task_type=? AND task_key=?",
+            (month, provider, task_type, task_key),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def set_checkpoint(month, provider, task_type, task_key, status, *, records_received=0, error="", path=None):
+    allowed = {"PENDING", "RUNNING", "COMPLETED", "RATE_LIMITED", "FAILED_RETRYABLE", "FAILED_FINAL"}
+    if status not in allowed:
+        raise ValueError("Unsupported checkpoint status")
+    with connect(path) as con:
+        con.execute(
+            """INSERT INTO orion_harvest_checkpoints(month,provider,task_type,task_key,status,attempts,records_received,last_error,updated_at)
+               VALUES(?,?,?,?,?,1,?,?,?) ON CONFLICT(month,provider,task_type,task_key) DO UPDATE SET
+               status=excluded.status,attempts=orion_harvest_checkpoints.attempts+1,
+               records_received=excluded.records_received,last_error=excluded.last_error,updated_at=excluded.updated_at""",
+            (month, provider, task_type, task_key, status, int(records_received), str(error)[:500], _iso()),
+        )
+
+
+def checkpoint_summary(*, path=None):
+    with connect(path) as con:
+        rows = con.execute(
+            "SELECT month,status,COUNT(*) AS total FROM orion_harvest_checkpoints GROUP BY month,status ORDER BY month DESC,status"
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 def log_search(query, domain, sources:Iterable[str], found, unique_saved, duration_ms, errors, *, path=None):
     with connect(path) as con:
