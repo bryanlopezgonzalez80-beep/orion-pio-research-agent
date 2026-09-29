@@ -38,6 +38,7 @@ class PaperResponse(BaseModel):
     metadata_sources_count: int = 1
     metadata_provenance: dict[str, Any] = Field(default_factory=dict)
     evidence_flags: list[str] = Field(default_factory=list)
+    abstract_available: int = 0
     apa_citation: str = ""
     geography_primary: str = ""
     geography_tags: list[str] = Field(default_factory=list)
@@ -54,7 +55,14 @@ class PaperResponse(BaseModel):
     access_status: str = "UNKNOWN"
     best_access_url: str = ""
     access_provider: str = ""
+    access_type: str = ""
     requires_login: int = 0
+    institutional_access_possible: int = 0
+    open_access: int = 0
+    pdf_available: int = 0
+    html_available: int = 0
+    doi_url: str = ""
+    alternative_access_options: list[dict[str, Any]] = Field(default_factory=list)
     fulltext_available: int = 0
     read_full: int = 0
     favorite: int = 0

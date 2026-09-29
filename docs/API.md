@@ -26,7 +26,7 @@ Interactive documentation is available at `/docs`; the OpenAPI document is `/ope
 | `NCBI_EMAIL` | Optional contact identity for NCBI E-utilities; `CROSSREF_EMAIL` is used as a fallback. |
 | `NCBI_API_KEY` | Optional PubMed/NCBI key. Not required; raises the supported E-utilities request rate. |
 | `ORION_OPENALEX_QUERIES_PER_RUN` | Anonymous OpenAlex query budget per deep sweep; defaults to 12. |
-| `ORION_BACKFILL_MONTHS_PER_RUN` | Historical Crossref month windows processed per daily run; defaults to 4. |
+| `ORION_BACKFILL_TARGET_MONTHS_PER_RUN` | Adaptive historical target per daily run; defaults to 12 and slows/stops under provider stress. |
 | `ORION_BACKFILL_FLOOR_YEAR` | Oldest year targeted by automatic historical backfill; defaults to 1950. |
 | `ORION_GEO_PR_QUERIES_PER_RUN` | Puerto Rico geographic query budget; defaults to 6. |
 | `ORION_GEO_US_QUERIES_PER_RUN` | United States geographic query budget; defaults to 4. |

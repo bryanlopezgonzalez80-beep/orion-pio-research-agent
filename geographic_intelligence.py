@@ -180,6 +180,18 @@ def _json_list(value: object) -> list[str]:
     return []
 
 
+def _json_dict(value: object) -> dict:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
 def classify_geography(paper: dict) -> dict:
     """Classify geographic evidence without inferring study sample from affiliation."""
     evidence: dict[str, set[str]] = {}
@@ -218,9 +230,20 @@ def classify_geography(paper: dict) -> dict:
     mention_locations = add(mention_value, "title_or_abstract_mention")
     add(paper.get("matched_query"), "query_context")
 
+    existing_basis = _json_dict(paper.get("geography_basis"))
     existing_tags = _json_list(paper.get("geography_tags"))
+    for flag, label in (
+        (paper.get("geo_pr"), PUERTO_RICO.label),
+        (paper.get("geo_us"), UNITED_STATES.label),
+        (paper.get("geo_latam_caribbean"), LATAM_CARIBBEAN.label),
+    ):
+        if flag and label not in existing_tags:
+            existing_tags.append(label)
     for label in existing_tags:
-        evidence.setdefault(label, set()).add("unknown")
+        bases = existing_basis.get(label) or ["persisted_flag"]
+        if not isinstance(bases, list):
+            bases = [bases]
+        evidence.setdefault(label, set()).update(str(value) for value in bases if value)
 
     basis_rank = {
         "sample_explicit": 0,
@@ -230,6 +253,7 @@ def classify_geography(paper: dict) -> dict:
         "affiliation": 4,
         "publication_venue": 5,
         "unknown": 6,
+        "persisted_flag": 7,
     }
     profile_rank = {profile.label: profile.priority for profile in GEOGRAPHIC_PROFILES}
     tags = sorted(
@@ -253,6 +277,7 @@ def classify_geography(paper: dict) -> dict:
         "affiliation": 0.4,
         "publication_venue": 0.3,
         "unknown": 0.0,
+        "persisted_flag": 0.0,
     }
     study_location = (sample_locations or study_locations)
     basis_payload = {

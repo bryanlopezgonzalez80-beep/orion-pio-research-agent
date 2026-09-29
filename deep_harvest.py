@@ -7,16 +7,17 @@ licensed databases that do not expose a permitted API.
 from __future__ import annotations
 
 import os
+import random
 import time
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
-from data_store import db_stats, upsert_papers
+from data_store import db_stats, evidence_observability, upsert_papers
 from source_registry import public_source_registry
 from geographic_intelligence import geography_status, run_geographic_booster
 from orion_platform import TOPIC_GROUPS, execute_academic_search, route_query, source_search_url
-from platform_store import checkpoint_summary, get_checkpoint, get_setting, get_source_metrics, set_checkpoint, set_setting
+from platform_store import checkpoint_summary, enrichment_summary, get_checkpoint, get_setting, get_source_metrics, set_checkpoint, set_setting
 from research_agent import (
     deduplicate,
     search_crossref_journal_window,
@@ -488,10 +489,25 @@ def _parse_cursor(value) -> date:
     return date.today().replace(day=1)
 
 
+def _backfill_retry_delay(exc: Exception, attempt: int) -> float | None:
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) != 429:
+        return None
+    raw = (getattr(response, "headers", None) or {}).get("Retry-After")
+    if raw:
+        try:
+            return min(30.0, max(0.0, float(raw)))
+        except (TypeError, ValueError):
+            pass
+    return min(15.0, 0.75 * (2 ** max(0, attempt)) + random.random() * 0.25)
+
+
 def run_historical_backfill(
     *,
     months_per_run: int | None = None,
     records_per_query_month: int = 500,
+    progress_callback: Callable[[dict], None] | None = None,
+    sleep_fn: Callable[[float], None] = time.sleep,
 ) -> dict:
     """Backfill older Crossref literature in resumable month-sized windows."""
     months = max(
@@ -528,6 +544,9 @@ def run_historical_backfill(
         ]
         month_key = month_start.isoformat()
         completed_tasks = 0
+        for task_type, task_key, _fetch, _max_records in tasks:
+            if get_checkpoint(month_key, "Crossref", task_type, task_key) is None:
+                set_checkpoint(month_key, "Crossref", task_type, task_key, "PENDING")
         for task_type, task_key, fetch, max_records in tasks:
             checkpoint = get_checkpoint(month_key, "Crossref", task_type, task_key)
             if checkpoint and checkpoint.get("status") == "COMPLETED":
@@ -535,13 +554,23 @@ def run_historical_backfill(
                 continue
             set_checkpoint(month_key, "Crossref", task_type, task_key, "RUNNING")
             try:
-                papers = fetch(
-                    task_key,
-                    month_start,
-                    month_end,
-                    max_records=max_records,
-                    page_size=200,
-                )
+                papers = None
+                for attempt in range(3):
+                    try:
+                        papers = fetch(
+                            task_key,
+                            month_start,
+                            month_end,
+                            max_records=max_records,
+                            page_size=200,
+                        )
+                        break
+                    except Exception as exc:
+                        delay = _backfill_retry_delay(exc, attempt)
+                        if delay is None or attempt >= 2:
+                            raise
+                        sleep_fn(delay)
+                papers = papers or []
                 month_results.extend(papers)
                 if papers:
                     unique_task = deduplicate(papers)
@@ -563,6 +592,24 @@ def run_historical_backfill(
                     "RATE_LIMITED" if rate_limited else "FAILED_RETRYABLE",
                     error=type(exc).__name__,
                 )
+                if rate_limited:
+                    # Crossref stress is provider-wide. Leave remaining tasks
+                    # PENDING for the next run instead of amplifying a 429.
+                    if progress_callback is not None:
+                        progress_callback({
+                            "phase": "backfill", "backfill_month": month_key,
+                            "backfill_tasks_completed": completed_tasks,
+                            "backfill_tasks_total": len(tasks),
+                            "backfill_rate_limited": True,
+                        })
+                    break
+            if progress_callback is not None:
+                progress_callback({
+                    "phase": "backfill", "backfill_month": month_key,
+                    "backfill_tasks_completed": completed_tasks,
+                    "backfill_tasks_total": len(tasks),
+                    "backfill_records_received": len(month_results),
+                })
 
         unique = deduplicate(month_results)
         if unique:
@@ -609,9 +656,36 @@ def run_deep_harvest(
     include_backfill: bool = True,
     progress_callback: Callable[[dict], None] | None = None,
 ) -> dict:
-    live = run_live_sweep(progress_callback=progress_callback)
-    geography = run_geographic_booster(progress_callback=progress_callback)
-    backfill = run_historical_backfill() if include_backfill else None
+    progress_state: dict = {}
+    monotonic_fields = {
+        "queries_processed", "queries_total", "received", "unique_seen",
+        "journal_watch_processed", "journal_watch_total",
+        "geo_queries_processed", "geo_queries_total",
+        "backfill_tasks_completed", "backfill_tasks_total",
+        "backfill_records_received",
+    }
+
+    def cumulative_progress(snapshot: dict) -> None:
+        if progress_callback is None:
+            return
+        for key, value in snapshot.items():
+            if key in monotonic_fields:
+                progress_state[key] = max(int(progress_state.get(key) or 0), int(value or 0))
+            elif isinstance(value, dict) and isinstance(progress_state.get(key), dict):
+                progress_state[key] = {**progress_state[key], **value}
+            else:
+                progress_state[key] = value
+        progress_callback(dict(progress_state))
+
+    corpus_before = int(db_stats().get("papers") or 0)
+    live = run_live_sweep(progress_callback=cumulative_progress)
+    geography = run_geographic_booster(progress_callback=cumulative_progress)
+    backfill = run_historical_backfill(progress_callback=cumulative_progress) if include_backfill else None
+    corpus_after = int(db_stats().get("papers") or 0)
+    warnings = (
+        len(live.get("errors") or []) + len(geography.get("errors") or [])
+        + len((backfill or {}).get("errors") or [])
+    )
     result = {
         "completed_at": _utcnow().isoformat(timespec="seconds"),
         "coverage_query_count": len(coverage_queries()),
@@ -619,30 +693,74 @@ def run_deep_harvest(
         "live": live,
         "geography": geography,
         "backfill": backfill,
+        "status": "COMPLETED_WITH_WARNINGS" if warnings else "COMPLETED",
+        "total_papers_persisted": corpus_after,
+        "new_papers_this_run": max(0, corpus_after - corpus_before),
+        "records_received_this_run": int(live.get("received") or 0) + int(geography.get("received") or 0) + int((backfill or {}).get("received") or 0),
+        "unique_seen_this_run": int(live.get("unique_seen") or 0) + int(geography.get("unique_seen") or 0) + int((backfill or {}).get("unique_seen") or 0),
     }
     set_setting(f"{STATE_PREFIX}.last_run", result)
     return result
 
 
 def harvest_status() -> dict:
-    corpus = db_stats()
+    facets = evidence_observability()
+    last_run = get_setting(f"{STATE_PREFIX}.last_run") or {}
+    last_backfill = get_setting(f"{STATE_PREFIX}.last_backfill") or {}
+    checkpoints = checkpoint_summary()
+    checkpoint_totals: dict[str, int] = Counter()
+    completed_months: set[str] = set()
+    months_with_pending: set[str] = set()
+    for item in checkpoints:
+        status = str(item.get("status") or "")
+        checkpoint_totals[status] += int(item.get("total") or 0)
+        if status == "COMPLETED":
+            completed_months.add(str(item.get("month") or ""))
+        else:
+            months_with_pending.add(str(item.get("month") or ""))
+    oldest_completed = min(completed_months - months_with_pending, default=None)
+    provider_health = get_source_metrics()
+    enrichment = enrichment_summary()
+    run_metrics = {
+        "new_papers_this_run": int(last_run.get("new_papers_this_run") or 0),
+        "records_received_this_run": int(last_run.get("records_received_this_run") or 0),
+        "unique_seen_this_run": int(last_run.get("unique_seen_this_run") or 0),
+    }
     return {
         "coverage_query_count": len(coverage_queries()),
-        "last_run": get_setting(f"{STATE_PREFIX}.last_run"),
+        "last_run": last_run or None,
         "last_live_sweep": get_setting(f"{STATE_PREFIX}.last_live_sweep"),
-        "last_backfill": get_setting(f"{STATE_PREFIX}.last_backfill"),
+        "last_backfill": last_backfill or None,
         "backfill_cursor": get_setting(f"{STATE_PREFIX}.backfill_cursor"),
         "openalex_key_configured": bool(os.getenv("OPENALEX_API_KEY")),
         "semantic_scholar_key_configured": bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY")),
         "geography": geography_status(),
         "corpus": {
-            "total_papers_persisted": corpus.get("papers", 0),
-            **{key: value for key, value in corpus.items() if key not in {"papers"}},
+            "total_papers": facets["total_papers"],
+            "total_papers_persisted": facets["total_papers"],
+            "new_this_run": run_metrics["new_papers_this_run"],
         },
+        "run": run_metrics,
+        "geography_summary": {key: facets[key] for key in ("puerto_rico", "united_states", "latam_caribbean", "global_or_unknown")},
+        "historical": {
+            "floor_year": BACKFILL_FLOOR_YEAR,
+            "current_month": last_backfill.get("next_cursor") or get_setting(f"{STATE_PREFIX}.backfill_cursor"),
+            "oldest_completed_month": oldest_completed,
+            "target_months_per_run": int(os.getenv("ORION_BACKFILL_TARGET_MONTHS_PER_RUN", "12")),
+            "months_completed_this_run": int(last_backfill.get("months_processed") or 0),
+            "tasks_completed": checkpoint_totals.get("COMPLETED", 0),
+            "tasks_pending": sum(checkpoint_totals.get(value, 0) for value in ("PENDING", "RUNNING", "RATE_LIMITED", "FAILED_RETRYABLE")),
+            "estimated_months_remaining": None,
+        },
+        "evidence": {key: facets[key] for key in ("peer_reviewed", "preprints", "systematic_reviews", "meta_analyses", "retracted")},
+        "access": {key: facets[key] for key in ("open_access", "institutional_access", "provider_login", "metadata_only", "requires_login")},
+        "enrichment": enrichment,
+        "citation_graph": {"papers_discovered": int(get_setting(f"{STATE_PREFIX}.citation_papers_discovered", 0) or 0)},
         "historical_target_months": int(os.getenv("ORION_BACKFILL_TARGET_MONTHS_PER_RUN", "12")),
-        "checkpoints": checkpoint_summary(),
+        "checkpoints": checkpoints,
         "provider_registry": public_source_registry(),
-        "provider_health": get_source_metrics(),
+        "provider_health": provider_health,
+        "providers": {"health": provider_health},
         "secondary_sources": [
             {
                 "name": name,

@@ -13,9 +13,10 @@ TEXT_FIELDS = {
     "author_affiliation_location", "publication_location",
     "peer_review_status", "publication_type", "retraction_status",
     "correction_status", "access_status", "best_access_url", "access_provider",
+    "access_type", "doi_url",
 }
-LIST_FIELDS = {"geography_tags", "affiliation_locations", "geographic_mentions", "evidence_flags"}
-INTEGER_FIELDS = {"year", "cited_by_count", "read_full", "favorite", "geo_pr", "geo_us", "geo_latam_caribbean", "doi_verified", "metadata_sources_count", "requires_login", "fulltext_available"}
+LIST_FIELDS = {"geography_tags", "affiliation_locations", "geographic_mentions", "evidence_flags", "alternative_access_options"}
+INTEGER_FIELDS = {"year", "cited_by_count", "read_full", "favorite", "geo_pr", "geo_us", "geo_latam_caribbean", "doi_verified", "metadata_sources_count", "abstract_available", "requires_login", "institutional_access_possible", "open_access", "pdf_available", "html_available", "fulltext_available"}
 FLOAT_FIELDS = {"relevance_score", "geography_confidence"}
 
 
@@ -68,6 +69,9 @@ def list_papers(
     full_text: bool | None = None,
     evidence_type: str | None = None,
     retracted: bool | None = None,
+    peer_review_status: str | None = None,
+    access_status: str | None = None,
+    retraction_status: str | None = None,
 ) -> list[dict]:
     papers = data_store.list_papers(
         limit=limit,
@@ -82,6 +86,9 @@ def list_papers(
         full_text=full_text,
         evidence_type=evidence_type,
         retracted=retracted,
+        peer_review_status=peer_review_status,
+        access_status=access_status,
+        retraction_status=retraction_status,
     )
     return [_normalize_paper(paper) for paper in papers]
 

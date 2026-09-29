@@ -30,7 +30,7 @@ def assess_integrity(paper: dict) -> dict:
     source = str(paper.get("source") or "").casefold()
     work_type = str(paper.get("work_type") or "").casefold()
     explicit = str(paper.get("peer_review_status") or "").upper()
-    if explicit in PEER_REVIEW_STATES:
+    if explicit in {"CONFIRMED", "LIKELY", "NOT_PEER_REVIEWED"}:
         peer_review = explicit
     elif "arxiv" in source or "preprint" in work_type:
         peer_review = "NOT_PEER_REVIEWED"

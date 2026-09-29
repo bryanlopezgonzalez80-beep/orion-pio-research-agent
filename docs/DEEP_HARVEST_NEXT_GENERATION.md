@@ -15,7 +15,7 @@ Discovery remains cheap and provider-isolated. Enrichment and citation chaining 
 
 `source_registry.py` is the central capability registry. A source can have multiple roles: discovery, enrichment, citation graph, full text, validation, access provider, regional, or data source. Capability does not assert quality, reachability, licensing, or peer review.
 
-Crossref, OpenAlex, Semantic Scholar, PubMed, Europe PMC, CORE, DOAJ, DataCite, ERIC, arXiv, SciELO, Redalyc, and Latindex have declared roles. Some are currently registry/enrichment targets rather than automated harvesters. Licensed connectors are fail-safe stubs and stay inactive unless both their explicit enable flag and server-side key are configured: `PSYCINFO_API_ENABLED`, `SCOPUS_API_ENABLED`, `WOS_API_ENABLED`, and `PROQUEST_API_ENABLED`.
+Crossref, OpenAlex, Semantic Scholar, PubMed, Europe PMC, CORE, DOAJ, DataCite, ERIC, arXiv, SciELO, Redalyc, and Latindex have declared roles. Some are currently registry/enrichment targets rather than automated harvesters. Licensed connectors are fail-safe access stubs and remain inactive even when enablement, server-side credentials, and authorization flags exist; a reviewed adapter must be implemented before harvesting can become active.
 
 No connector receives end-user credentials. Enabling a stub is not authorization to harvest; licensing and provider terms must be reviewed first.
 

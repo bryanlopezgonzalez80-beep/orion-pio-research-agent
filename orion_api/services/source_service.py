@@ -39,6 +39,11 @@ def list_public_sources() -> list[dict]:
                 "peer_review_information_available": bool(definition and definition.peer_review_information_available),
                 "geographic_strength": definition.geographic_strength if definition else "global",
                 "health_status": definition.health_status.value if definition else "INACTIVE",
+                "registered": bool(definition and definition.registered),
+                "implemented": bool(definition and definition.implemented),
+                "configured": bool(definition and definition.configured),
+                "authorized": bool(definition and definition.authorized),
+                "active": bool(definition and definition.active),
             }
         )
     known_names = {item["name"] for item in public}

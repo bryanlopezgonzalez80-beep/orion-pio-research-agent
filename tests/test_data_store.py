@@ -123,6 +123,12 @@ def test_database_error_rolls_back_and_closes_connection(sample_paper, monkeypat
     class BrokenConnection:
         engine = "sqlite"
 
+        def execute(self, *args, **kwargs):
+            class EmptyCursor:
+                def fetchall(self):
+                    return []
+            return EmptyCursor()
+
         def executemany(self, *args, **kwargs):
             raise sqlite3.OperationalError("disk unavailable")
 
@@ -163,6 +169,12 @@ def test_postgres_upsert_uses_greatest_dialect(sample_paper, monkeypatch):
 
     class PostgresConnection:
         engine = "postgres"
+
+        def execute(self, *args, **kwargs):
+            class EmptyCursor:
+                def fetchall(self):
+                    return []
+            return EmptyCursor()
 
         def executemany(self, sql, payloads):
             events.append(sql)

@@ -26,6 +26,7 @@ def external_ids(paper: dict) -> dict[str, str]:
         "pmcid": str(paper.get("pmcid") or "").strip(),
         "openalex": str(paper.get("openalex_id") or "").strip(),
         "semantic_scholar": str(paper.get("semantic_scholar_id") or "").strip(),
+        "datacite": normalize_doi(paper.get("datacite_doi")) or str(paper.get("datacite_id") or "").strip(),
         "publisher": str(paper.get("publisher_id") or "").strip(),
     }
     return {key: value for key, value in aliases.items() if value}
@@ -33,7 +34,7 @@ def external_ids(paper: dict) -> dict[str, str]:
 
 def canonical_key(paper: dict) -> str:
     ids = external_ids(paper)
-    for kind in ("doi", "pmid", "pmcid", "openalex", "semantic_scholar", "publisher"):
+    for kind in ("doi", "pmid", "pmcid", "openalex", "semantic_scholar", "datacite", "publisher"):
         if ids.get(kind):
             return f"{kind}:{ids[kind].casefold()}"
     title = unicodedata.normalize("NFKD", str(paper.get("title") or "")).encode("ascii", "ignore").decode().casefold()
@@ -73,7 +74,10 @@ def merge_records(records: Iterable[dict]) -> list[dict]:
 
 def enrich_record(paper: dict, *, institution: dict | None = None) -> dict:
     enriched = enrich_paper(dict(paper))
-    enriched.update(assess_integrity(enriched))
+    integrity = assess_integrity(enriched)
+    enriched.update(integrity)
+    if integrity["study_design"] != "UNKNOWN":
+        enriched["evidence_type"] = integrity["study_design"]
     access = resolve_access(enriched, institution=institution)
     enriched.update(access)
     enriched["access_provider"] = access.get("provider") or ""

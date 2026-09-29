@@ -25,3 +25,8 @@ class SourceResponse(BaseModel):
     peer_review_information_available: bool = False
     geographic_strength: str = "global"
     health_status: str = "INACTIVE"
+    registered: bool = True
+    implemented: bool = False
+    configured: bool = False
+    authorized: bool = False
+    active: bool = False
