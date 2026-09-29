@@ -104,6 +104,30 @@ def test_crossref_parser_handles_missing_fields(monkeypatch, fake_response):
     assert papers[1]["published_date"] == "2023-01-02"
 
 
+def test_crossref_range_uses_bounded_publication_dates(monkeypatch, fake_response):
+    from datetime import date
+
+    captured = {}
+
+    def fake_get(*args, **kwargs):
+        captured.update(kwargs)
+        return fake_response({"message": {"items": []}})
+
+    monkeypatch.setattr(research_agent, "_get", fake_get)
+    papers = research_agent.search_crossref_range(
+        "organizational development",
+        date(2010, 1, 1),
+        date(2010, 12, 31),
+        per_page=200,
+    )
+
+    assert papers == []
+    assert captured["params"]["filter"] == (
+        "from-pub-date:2010-01-01,until-pub-date:2010-12-31"
+    )
+    assert captured["params"]["rows"] == 200
+
+
 def test_europe_pmc_parser_handles_open_access_and_empty_results(monkeypatch, fake_response):
     payload = {"resultList": {"result": [{
         "id": "1", "pmcid": "PMC1", "source": "MED", "title": "Wellbeing", "pubYear": "2025",
