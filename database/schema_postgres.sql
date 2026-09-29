@@ -162,3 +162,21 @@ CREATE TABLE IF NOT EXISTS orion_settings (
   value_json TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+
+CREATE TABLE IF NOT EXISTS orion_coverage_runs (
+  id BIGSERIAL PRIMARY KEY,
+  trigger TEXT NOT NULL,
+  status TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  topics_total INTEGER NOT NULL DEFAULT 0,
+  topics_completed INTEGER NOT NULL DEFAULT 0,
+  results_seen INTEGER NOT NULL DEFAULT 0,
+  unique_processed INTEGER NOT NULL DEFAULT 0,
+  source_counts_json TEXT NOT NULL DEFAULT '{}',
+  domain_counts_json TEXT NOT NULL DEFAULT '{}',
+  errors_json TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS idx_orion_coverage_runs_started
+  ON orion_coverage_runs(started_at);
