@@ -55,6 +55,8 @@ def test_comprehensive_refresh_persists_chunks_and_progress(monkeypatch, sample_
         paper = dict(
             sample_paper,
             id=f"id:{query}",
+            doi="",
+            url=f"https://example.test/recent/{query.replace(' ', '-')}",
             title=f"Study about {query}",
             topic_relevance_percent=100,
         )
@@ -73,6 +75,8 @@ def test_comprehensive_refresh_persists_chunks_and_progress(monkeypatch, sample_
             dict(
                 sample_paper,
                 id=f"historical:{query}",
+                doi="",
+                url=f"https://example.test/historical/{query.replace(' ', '-')}",
                 title=f"Historical study about {query}",
                 topic_relevance_percent=100,
             )
