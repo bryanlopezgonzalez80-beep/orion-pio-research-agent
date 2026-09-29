@@ -14,18 +14,47 @@ from platform_store import get_cache, log_search, record_source_failure, record_
 PLATFORM_VERSION = "3.0.0"
 
 
+def _retry_after_seconds(response, *, cap: float) -> float | None:
+    """Parse a numeric Retry-After header without leaking response content."""
+    raw = (getattr(response, "headers", None) or {}).get("Retry-After")
+    if raw:
+        try:
+            return min(cap, max(0.0, float(raw)))
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
 def _rate_limit_delay(exc: Exception, attempt: int) -> float | None:
     """Return a bounded retry delay for HTTP 429, otherwise None."""
     response = getattr(exc, "response", None)
     if getattr(response, "status_code", None) != 429:
         return None
-    raw = (getattr(response, "headers", None) or {}).get("Retry-After")
-    if raw:
-        try:
-            return min(10.0, max(0.0, float(raw)))
-        except (TypeError, ValueError):
-            pass
-    return min(8.0, 0.75 * (2 ** max(0, attempt)))
+    retry_after = _retry_after_seconds(response, cap=30.0)
+    if retry_after is not None:
+        return retry_after
+    return min(15.0, 1.0 * (2 ** max(0, attempt)))
+
+
+def _transient_retry_delay(exc: Exception, attempt: int) -> float | None:
+    """Back off for rate limits, provider 5xx errors, timeouts, and connection failures."""
+    rate_limit = _rate_limit_delay(exc, attempt)
+    if rate_limit is not None:
+        return rate_limit
+
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    if isinstance(status_code, int) and 500 <= status_code <= 599:
+        retry_after = _retry_after_seconds(response, cap=30.0)
+        if retry_after is not None:
+            return retry_after
+        return min(15.0, 1.0 * (2 ** max(0, attempt)))
+
+    # Requests exceptions are intentionally detected by class name as well as
+    # inheritance so test doubles and wrapped transport errors remain retryable.
+    if type(exc).__name__ in {"Timeout", "ConnectTimeout", "ReadTimeout", "ConnectionError"}:
+        return min(8.0, 1.0 * (2 ** max(0, attempt)))
+    return None
 
 @dataclass(frozen=True)
 class SourceSpec:
@@ -222,8 +251,15 @@ def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_k
                     if getattr(getattr(exc, "response", None), "status_code", None)==429:
                         rate_limited=True
                     if attempt<retries:
-                        rate_limit_delay=_rate_limit_delay(exc,attempt)
-                        sleep_fn(rate_limit_delay if rate_limit_delay is not None else min(3.0,0.45*(2**attempt)+random.random()*0.2))
+                        retry_delay = _transient_retry_delay(exc, attempt)
+                        # Preserve one short retry for opaque provider/runtime
+                        # errors, while giving documented HTTP/transient failures
+                        # enough time to recover.
+                        sleep_fn(
+                            retry_delay
+                            if retry_delay is not None
+                            else min(3.0, 0.45 * (2 ** attempt) + random.random() * 0.2)
+                        )
             if result is None:
                 suffix=f" (variant {variant_index}/{len(query_variants)})" if len(query_variants)>1 else ""
                 source_errors.append(f"{source}{suffix}: {type(last_error).__name__}: {last_error}")
