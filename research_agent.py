@@ -461,22 +461,14 @@ def _crossref_date(item: dict) -> str:
     return ""
 
 
-def search_crossref(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
-    start = date.today() - timedelta(days=days)
-    params = {
-        "query.bibliographic": query,
-        "filter": f"from-pub-date:{start.isoformat()},until-pub-date:{date.today().isoformat()}",
-        "rows": min(per_page, 200), "sort": "published", "order": "desc",
-        "mailto": os.getenv("CROSSREF_EMAIL", "") or None,
-    }
-    params = {k:v for k,v in params.items() if v is not None}
-    data = _get("https://api.crossref.org/works", params=params).json().get("message", {})
+def _parse_crossref_items(items: list[dict], query: str, days: int) -> list[dict]:
     out = []
-    for it in data.get("items", []):
+    for it in items:
         authors = []
         for a in it.get("author", [])[:8]:
             name = " ".join(x for x in [a.get("given", ""), a.get("family", "")] if x).strip()
-            if name: authors.append(name)
+            if name:
+                authors.append(name)
         title = clean_text((it.get("title") or [""])[0])
         doi = normalize_doi(it.get("DOI") or "")
         url = it.get("URL") or (f"https://doi.org/{doi}" if doi else "")
@@ -485,14 +477,55 @@ def search_crossref(query: str, days: int = 45, per_page: int = 15) -> list[dict
         year = int((published or "0")[:4] or 0)
         abstract = clean_text(it.get("abstract"))
         p = {
-            "id": stable_id("Crossref", doi, doi, title), "title": title, "authors": ", ".join(authors), "year": year,
-            "published_date": published, "source": "Crossref", "journal": journal, "work_type": clean_text(it.get("type")),
-            "doi": doi, "url": url, "oa_url": "", "pdf_url": "", "abstract": abstract,
-            "topics": ", ".join(clean_text(s) for s in (it.get("subject") or [])[:6]), "discovered_via": "Crossref",
+            "id": stable_id("Crossref", doi, doi, title),
+            "title": title,
+            "authors": ", ".join(authors),
+            "year": year,
+            "published_date": published,
+            "source": "Crossref",
+            "journal": journal,
+            "work_type": clean_text(it.get("type")),
+            "doi": doi,
+            "url": url,
+            "oa_url": "",
+            "pdf_url": "",
+            "abstract": abstract,
+            "topics": ", ".join(clean_text(s) for s in (it.get("subject") or [])[:6]),
+            "discovered_via": "Crossref",
             "cited_by_count": int(it.get("is-referenced-by-count") or 0),
         }
         out.append(score_record(p, query, days))
     return out
+
+
+def search_crossref_range(
+    query: str,
+    start_date: date,
+    end_date: date,
+    per_page: int = 200,
+) -> list[dict]:
+    if end_date < start_date:
+        raise ValueError("end_date must be on or after start_date")
+    params = {
+        "query.bibliographic": query,
+        "filter": (
+            f"from-pub-date:{start_date.isoformat()},"
+            f"until-pub-date:{end_date.isoformat()}"
+        ),
+        "rows": min(per_page, 200),
+        "sort": "published",
+        "order": "desc",
+        "mailto": os.getenv("CROSSREF_EMAIL", "") or None,
+    }
+    params = {key: value for key, value in params.items() if value is not None}
+    data = _get("https://api.crossref.org/works", params=params).json().get("message", {})
+    days = max(1, (date.today() - start_date).days)
+    return _parse_crossref_items(data.get("items", []), query, days)
+
+
+def search_crossref(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
+    start = date.today() - timedelta(days=days)
+    return search_crossref_range(query, start, date.today(), per_page=per_page)
 
 
 def search_europe_pmc(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
