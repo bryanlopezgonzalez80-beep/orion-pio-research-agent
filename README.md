@@ -94,6 +94,11 @@ Antes de habilitar el modo de producción, configura `ORION_ENV`, una clave inte
 
 ## Deep Harvest PIO
 
+La arquitectura Next Generation —registro de fuentes, checkpoints granulares,
+provenance, integridad, citation graph limitado y resolución legítima de acceso—
+está documentada en
+[`docs/DEEP_HARVEST_NEXT_GENERATION.md`](docs/DEEP_HARVEST_NEXT_GENERATION.md).
+
 Orion's daily refresh now uses a high-recall discovery engine instead of a small fixed topic sample.
 
 - Preserves the 188-query global PIO taxonomy, journal watch, and historical backfill.
