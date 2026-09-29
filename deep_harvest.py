@@ -502,6 +502,14 @@ def _backfill_retry_delay(exc: Exception, attempt: int) -> float | None:
     return min(15.0, 0.75 * (2 ** max(0, attempt)) + random.random() * 0.25)
 
 
+def _is_rate_limited(exc: Exception) -> bool:
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) == 429:
+        return True
+    detail = str(exc).casefold()
+    return "429" in detail or "rate limit" in detail
+
+
 def run_historical_backfill(
     *,
     months_per_run: int | None = None,
@@ -526,6 +534,7 @@ def run_historical_backfill(
     windows: list[dict] = []
     total_received = 0
     unique_ids: set[str] = set()
+    run_tasks_completed = 0
 
     for _ in range(months):
         month_end = cursor - timedelta(days=1)
@@ -551,6 +560,7 @@ def run_historical_backfill(
             checkpoint = get_checkpoint(month_key, "Crossref", task_type, task_key)
             if checkpoint and checkpoint.get("status") == "COMPLETED":
                 completed_tasks += 1
+                run_tasks_completed += 1
                 continue
             set_checkpoint(month_key, "Crossref", task_type, task_key, "RUNNING")
             try:
@@ -581,12 +591,13 @@ def run_historical_backfill(
                     records_received=len(papers),
                 )
                 completed_tasks += 1
+                run_tasks_completed += 1
             except Exception as exc:
                 safe_detail = str(exc)[:200]
                 msg = f"{task_type} {task_key}: {type(exc).__name__}: {safe_detail}"
                 month_errors.append(msg)
                 errors.append(f"{month_start.isoformat()}: {msg}")
-                rate_limited = "429" in safe_detail or "rate limit" in safe_detail.casefold()
+                rate_limited = _is_rate_limited(exc)
                 set_checkpoint(
                     month_key, "Crossref", task_type, task_key,
                     "RATE_LIMITED" if rate_limited else "FAILED_RETRYABLE",
@@ -600,6 +611,9 @@ def run_historical_backfill(
                             "phase": "backfill", "backfill_month": month_key,
                             "backfill_tasks_completed": completed_tasks,
                             "backfill_tasks_total": len(tasks),
+                            "backfill_month_tasks_completed": completed_tasks,
+                            "backfill_month_tasks_total": len(tasks),
+                            "backfill_tasks_completed_total": run_tasks_completed,
                             "backfill_rate_limited": True,
                         })
                     break
@@ -608,6 +622,9 @@ def run_historical_backfill(
                     "phase": "backfill", "backfill_month": month_key,
                     "backfill_tasks_completed": completed_tasks,
                     "backfill_tasks_total": len(tasks),
+                    "backfill_month_tasks_completed": completed_tasks,
+                    "backfill_month_tasks_total": len(tasks),
+                    "backfill_tasks_completed_total": run_tasks_completed,
                     "backfill_records_received": len(month_results),
                 })
 
@@ -661,13 +678,20 @@ def run_deep_harvest(
         "queries_processed", "queries_total", "received", "unique_seen",
         "journal_watch_processed", "journal_watch_total",
         "geo_queries_processed", "geo_queries_total",
-        "backfill_tasks_completed", "backfill_tasks_total",
-        "backfill_records_received",
+        "backfill_tasks_completed_total", "backfill_records_received",
     }
 
     def cumulative_progress(snapshot: dict) -> None:
         if progress_callback is None:
             return
+        previous_month = progress_state.get("backfill_month")
+        incoming_month = snapshot.get("backfill_month")
+        if incoming_month and incoming_month != previous_month:
+            for key in (
+                "backfill_tasks_completed", "backfill_tasks_total",
+                "backfill_month_tasks_completed", "backfill_month_tasks_total",
+            ):
+                progress_state.pop(key, None)
         for key, value in snapshot.items():
             if key in monotonic_fields:
                 progress_state[key] = max(int(progress_state.get(key) or 0), int(value or 0))

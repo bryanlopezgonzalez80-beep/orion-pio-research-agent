@@ -262,6 +262,17 @@ def _json_value(value, fallback):
     return parsed if isinstance(parsed, type(fallback)) else fallback
 
 
+ACCESS_RANK = {
+    "UNKNOWN": 0,
+    "METADATA_ONLY": 1,
+    "DOI_ONLY": 2,
+    "PUBLISHER_ACCESS": 3,
+    "PROVIDER_LOGIN": 4,
+    "INSTITUTIONAL_ACCESS": 4,
+    "OPEN_ACCESS": 5,
+}
+
+
 def _merge_provenance_payloads(con, payloads: list[dict]) -> None:
     """Union additive provenance in one batched read before portable UPSERT."""
     by_id = {str(payload.get("id") or ""): payload for payload in payloads}
@@ -270,6 +281,7 @@ def _merge_provenance_payloads(con, payloads: list[dict]) -> None:
         "id,geography_tags,geography_basis,affiliation_locations,"
         "geographic_mentions,metadata_provenance,evidence_flags,"
         "alternative_access_options,geo_pr,geo_us,geo_latam_caribbean,metadata_sources_count"
+        ",access_status,best_access_url,access_provider,access_type"
     )
     existing_rows = []
     for start in range(0, len(ids), 500):
@@ -290,6 +302,21 @@ def _merge_provenance_payloads(con, payloads: list[dict]) -> None:
             json.dumps(option, ensure_ascii=False, sort_keys=True): option
             for option in old_options + new_options if isinstance(option, dict)
         }
+        payload["alternative_access_options"] = json.dumps(
+            [options[key] for key in sorted(options)], ensure_ascii=False
+        )
+        old_status = str(existing.get("access_status") or "UNKNOWN")
+        new_status = str(payload.get("access_status") or "UNKNOWN")
+        old_rank = ACCESS_RANK.get(old_status, 0)
+        new_rank = ACCESS_RANK.get(new_status, 0)
+        if old_rank >= new_rank and old_status != "UNKNOWN":
+            if payload.get("best_access_url") and payload.get("best_access_url") != existing.get("best_access_url"):
+                options[json.dumps({"access_type": payload.get("access_type") or new_status.casefold(), "url": payload["best_access_url"]}, sort_keys=True)] = {"access_type": payload.get("access_type") or new_status.casefold(), "url": payload["best_access_url"]}
+            for field in ("access_status", "best_access_url", "access_provider", "access_type"):
+                payload[field] = existing.get(field) or payload.get(field)
+        elif existing.get("best_access_url") and existing.get("best_access_url") != payload.get("best_access_url"):
+            option = {"access_type": existing.get("access_type") or old_status.casefold(), "url": existing["best_access_url"]}
+            options[json.dumps(option, sort_keys=True)] = option
         payload["alternative_access_options"] = json.dumps(
             [options[key] for key in sorted(options)], ensure_ascii=False
         )
@@ -321,6 +348,8 @@ def upsert_papers(papers: Iterable[dict]):
     con = connect()
     _merge_provenance_payloads(con, payloads)
     greatest = "GREATEST" if con.engine == "postgres" else "MAX"
+    current_access_rank = "CASE COALESCE(papers.access_status,'UNKNOWN') WHEN 'OPEN_ACCESS' THEN 5 WHEN 'INSTITUTIONAL_ACCESS' THEN 4 WHEN 'PROVIDER_LOGIN' THEN 4 WHEN 'PUBLISHER_ACCESS' THEN 3 WHEN 'DOI_ONLY' THEN 2 WHEN 'METADATA_ONLY' THEN 1 ELSE 0 END"
+    incoming_access_rank = "CASE COALESCE(excluded.access_status,'UNKNOWN') WHEN 'OPEN_ACCESS' THEN 5 WHEN 'INSTITUTIONAL_ACCESS' THEN 4 WHEN 'PROVIDER_LOGIN' THEN 4 WHEN 'PUBLISHER_ACCESS' THEN 3 WHEN 'DOI_ONLY' THEN 2 WHEN 'METADATA_ONLY' THEN 1 ELSE 0 END"
     columns = [k for k in PAPER_COLUMNS.keys() if k not in {"created_at", "updated_at"}]
     col_sql = ",".join(columns)
     val_sql = ",".join(f":{c}" for c in columns)
@@ -373,10 +402,10 @@ def upsert_papers(papers: Iterable[dict]):
             f"geo_pr={greatest}(COALESCE(papers.geo_pr,0), excluded.geo_pr)",
             f"geo_us={greatest}(COALESCE(papers.geo_us,0), excluded.geo_us)",
             f"geo_latam_caribbean={greatest}(COALESCE(papers.geo_latam_caribbean,0), excluded.geo_latam_caribbean)",
-            "access_status=CASE WHEN excluded.access_status NOT IN ('','UNKNOWN') THEN excluded.access_status ELSE papers.access_status END",
-            "best_access_url=CASE WHEN excluded.best_access_url<>'' THEN excluded.best_access_url ELSE papers.best_access_url END",
-            "access_provider=CASE WHEN excluded.access_provider<>'' THEN excluded.access_provider ELSE papers.access_provider END",
-            "access_type=CASE WHEN excluded.access_type<>'' THEN excluded.access_type ELSE papers.access_type END",
+            f"access_status=CASE WHEN {incoming_access_rank}>{current_access_rank} THEN excluded.access_status ELSE papers.access_status END",
+            f"best_access_url=CASE WHEN {incoming_access_rank}>{current_access_rank} AND excluded.best_access_url<>'' THEN excluded.best_access_url ELSE papers.best_access_url END",
+            f"access_provider=CASE WHEN {incoming_access_rank}>{current_access_rank} AND excluded.access_provider<>'' THEN excluded.access_provider ELSE papers.access_provider END",
+            f"access_type=CASE WHEN {incoming_access_rank}>{current_access_rank} AND excluded.access_type<>'' THEN excluded.access_type ELSE papers.access_type END",
             f"requires_login={greatest}(COALESCE(papers.requires_login,0), excluded.requires_login)",
             f"institutional_access_possible={greatest}(COALESCE(papers.institutional_access_possible,0), excluded.institutional_access_possible)",
             f"open_access={greatest}(COALESCE(papers.open_access,0), excluded.open_access)",
@@ -503,8 +532,8 @@ def list_papers(
         conditions.append("peer_review_status=?" if peer_reviewed else "peer_review_status<>?")
         params.append("CONFIRMED")
     if open_access is not None:
-        conditions.append("access_status=?" if open_access else "access_status<>?")
-        params.append("OPEN_ACCESS")
+        conditions.append("open_access=?")
+        params.append(1 if open_access else 0)
     if full_text is not None:
         conditions.append("fulltext_available=?")
         params.append(1 if full_text else 0)
@@ -716,11 +745,11 @@ def evidence_observability():
               COALESCE(SUM(CASE WHEN LENGTH(COALESCE(abstract,''))>0 THEN 1 ELSE 0 END),0) AS with_abstract,
               COALESCE(SUM(CASE WHEN fulltext_available=1 THEN 1 ELSE 0 END),0) AS with_fulltext,
               COALESCE(SUM(CASE WHEN peer_review_status='CONFIRMED' THEN 1 ELSE 0 END),0) AS peer_reviewed,
-              COALESCE(SUM(CASE WHEN UPPER(COALESCE(evidence_type,'')) IN ('PREPRINT','PREPRINT') OR peer_review_status='NOT_PEER_REVIEWED' THEN 1 ELSE 0 END),0) AS preprints,
+              COALESCE(SUM(CASE WHEN UPPER(COALESCE(evidence_type,''))='PREPRINT' OR peer_review_status='NOT_PEER_REVIEWED' THEN 1 ELSE 0 END),0) AS preprints,
               COALESCE(SUM(CASE WHEN UPPER(COALESCE(evidence_type,''))='SYSTEMATIC_REVIEW' THEN 1 ELSE 0 END),0) AS systematic_reviews,
               COALESCE(SUM(CASE WHEN UPPER(COALESCE(evidence_type,''))='META_ANALYSIS' THEN 1 ELSE 0 END),0) AS meta_analyses,
               COALESCE(SUM(CASE WHEN retraction_status='RETRACTED' THEN 1 ELSE 0 END),0) AS retracted,
-              COALESCE(SUM(CASE WHEN access_status='OPEN_ACCESS' THEN 1 ELSE 0 END),0) AS open_access,
+              COALESCE(SUM(CASE WHEN open_access=1 THEN 1 ELSE 0 END),0) AS open_access,
               COALESCE(SUM(CASE WHEN access_status='INSTITUTIONAL_ACCESS' THEN 1 ELSE 0 END),0) AS institutional_access,
               COALESCE(SUM(CASE WHEN access_status='PROVIDER_LOGIN' THEN 1 ELSE 0 END),0) AS provider_login,
               COALESCE(SUM(CASE WHEN access_status IN ('METADATA_ONLY','UNKNOWN') THEN 1 ELSE 0 END),0) AS metadata_only,
