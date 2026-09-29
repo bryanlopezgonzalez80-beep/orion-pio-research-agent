@@ -1,0 +1,86 @@
+name: Orion Provider Recovery Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/provider-recovery-gate.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orion-provider-recovery-gate
+  cancel-in-progress: false
+
+jobs:
+  provider-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime dependencies
+        run: pip install -r requirements.txt
+
+      - name: Recover OpenAlex and Semantic Scholar health
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
+        run: |
+          python - <<'PY'
+          import json
+          from orion_platform import execute_academic_search
+
+          result = execute_academic_search(
+              "industrial organizational psychology leadership",
+              days=30,
+              per_source=3,
+              sources=["OpenAlex", "Semantic Scholar"],
+              max_keep=12,
+              retries=3,
+              cache_ttl_hours=1,
+              force_refresh=True,
+          )
+          summary = {
+              item["source"]: {
+                  "status": item["status"],
+                  "count": item["count"],
+                  "network_requests": item["network_requests"],
+                  "retries": item["retries"],
+                  "rate_limited": item["rate_limited"],
+              }
+              for item in result["source_meta"]
+          }
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          failed = [name for name, item in summary.items() if item["status"] != "ok"]
+          if failed:
+              raise SystemExit("Provider recovery failed: " + ", ".join(failed))
+          PY
+
+      - name: Verify Orion system health after provider recovery
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: PYTHONPATH=. python scripts/orion_health_check.py --output artifacts/orion-provider-recovery-health.json
+
+      - name: Upload recovery health report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: orion-provider-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/orion-provider-recovery-health.json
+          if-no-files-found: error
+          retention-days: 30
