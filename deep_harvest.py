@@ -45,6 +45,90 @@ UMBRELLA_QUERIES = [
     "future of work human resources",
 ]
 
+EXPANSION_QUERIES = [
+    "organizational psychology",
+    "occupational psychology",
+    "work psychology",
+    "organizational behavior",
+    "human resource management",
+    "transactional leadership",
+    "destructive leadership",
+    "resistance to change",
+    "organization development intervention",
+    "organizational transformation",
+    "change management workplace",
+    "organizational learning",
+    "organizational innovation",
+    "psychological climate workplace",
+    "procedural justice workplace",
+    "speak up behavior workplace",
+    "ethical climate organization",
+    "innovation climate workplace",
+    "team performance workplace",
+    "team diversity performance",
+    "team learning",
+    "collaboration workplace",
+    "knowledge sharing workplace",
+    "personnel selection",
+    "structured employment interview",
+    "assessment center employee selection",
+    "cognitive ability job performance",
+    "personality job performance",
+    "employee turnover",
+    "onboarding employee",
+    "job performance",
+    "performance appraisal",
+    "goal setting workplace",
+    "work motivation",
+    "self determination work",
+    "job satisfaction",
+    "organizational commitment",
+    "learning transfer workplace",
+    "employee development",
+    "leadership training",
+    "coaching workplace",
+    "mentoring workplace",
+    "career adaptability",
+    "continuous learning workplace",
+    "occupational fatigue",
+    "psychosocial safety climate",
+    "diversity inclusion workplace",
+    "belonging workplace",
+    "workplace discrimination",
+    "gender bias workplace",
+    "racial bias workplace",
+    "age discrimination workplace",
+    "disability inclusion workplace",
+    "sexual harassment workplace",
+    "employee ethics behavior",
+    "corporate social responsibility employees",
+    "artificial intelligence human resources workplace",
+    "AI hiring employee selection",
+    "employee monitoring technology",
+    "human AI collaboration workplace",
+    "automation jobs workplace",
+    "digital transformation employees",
+    "remote work employees",
+    "hybrid work employees",
+    "flexible work arrangements",
+    "telework employee outcomes",
+    "gig work psychology",
+    "shift work employee outcomes",
+    "four day workweek employees",
+    "return to office employees",
+    "occupational safety behavior",
+    "safety climate workplace",
+    "human factors work performance",
+    "ergonomics employee performance",
+    "human error workplace",
+    "safety leadership workplace",
+    "workplace Puerto Rico employees organizational",
+    "psicología industrial organizacional Puerto Rico",
+    "desarrollo organizacional Puerto Rico",
+    "liderazgo empleados Puerto Rico",
+    "recursos humanos América Latina",
+]
+
 GEOGRAPHIC_QUERIES = [
     "industrial organizational psychology Puerto Rico",
     "organizational psychology Puerto Rico",
@@ -126,7 +210,7 @@ def coverage_queries() -> list[str]:
     out: list[str] = []
     for query in UMBRELLA_QUERIES + [
         topic for topics in TOPIC_GROUPS.values() for topic in topics
-    ] + GEOGRAPHIC_QUERIES:
+    ] + EXPANSION_QUERIES + GEOGRAPHIC_QUERIES:
         cleaned = " ".join(str(query).split())
         key = cleaned.casefold()
         if cleaned and key not in seen:
@@ -186,6 +270,17 @@ def run_live_sweep(
     started_at = _utcnow()
     started = time.monotonic()
 
+    # Keep the live catalog fair even if a provider slowdown causes the runtime
+    # budget to expire. The next run resumes from the next unprocessed query
+    # instead of repeatedly starving the tail of the taxonomy.
+    live_rotation = int(get_setting(f"{STATE_PREFIX}.live_rotation", 0) or 0)
+    if queries:
+        live_rotation %= len(queries)
+        ordered_queries = queries[live_rotation:] + queries[:live_rotation]
+    else:
+        live_rotation = 0
+        ordered_queries = []
+
     # Anonymous OpenAlex usage has a much smaller daily budget. Without a key,
     # rotate a bounded share of topics while Crossref/PubMed/Europe PMC still
     # sweep the entire taxonomy every run.
@@ -205,7 +300,7 @@ def run_live_sweep(
     unique_seen: dict[str, dict] = {}
     stopped_for_budget = False
 
-    for query in queries:
+    for query in ordered_queries:
         if time.monotonic() - started >= max_runtime_seconds:
             stopped_for_budget = True
             break
@@ -276,6 +371,13 @@ def run_live_sweep(
     if not os.getenv("OPENALEX_API_KEY"):
         set_setting(f"{STATE_PREFIX}.openalex_rotation", next_rotation)
 
+    next_live_rotation = (
+        (live_rotation + processed) % len(queries)
+        if queries
+        else 0
+    )
+    set_setting(f"{STATE_PREFIX}.live_rotation", next_live_rotation)
+
     result = {
         "mode": "live_sweep",
         "started_at": started_at.isoformat(timespec="seconds"),
@@ -283,6 +385,8 @@ def run_live_sweep(
         "queries_total": len(queries),
         "queries_processed": processed,
         "queries_remaining": max(0, len(queries) - processed),
+        "query_rotation_start": live_rotation,
+        "next_query_rotation": next_live_rotation,
         "received": received,
         "unique_seen": len(unique_seen),
         "errors": errors,
