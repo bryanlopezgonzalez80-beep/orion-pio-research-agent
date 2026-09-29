@@ -13,7 +13,7 @@ from research_agent import deduplicate
 
 
 DEFAULT_RECENT_DAYS = 4
-DEFAULT_PER_SOURCE = 40
+DEFAULT_PER_SOURCE = 100
 OPENALEX_DAILY_QUERY_BUDGET_NO_KEY = 40
 OPENALEX_DAILY_QUERY_BUDGET_WITH_KEY = 100
 ARXIV_DAILY_QUERY_BUDGET = 16
@@ -141,7 +141,7 @@ def run_comprehensive_refresh(
             "source_result_counts": dict(source_results),
             "domain_result_counts": dict(domain_results),
             "results_seen": sum(source_results.values()),
-            "final_batch_unique": total_unique,
+            "unique_processed": total_unique,
             "error_count": len(errors),
             "errors": errors,
         }
