@@ -36,11 +36,15 @@ def radar(
 def coverage_status() -> dict:
     """Expose safe coverage progress without provider credentials or internals."""
     stats = db_stats()
+    latest = latest_coverage_run()
+    if latest:
+        errors = latest.pop("errors", []) or []
+        latest["error_count"] = len(errors)
     return {
         "catalog_topics": len(COVERAGE_TOPICS),
         "catalog_domains": len(coverage_domains()),
         "papers_persisted": int(stats.get("papers") or 0),
-        "last_run": latest_coverage_run(),
+        "last_run": latest,
         "manual_refresh_running": _refresh_lock.locked(),
     }
 
