@@ -55,6 +55,16 @@ def source_rate_policy(source: str) -> dict:
             "minimum_interval_seconds": 1.0,
             "guidance": "API-key users start at 1 request/second; unauthenticated access may be throttled.",
         }
+    if source == "PubMed":
+        keyed = bool(os.getenv("NCBI_API_KEY"))
+        return {
+            "minimum_interval_seconds": 0.1 if keyed else (1.0 / 3.0),
+            "guidance": (
+                "NCBI E-utilities: up to 10 requests/second with an API key."
+                if keyed
+                else "NCBI E-utilities: keep at or below 3 requests/second without an API key."
+            ),
+        }
     if source == "arXiv":
         return {
             "minimum_interval_seconds": 3.0,
@@ -94,7 +104,8 @@ def pace_source_request(
 SOURCE_LABELS = {
     "OpenAlex": "OpenAlex",
     "Crossref": "Crossref",
-    "Europe PMC": "Europe PMC / PubMed",
+    "Europe PMC": "Europe PMC",
+    "PubMed": "PubMed / NCBI",
     "Semantic Scholar": "Semantic Scholar",
     "arXiv": "arXiv",
 }
@@ -524,6 +535,97 @@ def search_europe_pmc(query: str, days: int = 45, per_page: int = 15) -> list[di
     return out
 
 
+def search_pubmed(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
+    """Search PubMed through NCBI E-utilities using only public metadata."""
+    start = date.today() - timedelta(days=days)
+    today = date.today()
+    term = (
+        f'({query}) AND ("{start.strftime("%Y/%m/%d")}"[Date - Publication] : '
+        f'"{today.strftime("%Y/%m/%d")}"[Date - Publication])'
+    )
+    common = {
+        "tool": "orion_pio_research",
+        "email": os.getenv("NCBI_EMAIL", "") or os.getenv("CROSSREF_EMAIL", "") or None,
+        "api_key": os.getenv("NCBI_API_KEY", "") or None,
+    }
+    common = {k: v for k, v in common.items() if v}
+    search_params = {
+        "db": "pubmed",
+        "term": term,
+        "retmode": "json",
+        "retmax": min(int(per_page), 50),
+        "sort": "pub date",
+        **common,
+    }
+    search_data = _get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+        params=search_params,
+    ).json()
+    ids = ((search_data.get("esearchresult") or {}).get("idlist") or [])
+    if not ids:
+        return []
+
+    # NCBI counts each E-utility call separately. Reserve the second request
+    # here because one logical PubMed search uses ESearch + ESummary.
+    pace_source_request("PubMed")
+    summary_params = {
+        "db": "pubmed",
+        "id": ",".join(ids),
+        "retmode": "json",
+        **common,
+    }
+    summary = _get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+        params=summary_params,
+    ).json().get("result") or {}
+
+    out = []
+    for pmid in summary.get("uids") or ids:
+        it = summary.get(str(pmid)) or {}
+        title = clean_text(it.get("title"))
+        if not title:
+            continue
+        article_ids = it.get("articleids") or []
+        doi = normalize_doi(
+            next(
+                (
+                    item.get("value")
+                    for item in article_ids
+                    if str(item.get("idtype", "")).casefold() == "doi"
+                ),
+                "",
+            )
+        )
+        authors = ", ".join(
+            clean_text(author.get("name"))
+            for author in (it.get("authors") or [])[:8]
+            if author.get("name")
+        )
+        published = parse_date(it.get("pubdate") or it.get("epubdate"))
+        year = int((published or "0")[:4] or 0)
+        url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+        p = {
+            "id": stable_id("PubMed", str(pmid), doi, title),
+            "title": title,
+            "authors": authors,
+            "year": year,
+            "published_date": published,
+            "source": "PubMed",
+            "journal": clean_text(it.get("fulljournalname") or it.get("source")),
+            "work_type": ", ".join(clean_text(x) for x in (it.get("pubtype") or [])[:6]),
+            "doi": doi,
+            "url": url,
+            "oa_url": "",
+            "pdf_url": "",
+            "abstract": "",
+            "topics": "",
+            "discovered_via": "PubMed / NCBI",
+            "cited_by_count": 0,
+        }
+        out.append(score_record(p, query, days))
+    return out
+
+
 def search_semantic_scholar(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
     start = date.today() - timedelta(days=days)
     fields = "title,abstract,authors,year,venue,url,externalIds,citationCount,publicationDate,openAccessPdf,publicationTypes,fieldsOfStudy"
@@ -601,6 +703,7 @@ SEARCHERS = {
     "OpenAlex": search_openalex,
     "Crossref": search_crossref,
     "Europe PMC": search_europe_pmc,
+    "PubMed": search_pubmed,
     "Semantic Scholar": search_semantic_scholar,
     "arXiv": search_arxiv,
 }
