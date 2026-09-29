@@ -417,7 +417,7 @@ def search_openalex(query: str, days: int = 45, per_page: int = 15) -> list[dict
     params = {
         "search": query,
         "filter": f"from_publication_date:{start.isoformat()},to_publication_date:{date.today().isoformat()}",
-        "per-page": min(per_page, 50),
+        "per-page": min(per_page, 100),
         "sort": "publication_date:desc",
         "api_key": os.getenv("OPENALEX_API_KEY", "") or None,
     }
@@ -466,7 +466,7 @@ def search_crossref(query: str, days: int = 45, per_page: int = 15) -> list[dict
     params = {
         "query.bibliographic": query,
         "filter": f"from-pub-date:{start.isoformat()},until-pub-date:{date.today().isoformat()}",
-        "rows": min(per_page, 50), "sort": "published", "order": "desc",
+        "rows": min(per_page, 200), "sort": "published", "order": "desc",
         "mailto": os.getenv("CROSSREF_EMAIL", "") or None,
     }
     params = {k:v for k,v in params.items() if v is not None}
@@ -498,7 +498,7 @@ def search_crossref(query: str, days: int = 45, per_page: int = 15) -> list[dict
 def search_europe_pmc(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
     start = date.today() - timedelta(days=days)
     q = f'({query}) AND FIRST_PDATE:[{start.isoformat()} TO {date.today().isoformat()}]'
-    params = {"query": q, "format": "json", "pageSize": min(per_page, 50), "resultType": "core", "sort": "FIRST_PDATE_D desc"}
+    params = {"query": q, "format": "json", "pageSize": min(per_page, 200), "resultType": "core", "sort": "FIRST_PDATE_D desc"}
     data = _get("https://www.ebi.ac.uk/europepmc/webservices/rest/search", params=params).json()
     out = []
     for it in ((data.get("resultList") or {}).get("result") or []):
@@ -528,7 +528,7 @@ def search_semantic_scholar(query: str, days: int = 45, per_page: int = 15) -> l
     start = date.today() - timedelta(days=days)
     fields = "title,abstract,authors,year,venue,url,externalIds,citationCount,publicationDate,openAccessPdf,publicationTypes,fieldsOfStudy"
     params = {
-        "query": query.replace("-", " "), "limit": min(per_page, 50), "fields": fields,
+        "query": query.replace("-", " "), "limit": min(per_page, 100), "fields": fields,
         "publicationDateOrYear": f"{start.isoformat()}:{date.today().isoformat()}",
     }
     headers = {}
@@ -561,7 +561,7 @@ def search_arxiv(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
     if feedparser is None:
         raise RuntimeError("Falta la dependencia feedparser")
     params = {
-        "search_query": f'all:"{query}"', "start": 0, "max_results": min(per_page * 2, 60),
+        "search_query": f'all:"{query}"', "start": 0, "max_results": min(per_page * 2, 100),
         "sortBy": "submittedDate", "sortOrder": "descending",
     }
     r = requests.get("https://export.arxiv.org/api/query", params=params, headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)
