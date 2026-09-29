@@ -471,6 +471,8 @@ def authenticated_api(monkeypatch, sample_paper):
         ("get", "/api/v1/papers", None),
         ("get", "/api/v1/papers/doi:10.1234/orion", None),
         ("get", "/api/v1/radar", None),
+        ("get", "/api/v1/radar/coverage", None),
+        ("post", "/api/v1/radar/refresh", None),
         ("get", "/api/v1/sources", None),
         ("post", "/api/v1/search", {"query": "leadership"}),
         ("get", "/api/v1/library", None),
