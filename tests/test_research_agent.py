@@ -79,6 +79,10 @@ def test_provider_rate_policies_and_pacing(monkeypatch):
     monkeypatch.setenv("CROSSREF_EMAIL", "researcher@example.test")
     assert research_agent.source_rate_policy("Crossref")["minimum_interval_seconds"] == pytest.approx(1 / 3)
     assert research_agent.source_rate_policy("Semantic Scholar")["minimum_interval_seconds"] == 1.0
+    monkeypatch.delenv("NCBI_API_KEY", raising=False)
+    assert research_agent.source_rate_policy("PubMed")["minimum_interval_seconds"] == pytest.approx(1 / 3)
+    monkeypatch.setenv("NCBI_API_KEY", "test-key")
+    assert research_agent.source_rate_policy("PubMed")["minimum_interval_seconds"] == 0.1
     assert research_agent.source_rate_policy("arXiv")["minimum_interval_seconds"] == 3.0
 
     research_agent._SOURCE_NEXT_REQUEST_AT.clear()
@@ -102,6 +106,102 @@ def test_crossref_parser_handles_missing_fields(monkeypatch, fake_response):
     assert papers[0]["published_date"] == "2024-05-01"
     assert papers[1]["id"].startswith("title:")
     assert papers[1]["published_date"] == "2023-01-02"
+
+
+def test_crossref_historical_window_uses_cursor_paging(monkeypatch, fake_response):
+    calls = []
+    payloads = [
+        {
+            "message": {
+                "items": [
+                    {
+                        "title": ["Leadership at work"],
+                        "DOI": "10.10/one",
+                        "published": {"date-parts": [[2001, 2, 3]]},
+                        "container-title": ["Journal One"],
+                    }
+                ],
+                "next-cursor": "cursor-2",
+            }
+        },
+        {
+            "message": {
+                "items": [
+                    {
+                        "title": ["Teams at work"],
+                        "DOI": "10.10/two",
+                        "published": {"date-parts": [[2001, 2, 4]]},
+                        "container-title": ["Journal Two"],
+                    }
+                ]
+            }
+        },
+    ]
+
+    def fake_get(url, **kwargs):
+        calls.append(kwargs["params"].copy())
+        return fake_response(payloads[len(calls) - 1])
+
+    monkeypatch.setattr(research_agent, "_get", fake_get)
+    monkeypatch.setattr(research_agent, "pace_source_request", lambda *a, **k: 0)
+
+    papers = research_agent.search_crossref_window(
+        "leadership workplace",
+        research_agent.date(2001, 2, 1),
+        research_agent.date(2001, 2, 28),
+        max_records=2,
+        page_size=1,
+    )
+
+    assert [paper["doi"] for paper in papers] == ["10.10/two", "10.10/one"] or {
+        paper["doi"] for paper in papers
+    } == {"10.10/one", "10.10/two"}
+    assert calls[0]["cursor"] == "*"
+    assert calls[1]["cursor"] == "cursor-2"
+    assert "from-pub-date:2001-02-01" in calls[0]["filter"]
+
+
+def test_pubmed_parser_uses_ncbi_esearch_and_esummary(monkeypatch, fake_response):
+    calls = []
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs.get("params") or {}))
+        if "esearch.fcgi" in url:
+            return fake_response({"esearchresult": {"idlist": ["12345"]}})
+        return fake_response(
+            {
+                "result": {
+                    "uids": ["12345"],
+                    "12345": {
+                        "title": "Psychological safety at work",
+                        "pubdate": "2025 Mar 04",
+                        "fulljournalname": "Journal of Occupational Health",
+                        "authors": [{"name": "A. Rivera"}, {"name": "B. Smith"}],
+                        "pubtype": ["Journal Article"],
+                        "articleids": [
+                            {"idtype": "pubmed", "value": "12345"},
+                            {"idtype": "doi", "value": "10.1000/PUBMED"},
+                        ],
+                    },
+                }
+            }
+        )
+
+    monkeypatch.setenv("NCBI_EMAIL", "researcher@example.test")
+    monkeypatch.setenv("NCBI_API_KEY", "test-key")
+    monkeypatch.setattr(research_agent, "_get", fake_get)
+    monkeypatch.setattr(research_agent, "pace_source_request", lambda *a, **k: 0)
+
+    papers = research_agent.search_pubmed("psychological safety", days=365, per_page=5)
+
+    assert len(papers) == 1
+    paper = papers[0]
+    assert paper["source"] == "PubMed"
+    assert paper["doi"] == "10.1000/pubmed"
+    assert paper["url"] == "https://pubmed.ncbi.nlm.nih.gov/12345/"
+    assert "A. Rivera" in paper["authors"]
+    assert calls[0][1]["api_key"] == "test-key"
+    assert calls[1][1]["api_key"] == "test-key"
 
 
 def test_europe_pmc_parser_handles_open_access_and_empty_results(monkeypatch, fake_response):
