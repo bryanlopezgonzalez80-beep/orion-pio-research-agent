@@ -46,5 +46,7 @@ The daily agent performs a high-recall sweep rather than only the old eight-topi
 - OpenAlex remains usable without a key, but because anonymous usage has a much smaller daily budget Orion rotates a bounded set of OpenAlex queries per run instead of exhausting the provider. This is intentionally compatible with deployments that choose not to configure an OpenAlex key.
 - A resumable Crossref historical backfill walks older literature month by month and persists its cursor in `orion_settings`. It defaults to four months per daily run and a 1900 floor; both are configurable. A curated core PIO journal watch uses Crossref's exact `container-title` filter so papers with novel terminology are still captured.
 - Every query is persisted immediately. Later provider failures do not roll back earlier discoveries.
+- Geographic Intelligence has independent defaults of 6 Puerto Rico, 4 United States, and 3 Latin America/Caribbean queries per run, plus a 180-second runtime budget. Its cursors prevent the same locations and providers from always receiving the first requests.
+- Puerto Rico journal names are searched through permitted scholarly metadata APIs. CONUCO remains a directed/manual source because mixed academic and informational content must not be scraped or automatically labeled peer reviewed.
 
 This is designed for **maximum practical coverage**, not a claim that Orion contains literally every scholarly page on the internet. Licensed databases or services without a permitted public API remain directed secondary sources rather than scraped sources.

@@ -36,7 +36,20 @@ PAPER_COLUMNS = {
     "applications": "TEXT",
     "limitations": "TEXT",
     "evidence_level": "TEXT",
+    "evidence_type": "TEXT",
     "apa_citation": "TEXT",
+    "geography_primary": "TEXT",
+    "geography_tags": "TEXT",
+    "geography_confidence": "REAL DEFAULT 0",
+    "geography_basis": "TEXT",
+    "study_location": "TEXT",
+    "author_affiliation_location": "TEXT",
+    "affiliation_locations": "TEXT",
+    "publication_location": "TEXT",
+    "geographic_mentions": "TEXT",
+    "geo_pr": "INTEGER DEFAULT 0",
+    "geo_us": "INTEGER DEFAULT 0",
+    "geo_latam_caribbean": "INTEGER DEFAULT 0",
     "read_full": "INTEGER DEFAULT 0",
     "favorite": "INTEGER DEFAULT 0",
     "created_at": "TEXT DEFAULT CURRENT_TIMESTAMP",
@@ -188,13 +201,21 @@ def _init_schema(con):
 
 
 def _paper_payload(p: dict) -> dict:
+    from geographic_intelligence import enrich_paper
+
+    p = enrich_paper(p)
     payload = {k: p.get(k) for k in PAPER_COLUMNS.keys() if k not in {"created_at", "updated_at"}}
     payload["title"] = payload.get("title") or "Sin título"
-    for key in ("source", "journal", "work_type", "doi", "url", "oa_url", "pdf_url", "abstract", "topics", "discovered_via", "summary", "why_it_matters", "applications", "limitations", "evidence_level", "apa_citation", "authors", "published_date"):
+    for key in ("source", "journal", "work_type", "doi", "url", "oa_url", "pdf_url", "abstract", "topics", "discovered_via", "summary", "why_it_matters", "applications", "limitations", "evidence_level", "evidence_type", "apa_citation", "authors", "published_date", "geography_primary", "study_location", "author_affiliation_location", "publication_location"):
         payload[key] = payload.get(key) or ""
-    for key in ("year", "cited_by_count", "read_full", "favorite"):
+    for key in ("geography_tags", "affiliation_locations", "geographic_mentions"):
+        payload[key] = json.dumps(payload.get(key) or [], ensure_ascii=False)
+    payload["geography_basis"] = json.dumps(
+        payload.get("geography_basis") or {}, ensure_ascii=False
+    )
+    for key in ("year", "cited_by_count", "read_full", "favorite", "geo_pr", "geo_us", "geo_latam_caribbean"):
         payload[key] = int(payload.get(key) or 0)
-    for key in ("relevance_score", "practical_score", "evidence_score", "recency_score"):
+    for key in ("relevance_score", "practical_score", "evidence_score", "recency_score", "geography_confidence"):
         payload[key] = float(payload.get(key) or 0)
     return payload
 
@@ -235,7 +256,20 @@ def upsert_papers(papers: Iterable[dict]):
             "applications=CASE WHEN excluded.applications<>'' THEN excluded.applications ELSE papers.applications END",
             "limitations=CASE WHEN excluded.limitations<>'' THEN excluded.limitations ELSE papers.limitations END",
             "evidence_level=CASE WHEN excluded.evidence_level<>'' THEN excluded.evidence_level ELSE papers.evidence_level END",
+            "evidence_type=CASE WHEN excluded.evidence_type<>'' AND excluded.evidence_type<>'unknown' THEN excluded.evidence_type ELSE papers.evidence_type END",
             "apa_citation=CASE WHEN excluded.apa_citation<>'' THEN excluded.apa_citation ELSE papers.apa_citation END",
+            "geography_primary=CASE WHEN excluded.geography_confidence>=COALESCE(papers.geography_confidence,0) AND excluded.geography_primary<>'' THEN excluded.geography_primary ELSE papers.geography_primary END",
+            "geography_tags=CASE WHEN excluded.geography_confidence>=COALESCE(papers.geography_confidence,0) AND excluded.geography_tags<>'[]' THEN excluded.geography_tags ELSE papers.geography_tags END",
+            f"geography_confidence={greatest}(COALESCE(papers.geography_confidence,0), excluded.geography_confidence)",
+            "geography_basis=CASE WHEN excluded.geography_confidence>=COALESCE(papers.geography_confidence,0) AND excluded.geography_basis<>'{}' THEN excluded.geography_basis ELSE papers.geography_basis END",
+            "study_location=CASE WHEN excluded.study_location<>'' THEN excluded.study_location ELSE papers.study_location END",
+            "author_affiliation_location=CASE WHEN excluded.author_affiliation_location<>'' THEN excluded.author_affiliation_location ELSE papers.author_affiliation_location END",
+            "affiliation_locations=CASE WHEN excluded.affiliation_locations<>'[]' THEN excluded.affiliation_locations ELSE papers.affiliation_locations END",
+            "publication_location=CASE WHEN excluded.publication_location<>'' THEN excluded.publication_location ELSE papers.publication_location END",
+            "geographic_mentions=CASE WHEN excluded.geographic_mentions<>'[]' THEN excluded.geographic_mentions ELSE papers.geographic_mentions END",
+            f"geo_pr={greatest}(COALESCE(papers.geo_pr,0), excluded.geo_pr)",
+            f"geo_us={greatest}(COALESCE(papers.geo_us,0), excluded.geo_us)",
+            f"geo_latam_caribbean={greatest}(COALESCE(papers.geo_latam_caribbean,0), excluded.geo_latam_caribbean)",
             f"read_full={greatest}(COALESCE(papers.read_full,0), excluded.read_full)",
             f"favorite={greatest}(COALESCE(papers.favorite,0), excluded.favorite)",
             "updated_at=CURRENT_TIMESTAMP",
@@ -274,6 +308,7 @@ def list_papers(
     query: str | None = None,
     source: str | None = None,
     year: int | None = None,
+    geography: str | None = None,
     favorites_only: bool = False,
 ):
     """Return a filtered page of papers using portable parameterized SQL."""
@@ -301,6 +336,17 @@ def list_papers(
     if year is not None:
         conditions.append("year=?")
         params.append(int(year))
+    geography_columns = {
+        "puerto_rico": "geo_pr",
+        "united_states": "geo_us",
+        "latam_caribbean": "geo_latam_caribbean",
+    }
+    if geography is not None:
+        column = geography_columns.get(geography)
+        if column is None:
+            raise ValueError("Unsupported geography filter")
+        conditions.append(f"{column}=?")
+        params.append(1)
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     params.extend((int(limit), int(offset)))
     con = connect()

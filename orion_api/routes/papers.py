@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -20,9 +20,14 @@ def papers(
     query: Annotated[str | None, Query(min_length=2, max_length=300)] = None,
     source: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
     year: Annotated[int | None, Query(ge=1800, le=2200)] = None,
+    geography: Annotated[
+        Literal["puerto_rico", "united_states", "latam_caribbean"] | None,
+        Query(),
+    ] = None,
 ) -> PaperListResponse:
     items = paper_service.list_papers(
-        limit=limit, offset=offset, query=query, source=source, year=year
+        limit=limit, offset=offset, query=query, source=source, year=year,
+        geography=geography,
     )
     return PaperListResponse(items=items, limit=limit, offset=offset, count=len(items))
 

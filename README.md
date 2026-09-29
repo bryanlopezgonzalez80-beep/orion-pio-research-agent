@@ -96,7 +96,8 @@ Antes de habilitar el modo de producción, configura `ORION_ENV`, una clave inte
 
 Orion's daily refresh now uses a high-recall discovery engine instead of a small fixed topic sample.
 
-- Sweeps the full PIO topic taxonomy plus umbrella and geographic queries.
+- Preserves the 188-query global PIO taxonomy, journal watch, and historical backfill.
+- Runs a separate bounded Geographic Evidence Intelligence layer for Puerto Rico, the United States, and Latin America/Caribbean.
 - Queries Crossref, PubMed/NCBI, and Europe PMC across the taxonomy.
 - Adds arXiv for AI/technology/future-of-work topics.
 - Uses Semantic Scholar automatically when its key is configured.
@@ -105,5 +106,8 @@ Orion's daily refresh now uses a high-recall discovery engine instead of a small
 - Advances a resumable historical Crossref backfill month by month.
 - Exposes `GET /api/v1/radar/status` and asynchronous `POST /api/v1/radar/refresh` for the Site's "Actualizar Radar ahora" flow.
 - Keeps Google Scholar, APA PsycNet, SIOP, SSRN, Academy of Management, and DOAJ as directed complementary sources when automated ingestion is unavailable or not authorized.
+- Stores study location separately from author affiliation, publication location, and lower-confidence geographic mentions.
+- Rotates geographic queries, U.S. state groups, and Latin America/Caribbean groups with independent persistent cursors and budgets.
 
 The design targets maximum practical, lawful coverage; it does not claim literal coverage of every page or licensed database on the internet.
+CONUCO and other sources without an authorized automated API remain directed/manual sources. Their records are never assumed to be peer reviewed. See `docs/GEOGRAPHIC_INTELLIGENCE.md`.

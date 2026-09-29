@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import data_store
 
 
@@ -7,9 +9,12 @@ TEXT_FIELDS = {
     "authors", "published_date", "source", "journal", "work_type", "doi", "url",
     "oa_url", "pdf_url", "abstract", "topics", "summary", "why_it_matters",
     "applications", "limitations", "evidence_level", "apa_citation",
+    "evidence_type", "geography_primary", "study_location",
+    "author_affiliation_location", "publication_location",
 }
-INTEGER_FIELDS = {"year", "cited_by_count", "read_full", "favorite"}
-FLOAT_FIELDS = {"relevance_score"}
+LIST_FIELDS = {"geography_tags", "affiliation_locations", "geographic_mentions"}
+INTEGER_FIELDS = {"year", "cited_by_count", "read_full", "favorite", "geo_pr", "geo_us", "geo_latam_caribbean"}
+FLOAT_FIELDS = {"relevance_score", "geography_confidence"}
 
 
 def _normalize_paper(paper: dict) -> dict:
@@ -22,6 +27,21 @@ def _normalize_paper(paper: dict) -> dict:
         normalized[field] = int(normalized.get(field) or 0)
     for field in FLOAT_FIELDS:
         normalized[field] = float(normalized.get(field) or 0)
+    for field in LIST_FIELDS:
+        value = normalized.get(field)
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (TypeError, ValueError):
+                value = []
+        normalized[field] = value if isinstance(value, list) else []
+    basis = normalized.get("geography_basis")
+    if isinstance(basis, str):
+        try:
+            basis = json.loads(basis)
+        except (TypeError, ValueError):
+            basis = {}
+    normalized["geography_basis"] = basis if isinstance(basis, dict) else {}
     return normalized
 
 
@@ -33,6 +53,7 @@ def list_papers(
     source: str | None = None,
     year: int | None = None,
     favorites_only: bool = False,
+    geography: str | None = None,
 ) -> list[dict]:
     papers = data_store.list_papers(
         limit=limit,
@@ -41,6 +62,7 @@ def list_papers(
         source=source,
         year=year,
         favorites_only=favorites_only,
+        geography=geography,
     )
     return [_normalize_paper(paper) for paper in papers]
 
