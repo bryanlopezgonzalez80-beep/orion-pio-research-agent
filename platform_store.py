@@ -135,6 +135,19 @@ def record_source_success(source, *, path=None):
           consecutive_failures=excluded.consecutive_failures,
           circuit_open_until=excluded.circuit_open_until,last_checked=excluded.last_checked""",(source,_iso()))
 
+def record_source_inactive(source, *, path=None):
+    """Mark an optional/unconfigured provider inactive without fabricating success."""
+    with connect(path) as con:
+        con.execute(
+            """INSERT INTO orion_source_health(source,last_status,last_error,success_count,failure_count,consecutive_failures,circuit_open_until,last_checked)
+               VALUES(?,'inactive','',0,0,0,NULL,?) ON CONFLICT(source) DO UPDATE SET
+               last_status=excluded.last_status,last_error=excluded.last_error,
+               consecutive_failures=excluded.consecutive_failures,
+               circuit_open_until=excluded.circuit_open_until,last_checked=excluded.last_checked""",
+            (source, _iso()),
+        )
+
+
 def record_source_failure(source, error, *, path=None, threshold=3, cooldown_minutes=15):
     now=_utcnow()
     with connect(path) as con:
