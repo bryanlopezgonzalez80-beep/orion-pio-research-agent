@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import random
 import re
@@ -120,13 +121,16 @@ def route_query(query, domain="auto"):
 
 def source_search_url(source, query):
     q=quote_plus(query)
+    doaj_source=quote_plus(json.dumps({
+        "query":{"query_string":{"query":query,"default_operator":"AND"}}
+    }, separators=(",",":")))
     urls={
       "Google Scholar":f"https://scholar.google.com/scholar?q={q}",
       "APA PsycNet":f"https://psycnet.apa.org/search/results?term={q}",
       "SIOP":f"https://www.google.com/search?q=site%3Asiop.org+{q}",
       "SSRN":f"https://papers.ssrn.com/sol3/results.cfm?txtKey_Words={q}",
       "Academy of Management":f"https://journals.aom.org/action/doSearch?AllField={q}",
-      "DOAJ":f"https://www.google.com/search?q=site%3Adoaj.org%2Farticle+{q}",
+      "DOAJ":f"https://doaj.org/search?source={doaj_source}&ref=homepage-box",
       "OSL / SUTRA":f"https://www.google.com/search?q=site%3Asutra.oslpr.org+{q}",
       "Departamento de Estado PR":f"https://www.google.com/search?q=site%3Aestado.pr.gov+{q}",
       "Biblioteca Jurídica Virtual PR":f"https://www.google.com/search?q=site%3Abibliotecavirtual.estado.pr.gov+{q}",
