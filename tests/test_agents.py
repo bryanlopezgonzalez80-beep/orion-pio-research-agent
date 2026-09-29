@@ -22,8 +22,31 @@ def test_daily_agent_main_uses_mocks_and_temporary_reports(tmp_path, monkeypatch
     reports = tmp_path / "reports"
     reports.mkdir()
     monkeypatch.setattr(daily_agent, "REPORTS", reports)
-    monkeypatch.setattr(daily_agent, "CORE_TOPICS", ["leadership"])
     monkeypatch.setattr(daily_agent, "verify_database_backend", lambda: "sqlite")
+    monkeypatch.setattr(
+        daily_agent,
+        "run_deep_harvest",
+        lambda include_backfill=True: {
+            "coverage_query_count": 99,
+            "live": {
+                "received": 4,
+                "unique_seen": 3,
+                "queries_processed": 99,
+                "queries_total": 99,
+                "errors": [],
+                "source_totals": {"Crossref": {"results": 4, "network_requests": 2}},
+                "secondary_sources": ["Google Scholar"],
+            },
+            "backfill": {
+                "received": 2,
+                "unique_seen": 2,
+                "months_processed": 1,
+                "next_cursor": "2026-08-01",
+                "errors": [],
+            },
+        },
+    )
+    monkeypatch.setattr(daily_agent, "coverage_queries", lambda: ["leadership"])
     monkeypatch.setattr(daily_agent, "alerts_due", lambda: [
         {"id": 1, "query": "Ley 80 Puerto Rico", "domain": "auto", "sources_json": "[]"},
         {"id": 2, "query": "teams", "domain": "academic", "sources_json": "invalid"},
@@ -35,14 +58,18 @@ def test_daily_agent_main_uses_mocks_and_temporary_reports(tmp_path, monkeypatch
     monkeypatch.setattr(daily_agent, "_run", lambda query, sources=None: {
         "results": [dict(sample_paper, id=query)], "errors": [], "received": 1, "unique": 1,
     })
-    saved, marked = [], []
+    saved, marked, runs = [], [], []
     monkeypatch.setattr(daily_agent, "upsert_papers", lambda papers: saved.extend(papers))
     monkeypatch.setattr(daily_agent, "mark_alert_run", marked.append)
+    monkeypatch.setattr(daily_agent, "log_radar_run", lambda *args: runs.append(args))
     daily_agent.main()
-    assert len(saved) == 2
+    assert len(saved) == 1
     assert marked == [1, 2]
+    assert len(runs) == 1
     json_file = next(reports.glob("daily_*.json"))
-    assert json.loads(json_file.read_text(encoding="utf-8"))["results_seen"] == 2
+    payload = json.loads(json_file.read_text(encoding="utf-8"))
+    assert payload["results_seen"] == 7
+    assert payload["deep_harvest"]["coverage_query_count"] == 99
     assert next(reports.glob("daily_*.md")).stat().st_size > 0
 
 
@@ -123,7 +150,9 @@ def test_cloud_agents_fail_before_work_when_postgres_is_unavailable(agent, monke
     )
     if agent is daily_agent:
         monkeypatch.setattr(
-            agent, "_run", lambda *args, **kwargs: pytest.fail("daily work started")
+            agent,
+            "run_deep_harvest",
+            lambda *args, **kwargs: pytest.fail("daily work started"),
         )
     else:
         monkeypatch.setattr(
