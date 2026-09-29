@@ -10,6 +10,7 @@ This file records the provider constraints Orion uses for safe pacing. Limits ca
 | Crossref | 1.0 s minimum between list/search requests without `CROSSREF_EMAIL`; about 0.34 s with it. | Public pool list queries: 1 request/s, concurrency 1. Polite pool list queries: 3 requests/s, concurrency 3. |
 | Semantic Scholar | 1.0 s minimum. | The introductory API-key limit is 1 request/s across endpoints. Unauthenticated traffic shares a public pool and may be throttled. |
 | Europe PMC | 0.25 s conservative Orion pacing plus retry/backoff. | Europe PMC provides REST APIs and bulk/OAI alternatives, but its public developer pages do not publish a fixed numeric request quota. |
+| PubMed / NCBI | ~0.34 s minimum without a key; 0.10 s with `NCBI_API_KEY`. | NCBI supports up to 3 E-utility requests/s without an API key and 10 requests/s with a key. Orion batches PubMed IDs through ESearch + ESummary. |
 | arXiv | 3.0 s minimum, serialized by Orion's process-wide pacer. | Legacy API guidance: no more than one request every 3 seconds and one connection at a time. |
 
 ## Manual / complementary sources
@@ -32,3 +33,18 @@ Each live search reports per-source telemetry:
 - human-readable provider guidance.
 
 This telemetry counts Orion's activity for that search. It is not a guaranteed provider-wide remaining-quota figure unless a future provider integration explicitly reads and exposes a trustworthy remaining-quota header.
+
+
+## Deep harvest coverage
+
+The daily agent performs a high-recall sweep rather than only the old eight-topic sample.
+
+- The detailed PIO taxonomy is derived from Orion's topic groups plus broad umbrella concepts and geographic queries for Puerto Rico, the Caribbean, Latin America, the United States, and international work.
+- Crossref, PubMed, and Europe PMC are queried across the full taxonomy on each live sweep.
+- arXiv is added for technology / AI / automation topics.
+- Semantic Scholar participates automatically when its API key is configured.
+- OpenAlex remains usable without a key, but because anonymous usage has a much smaller daily budget Orion rotates a bounded set of OpenAlex queries per run instead of exhausting the provider. This is intentionally compatible with deployments that choose not to configure an OpenAlex key.
+- A resumable Crossref historical backfill walks older literature month by month and persists its cursor in `orion_settings`. It defaults to four months per daily run and a 1950 floor; both are configurable.
+- Every query is persisted immediately. Later provider failures do not roll back earlier discoveries.
+
+This is designed for **maximum practical coverage**, not a claim that Orion contains literally every scholarly page on the internet. Licensed databases or services without a permitted public API remain directed secondary sources rather than scraped sources.
