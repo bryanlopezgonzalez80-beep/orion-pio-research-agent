@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 from datetime import date
 
 import pytest
@@ -128,11 +129,92 @@ def test_backfill_honors_retry_after_before_recovery(monkeypatch):
     assert result["errors"] == []
 
 
+def test_persistent_429_uses_status_code_and_stops_provider(monkeypatch):
+    class Response:
+        status_code = 429
+        headers = {"Retry-After": "0"}
+
+    class Limited(Exception):
+        response = Response()
+
+    calls = []
+    monkeypatch.setattr(deep_harvest, "BACKFILL_QUERIES", ["one", "two"])
+    monkeypatch.setattr(deep_harvest, "PIO_JOURNALS", [])
+    monkeypatch.setattr(deep_harvest, "get_setting", lambda key, default=None: "2026-09-01" if key.endswith("backfill_cursor") else default)
+    monkeypatch.setattr(deep_harvest, "set_setting", lambda *args: None)
+
+    def limited(query, *args, **kwargs):
+        calls.append(query)
+        raise Limited("temporarily unavailable")
+
+    monkeypatch.setattr(deep_harvest, "search_crossref_window", limited)
+    deep_harvest.run_historical_backfill(months_per_run=1, sleep_fn=lambda _delay: None)
+
+    assert calls == ["one", "one", "one"]
+    assert get_checkpoint("2026-08-01", "Crossref", "query", "one")["status"] == "RATE_LIMITED"
+    assert get_checkpoint("2026-08-01", "Crossref", "query", "two")["status"] == "PENDING"
+
+
 def test_enrichment_queue_is_idempotent_after_persistence(sample_paper):
     data_store.upsert_papers([sample_paper, dict(sample_paper)])
     summary = enrichment_summary()
     assert summary["pending"] == 1
     assert summary["completed"] == 0
+
+
+def test_access_upsert_never_degrades_open_access(sample_paper):
+    data_store.upsert_papers([{
+        **sample_paper, "id": "access", "oa_url": "https://repository.example/open",
+    }])
+    data_store.upsert_papers([{
+        **sample_paper, "id": "access", "oa_url": "", "url": "https://publisher.example/landing",
+    }])
+    stored = data_store.get_paper("access")
+    assert stored["access_status"] == "OPEN_ACCESS"
+    assert stored["best_access_url"] == "https://repository.example/open"
+    assert stored["open_access"] == 1
+    assert {item["url"] for item in json.loads(stored["alternative_access_options"])} >= {"https://publisher.example/landing"}
+
+
+def test_open_access_filter_and_observability_use_boolean(sample_paper):
+    data_store.upsert_papers([{**sample_paper, "id": "oa", "oa_url": "https://repository.example/open"}])
+    con = data_store.connect()
+    try:
+        con.execute("UPDATE papers SET access_status='DOI_ONLY', open_access=1 WHERE id=?", ("oa",))
+        con.commit()
+    finally:
+        con.close()
+    assert [row["id"] for row in data_store.list_papers(open_access=True)] == ["oa"]
+    assert data_store.evidence_observability()["open_access"] == 1
+
+
+def test_preprint_observability_clause_is_not_duplicated(sample_paper):
+    data_store.upsert_papers([{**sample_paper, "id": "pre", "source": "arXiv", "work_type": "preprint"}])
+    assert data_store.evidence_observability()["preprints"] == 1
+    assert "IN ('PREPRINT','PREPRINT')" not in inspect.getsource(data_store.evidence_observability)
+
+
+def test_backfill_progress_resets_current_month_and_keeps_run_total(monkeypatch):
+    snapshots = []
+    counts = iter((0, 0))
+    monkeypatch.setattr(deep_harvest, "db_stats", lambda: {"papers": next(counts)})
+    monkeypatch.setattr(deep_harvest, "coverage_queries", lambda: ["q"] * 188)
+    monkeypatch.setattr(deep_harvest, "set_setting", lambda *args: None)
+    monkeypatch.setattr(deep_harvest, "run_live_sweep", lambda progress_callback=None: {"received": 0, "unique_seen": 0, "errors": []})
+    monkeypatch.setattr(deep_harvest, "run_geographic_booster", lambda progress_callback=None: {"received": 0, "unique_seen": 0, "errors": []})
+
+    def backfill(progress_callback=None):
+        progress_callback({"phase": "backfill", "backfill_month": "2026-08-01", "backfill_tasks_completed": 33, "backfill_tasks_total": 33, "backfill_month_tasks_completed": 33, "backfill_month_tasks_total": 33, "backfill_tasks_completed_total": 33})
+        progress_callback({"phase": "backfill", "backfill_month": "2026-07-01", "backfill_tasks_completed": 0, "backfill_tasks_total": 33, "backfill_month_tasks_completed": 0, "backfill_month_tasks_total": 33, "backfill_tasks_completed_total": 33})
+        return {"received": 0, "unique_seen": 0, "errors": []}
+
+    monkeypatch.setattr(deep_harvest, "run_historical_backfill", backfill)
+    deep_harvest.run_deep_harvest(progress_callback=snapshots.append)
+
+    assert snapshots[-1]["backfill_month"] == "2026-07-01"
+    assert snapshots[-1]["backfill_month_tasks_completed"] == 0
+    assert snapshots[-1]["backfill_tasks_completed"] == 0
+    assert snapshots[-1]["backfill_tasks_completed_total"] == 33
 
 
 def test_registry_lifecycle_does_not_claim_unimplemented_adapters(monkeypatch):

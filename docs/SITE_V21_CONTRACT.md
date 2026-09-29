@@ -22,6 +22,11 @@ The Site calls the Orion API server-side using `X-Orion-API-Key`. It never conne
 
 Corpus totals and current-run metrics are deliberately separate. `estimated_months_remaining` is `null` until a trustworthy estimate exists.
 
+During backfill, `backfill_month_tasks_completed` / `backfill_month_tasks_total`
+describe the current month and may reset when the month changes;
+`backfill_tasks_completed_total` is monotonic across the complete run. The legacy
+`backfill_tasks_completed` field remains as a current-month compatibility alias.
+
 ## Paper and radar filters
 
 `GET /api/v1/papers` and `GET /api/v1/radar` use parameterized allowlisted filters:
@@ -49,3 +54,7 @@ Existing title, authors, year, journal, DOI, URL, and abstract fields remain. Ad
 - `institutional_access_possible`, `open_access`, `pdf_available`, `html_available`, `doi_url`, `alternative_access_options`.
 
 Show a prominent warning when retracted or under expression of concern. Access buttons must use `best_access_url` and status: “Open article” for confirmed OA, “Access with institution” for OpenURL, or “Login with provider” for licensed access. Orion never receives the user’s provider credentials.
+
+Access observations never downgrade a previously confirmed route. Precedence is
+Open Access, institutional/provider access, publisher access, DOI-only, then
+metadata/unknown; weaker later routes remain available as alternatives.
