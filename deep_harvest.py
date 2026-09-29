@@ -14,10 +14,14 @@ from datetime import date, datetime, timedelta, timezone
 from data_store import upsert_papers
 from orion_platform import TOPIC_GROUPS, execute_academic_search, route_query, source_search_url
 from platform_store import get_setting, set_setting
-from research_agent import deduplicate, search_crossref_window
+from research_agent import (
+    deduplicate,
+    search_crossref_journal_window,
+    search_crossref_window,
+)
 
 STATE_PREFIX = "deep_harvest"
-BACKFILL_FLOOR_YEAR = int(os.getenv("ORION_BACKFILL_FLOOR_YEAR", "1950"))
+BACKFILL_FLOOR_YEAR = int(os.getenv("ORION_BACKFILL_FLOOR_YEAR", "1900"))
 
 # Broad anchors catch work that uses neighboring terminology instead of a
 # canonical I-O Psychology label. TOPIC_GROUPS contributes the detailed layer.
@@ -65,6 +69,36 @@ BACKFILL_QUERIES = [
     "organizational development change",
     "employee wellbeing occupational stress",
     "teams workplace performance",
+]
+
+
+# Exact Crossref container-title watch. This captures new papers from central
+# work/organizational journals even when their titles use novel terminology
+# that does not match Orion's concept queries.
+PIO_JOURNALS = [
+    "Journal of Applied Psychology",
+    "Personnel Psychology",
+    "Journal of Organizational Behavior",
+    "Organizational Behavior and Human Decision Processes",
+    "Human Relations",
+    "Journal of Management",
+    "The Leadership Quarterly",
+    "Human Resource Management",
+    "Applied Psychology",
+    "Work & Stress",
+    "Journal of Occupational Health Psychology",
+    "European Journal of Work and Organizational Psychology",
+    "Industrial and Organizational Psychology",
+    "International Journal of Selection and Assessment",
+    "Organizational Research Methods",
+    "Academy of Management Journal",
+    "Academy of Management Review",
+    "Journal of Business and Psychology",
+    "Journal of Vocational Behavior",
+    "Journal of Occupational and Organizational Psychology",
+    "Human Performance",
+    "Group & Organization Management",
+    "Occupational Health Science",
 ]
 
 TECH_HINTS = (
@@ -196,6 +230,39 @@ def run_live_sweep(
                 if paper_id:
                     unique_seen[paper_id] = paper
 
+    journal_watch_received = 0
+    journal_watch_unique = 0
+    journal_start = date.today() - timedelta(days=days)
+    if time.monotonic() - started < max_runtime_seconds:
+        journal_batch: list[dict] = []
+        for journal in PIO_JOURNALS:
+            if time.monotonic() - started >= max_runtime_seconds:
+                stopped_for_budget = True
+                break
+            try:
+                papers = search_crossref_journal_window(
+                    journal,
+                    journal_start,
+                    date.today(),
+                    max_records=250,
+                    page_size=200,
+                )
+                journal_watch_received += len(papers)
+                journal_batch.extend(papers)
+            except Exception as exc:
+                errors.append(
+                    f"journal watch {journal}: {type(exc).__name__}: {exc}"
+                )
+        journal_unique = deduplicate(journal_batch)
+        if journal_unique:
+            upsert_papers(journal_unique)
+            before = len(unique_seen)
+            for paper in journal_unique:
+                paper_id = str(paper.get("id") or "")
+                if paper_id:
+                    unique_seen[paper_id] = paper
+            journal_watch_unique = len(unique_seen) - before
+
     if not os.getenv("OPENALEX_API_KEY"):
         set_setting(f"{STATE_PREFIX}.openalex_rotation", next_rotation)
 
@@ -211,6 +278,9 @@ def run_live_sweep(
         "errors": errors,
         "stopped_for_runtime_budget": stopped_for_budget,
         "openalex_queries_this_run": len(openalex_queries),
+        "journal_watch_count": len(PIO_JOURNALS),
+        "journal_watch_received": journal_watch_received,
+        "journal_watch_unique": journal_watch_unique,
         "source_totals": {name: dict(values) for name, values in source_totals.items()},
         "secondary_sources": list(
             route_query("industrial organizational psychology", "academic")["manual_sources"]
@@ -273,6 +343,21 @@ def run_historical_backfill(
                 month_errors.append(msg)
                 errors.append(f"{month_start.isoformat()}: {msg}")
 
+        for journal in PIO_JOURNALS:
+            try:
+                papers = search_crossref_journal_window(
+                    journal,
+                    month_start,
+                    month_end,
+                    max_records=250,
+                    page_size=200,
+                )
+                month_results.extend(papers)
+            except Exception as exc:
+                msg = f"journal watch {journal}: {type(exc).__name__}: {exc}"
+                month_errors.append(msg)
+                errors.append(f"{month_start.isoformat()}: {msg}")
+
         unique = deduplicate(month_results)
         if unique:
             upsert_papers(unique)
@@ -295,6 +380,7 @@ def run_historical_backfill(
     result = {
         "mode": "historical_backfill",
         "floor_year": BACKFILL_FLOOR_YEAR,
+        "journal_watch_count": len(PIO_JOURNALS),
         "next_cursor": cursor.isoformat(),
         "months_processed": len(windows),
         "received": total_received,
@@ -312,6 +398,7 @@ def run_deep_harvest(*, include_backfill: bool = True) -> dict:
     result = {
         "completed_at": _utcnow().isoformat(timespec="seconds"),
         "coverage_query_count": len(coverage_queries()),
+        "journal_watch_count": len(PIO_JOURNALS),
         "live": live,
         "backfill": backfill,
     }
