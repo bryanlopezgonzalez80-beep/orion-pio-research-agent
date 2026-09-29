@@ -9,6 +9,7 @@ from orion_api.config import APISettings, DEFAULT_ALLOWED_ORIGINS, get_settings
 from orion_api.errors import ExternalRateLimit, ExternalSearchError, ExternalSearchTimeout
 from orion_api.main import create_app
 from orion_api.routes import health as health_route
+from orion_api.routes import radar as radar_route
 from orion_api.services import paper_service, research_service
 
 pytestmark = pytest.mark.integration
@@ -130,6 +131,49 @@ def test_radar_is_accumulated_and_new_results_do_not_replace_old(client, sample_
     after_ids = {paper["id"] for paper in after.json()["items"]}
     assert "radar:first" in before_ids
     assert {"radar:first", "radar:second"} <= after_ids
+
+
+def test_radar_coverage_status_exposes_catalog_and_persisted_count(client, sample_paper, monkeypatch):
+    data_store.upsert_papers([sample_paper])
+    monkeypatch.setattr(
+        radar_route,
+        "latest_coverage_run",
+        lambda: {
+            "id": 7,
+            "trigger": "scheduled",
+            "status": "success",
+            "topics_total": 100,
+            "topics_completed": 100,
+        },
+    )
+
+    response = client.get("/api/v1/radar/coverage")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["catalog_topics"] >= 100
+    assert body["catalog_domains"] >= 10
+    assert body["papers_persisted"] >= 1
+    assert body["last_run"]["status"] == "success"
+    assert "api_key" not in response.text.lower()
+
+
+def test_manual_radar_refresh_queues_background_job(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        radar_route,
+        "run_comprehensive_refresh",
+        lambda trigger: calls.append(trigger) or {"status": "success"},
+    )
+    if radar_route._refresh_lock.locked():
+        radar_route._refresh_lock.release()
+
+    response = client.post("/api/v1/radar/refresh")
+
+    assert response.status_code == 202
+    assert response.json()["accepted"] is True
+    assert calls == ["manual"]
+    assert radar_route._refresh_lock.locked() is False
 
 
 def test_paper_detail_supports_text_id_with_slash(client, sample_paper):
