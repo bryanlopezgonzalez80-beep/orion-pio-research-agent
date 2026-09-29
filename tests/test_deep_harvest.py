@@ -9,6 +9,20 @@ import deep_harvest
 pytestmark = pytest.mark.integration
 
 
+def test_crossref_transient_503_backoff_is_retryable(monkeypatch):
+    class Response:
+        status_code = 503
+        headers = {}
+
+    class Unavailable(Exception):
+        response = Response()
+
+    monkeypatch.setattr(deep_harvest.random, "random", lambda: 0.0)
+
+    assert deep_harvest._backfill_retry_delay(Unavailable("down"), 0) == 2.0
+    assert deep_harvest._backfill_retry_delay(Unavailable("down"), 1) == 4.0
+
+
 def test_coverage_catalog_is_broad_and_global():
     queries = deep_harvest.coverage_queries()
     assert len(queries) >= 150
