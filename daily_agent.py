@@ -53,6 +53,7 @@ def main():
     summaries = []
     errors = list((deep.get("live") or {}).get("errors") or [])
     errors.extend((deep.get("backfill") or {}).get("errors") or [])
+    errors.extend((deep.get("geography") or {}).get("errors") or [])
 
     summaries.append(
         {
@@ -76,6 +77,20 @@ def main():
                 "coverage": f"{deep['backfill'].get('months_processed', 0)} month windows",
             }
         )
+    geography = deep.get("geography") or {}
+    if geography:
+        for label, totals in (geography.get("geography_totals") or {}).items():
+            summaries.append(
+                {
+                    "query": f"Geographic Intelligence — {label}",
+                    "received": totals.get("received", 0),
+                    "unique": totals.get("unique_seen", 0),
+                    "errors": totals.get("errors", 0),
+                    "coverage": (
+                        f"{totals.get('queries_processed', 0)} geographic queries"
+                    ),
+                }
+            )
 
     # User-created alerts remain additive to the broad daily sweep.
     for alert in alerts_due():
@@ -116,14 +131,17 @@ def main():
 
     live = deep.get("live") or {}
     backfill = deep.get("backfill") or {}
+    geography = deep.get("geography") or {}
     total_seen = (
         int(live.get("received") or 0)
         + int(backfill.get("received") or 0)
+        + int(geography.get("received") or 0)
         + len(alert_results)
     )
     total_unique = (
         int(live.get("unique_seen") or 0)
         + int(backfill.get("unique_seen") or 0)
+        + int(geography.get("unique_seen") or 0)
         + len({p.get("id") for p in alert_results if p.get("id")})
     )
 
@@ -166,6 +184,14 @@ def main():
             f"{values.get('network_requests', 0)} requests; "
             f"{values.get('retries', 0)} reintentos; "
             f"{values.get('rate_limited_queries', 0)} consultas con 429."
+        )
+
+    md += ["", "## Geographic Evidence Intelligence"]
+    for label, values in (geography.get("geography_totals") or {}).items():
+        md.append(
+            f"- **{label}** — {values.get('queries_processed', 0)} consultas; "
+            f"{values.get('received', 0)} resultados; "
+            f"{values.get('unique_seen', 0)} únicos."
         )
 
     md += ["", "## Fuentes complementarias"]

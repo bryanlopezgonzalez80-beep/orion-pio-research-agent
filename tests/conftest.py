@@ -46,6 +46,10 @@ def isolated_environment(tmp_path, monkeypatch):
         "ORION_RATE_LIMIT_SEARCH_PER_MINUTE",
         "ORION_RATE_LIMIT_WRITE_PER_MINUTE",
         "ORION_RATE_LIMIT_READ_PER_MINUTE",
+        "ORION_GEO_PR_QUERIES_PER_RUN",
+        "ORION_GEO_US_QUERIES_PER_RUN",
+        "ORION_GEO_LATAM_QUERIES_PER_RUN",
+        "ORION_GEO_RUNTIME_SECONDS",
     ):
         monkeypatch.delenv(name, raising=False)
 

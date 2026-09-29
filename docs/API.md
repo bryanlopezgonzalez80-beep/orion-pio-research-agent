@@ -28,6 +28,10 @@ Interactive documentation is available at `/docs`; the OpenAPI document is `/ope
 | `ORION_OPENALEX_QUERIES_PER_RUN` | Anonymous OpenAlex query budget per deep sweep; defaults to 12. |
 | `ORION_BACKFILL_MONTHS_PER_RUN` | Historical Crossref month windows processed per daily run; defaults to 4. |
 | `ORION_BACKFILL_FLOOR_YEAR` | Oldest year targeted by automatic historical backfill; defaults to 1950. |
+| `ORION_GEO_PR_QUERIES_PER_RUN` | Puerto Rico geographic query budget; defaults to 6. |
+| `ORION_GEO_US_QUERIES_PER_RUN` | United States geographic query budget; defaults to 4. |
+| `ORION_GEO_LATAM_QUERIES_PER_RUN` | Latin America/Caribbean geographic query budget; defaults to 3. |
+| `ORION_GEO_RUNTIME_SECONDS` | Separate Geographic Intelligence runtime budget; defaults to 180 seconds. |
 | `ORION_ENV` | `development` by default; set explicitly to `production` only after production requirements are configured. |
 | `ORION_ALLOWED_ORIGINS` | Comma-separated browser origins. Development defaults locally; production requires explicit HTTPS, non-local origins. Wildcards are rejected. |
 | `ORION_API_KEY` | Optional only in development. Production requires at least 32 characters. Protected endpoints use `X-Orion-API-Key`; health, docs, and OpenAPI remain public. |
@@ -43,9 +47,9 @@ The canonical application routes use `/api/v1`. `/health` is also exposed withou
 | --- | --- | --- |
 | GET | `/health` | Sanitized database reachability. |
 | GET | `/api/v1/health` | Versioned health endpoint. |
-| GET | `/api/v1/papers` | Paged papers with optional `query`, `source`, and `year` filters. |
+| GET | `/api/v1/papers` | Paged papers with optional `query`, `source`, `year`, and allowlisted `geography` filters. |
 | GET | `/api/v1/papers/{paper_id}` | Paper detail; IDs are text and may contain DOI-style punctuation or slashes. |
-| GET | `/api/v1/radar` | Accumulated persisted research radar; new searches add results instead of replacing earlier findings. |
+| GET | `/api/v1/radar` | Accumulated persisted research radar with optional `geography=puerto_rico|united_states|latam_caribbean`. |
 | GET | `/api/v1/radar/status` | Deep-harvest coverage, historical cursor, source configuration flags, secondary-source links, and last manual refresh state. |
 | POST | `/api/v1/radar/refresh` | Queue a non-blocking full live PIO taxonomy sweep. Returns `202`; clients poll `/radar/status` for completion. |
 | GET | `/api/v1/sources` | Public source catalog and sanitized known status. |
@@ -107,6 +111,7 @@ The daily cloud job and manual refresh endpoint share the same high-recall engin
 - The live sweep covers Orion's full PIO taxonomy plus umbrella and geographic queries. Crossref, PubMed, and Europe PMC are queried across the taxonomy. arXiv is added to technology/AI topics. Semantic Scholar is included when its key is configured.
 - OpenAlex is deliberately rotated when no OpenAlex key exists so anonymous provider budget is not exhausted. Orion does not require an OpenAlex key.
 - Daily automation also advances a resumable historical Crossref backfill in month-sized windows.
+- After the global live sweep, Orion runs a separately budgeted geographic booster before historical backfill. It rotates Puerto Rico, U.S. state, and Latin America/Caribbean queries without multiplying the 188-query global taxonomy.
 - `POST /api/v1/radar/refresh` starts the live sweep only; it does not run historical backfill in the request-triggered job. The route returns quickly and the worker persists articles query-by-query.
 - `GET /api/v1/radar/status` is the polling/status surface. A client should show queued/running/completed/failed state and then refresh `GET /api/v1/radar` after completion.
 - The manual refresh worker is best-effort within the current single API process. The scheduled GitHub Actions daily harvest remains the durable source of continuity; distributed job locking/queues belong to the scalability phase.
@@ -123,6 +128,12 @@ updates `manual_refresh` incrementally. The safe progress payload includes the
 current phase, processed/total taxonomy queries, records received, unique papers
 seen, journal-watch progress, and aggregate per-source counters. It does not
 expose provider credentials, database URLs, or raw exception text.
+
+Optional additive fields include `geography_phase`, `geo_queries_processed`,
+`geo_queries_total`, and `geography_totals`. Existing Site clients may ignore
+them. `/radar/status` also adds a `geography` block with coverage, persistent
+rotation cursors, last refresh, discoveries, unique results, and partial source
+incidents without renaming existing fields.
 
 The Site may poll this status every 8–10 seconds and stop when
 `manual_refresh.state` becomes `completed` or `failed`.

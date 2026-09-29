@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
 from data_store import upsert_papers
+from geographic_intelligence import geography_status, run_geographic_booster
 from orion_platform import TOPIC_GROUPS, execute_academic_search, route_query, source_search_url
 from platform_store import get_setting, set_setting
 from research_agent import (
@@ -588,12 +589,14 @@ def run_deep_harvest(
     progress_callback: Callable[[dict], None] | None = None,
 ) -> dict:
     live = run_live_sweep(progress_callback=progress_callback)
+    geography = run_geographic_booster(progress_callback=progress_callback)
     backfill = run_historical_backfill() if include_backfill else None
     result = {
         "completed_at": _utcnow().isoformat(timespec="seconds"),
         "coverage_query_count": len(coverage_queries()),
         "journal_watch_count": len(PIO_JOURNALS),
         "live": live,
+        "geography": geography,
         "backfill": backfill,
     }
     set_setting(f"{STATE_PREFIX}.last_run", result)
@@ -609,6 +612,7 @@ def harvest_status() -> dict:
         "backfill_cursor": get_setting(f"{STATE_PREFIX}.backfill_cursor"),
         "openalex_key_configured": bool(os.getenv("OPENALEX_API_KEY")),
         "semantic_scholar_key_configured": bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY")),
+        "geography": geography_status(),
         "secondary_sources": [
             {
                 "name": name,

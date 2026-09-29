@@ -29,7 +29,20 @@ class PaperResponse(BaseModel):
     applications: str = ""
     limitations: str = ""
     evidence_level: str = ""
+    evidence_type: str = ""
     apa_citation: str = ""
+    geography_primary: str = ""
+    geography_tags: list[str] = Field(default_factory=list)
+    geography_confidence: float = 0
+    geography_basis: dict[str, list[str]] = Field(default_factory=dict)
+    study_location: str = ""
+    author_affiliation_location: str = ""
+    affiliation_locations: list[str] = Field(default_factory=list)
+    publication_location: str = ""
+    geographic_mentions: list[str] = Field(default_factory=list)
+    geo_pr: int = 0
+    geo_us: int = 0
+    geo_latam_caribbean: int = 0
     read_full: int = 0
     favorite: int = 0
 

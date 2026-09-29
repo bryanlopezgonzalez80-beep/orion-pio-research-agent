@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
@@ -43,6 +43,10 @@ def _run_manual_refresh() -> None:
                 "journal_watch_processed": 0,
                 "journal_watch_total": 0,
                 "source_totals": {},
+                "geography_phase": "",
+                "geo_queries_processed": 0,
+                "geo_queries_total": 0,
+                "geography_totals": {},
             },
         )
 
@@ -65,6 +69,14 @@ def _run_manual_refresh() -> None:
                         progress.get("journal_watch_total") or 0
                     ),
                     "source_totals": progress.get("source_totals") or {},
+                    "geography_phase": progress.get("geography_phase") or "",
+                    "geo_queries_processed": int(
+                        progress.get("geo_queries_processed") or 0
+                    ),
+                    "geo_queries_total": int(
+                        progress.get("geo_queries_total") or 0
+                    ),
+                    "geography_totals": progress.get("geography_totals") or {},
                 },
             )
 
@@ -73,6 +85,7 @@ def _run_manual_refresh() -> None:
             progress_callback=report_progress,
         )
         live = result.get("live") or {}
+        geography = result.get("geography") or {}
         set_setting(
             _MANUAL_STATUS_KEY,
             {
@@ -86,6 +99,10 @@ def _run_manual_refresh() -> None:
                 "source_totals": live.get("source_totals") or {},
                 "journal_watch_processed": live.get("journal_watch_processed", 0),
                 "journal_watch_total": live.get("journal_watch_count", 0),
+                "geography_phase": "completed",
+                "geo_queries_processed": geography.get("queries_processed", 0),
+                "geo_queries_total": geography.get("queries_total", 0),
+                "geography_totals": geography.get("geography_totals") or {},
             },
         )
     except Exception as exc:
@@ -106,9 +123,15 @@ def _run_manual_refresh() -> None:
 def radar(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+    geography: Annotated[
+        Literal["puerto_rico", "united_states", "latam_caribbean"] | None,
+        Query(),
+    ] = None,
 ) -> PaperListResponse:
     """Return the accumulated research radar instead of only the latest search."""
-    items = paper_service.list_papers(limit=limit, offset=offset)
+    items = paper_service.list_papers(
+        limit=limit, offset=offset, geography=geography
+    )
     return PaperListResponse(items=items, limit=limit, offset=offset, count=len(items))
 
 

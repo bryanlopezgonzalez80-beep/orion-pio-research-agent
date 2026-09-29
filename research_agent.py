@@ -447,6 +447,19 @@ def search_openalex(query: str, days: int = 45, per_page: int = 15) -> list[dict
         pairs = sorted((pos, word) for word, positions in inv.items() for pos in positions)
         abstract = " ".join(word for _, word in pairs)
         authors = ", ".join((((a or {}).get("author") or {}).get("display_name") or "") for a in w.get("authorships", [])[:8]).strip(", ")
+        affiliations = []
+        for authorship in (w.get("authorships") or [])[:8]:
+            for institution in (authorship.get("institutions") or []):
+                country = institution.get("country_code") or ""
+                country_label = {"US": "United States", "PR": "Puerto Rico"}.get(
+                    country, country
+                )
+                affiliations.append(
+                    {
+                        "name": clean_text(institution.get("display_name")),
+                        "country": country_label,
+                    }
+                )
         loc = w.get("primary_location") or {}
         src = loc.get("source") or {}
         oa = w.get("open_access") or {}
@@ -462,6 +475,8 @@ def search_openalex(query: str, days: int = 45, per_page: int = 15) -> list[dict
             "oa_url": best_oa.get("landing_page_url") or (w.get("doi") if oa.get("is_oa") else "") or "",
             "pdf_url": best_oa.get("pdf_url") or "", "abstract": clean_text(abstract), "topics": topics,
             "discovered_via": "OpenAlex", "cited_by_count": int(w.get("cited_by_count") or 0),
+            "affiliations": affiliations,
+            "provider_metadata": {"openalex_id": w.get("id") or ""},
         }
         out.append(score_record(p, query, days))
     return out
@@ -492,9 +507,15 @@ def search_crossref(query: str, days: int = 45, per_page: int = 15) -> list[dict
     out = []
     for it in data.get("items", []):
         authors = []
+        affiliations = []
         for a in it.get("author", [])[:8]:
             name = " ".join(x for x in [a.get("given", ""), a.get("family", "")] if x).strip()
             if name: authors.append(name)
+            affiliations.extend(
+                clean_text(item.get("name"))
+                for item in (a.get("affiliation") or [])
+                if item.get("name")
+            )
         title = clean_text((it.get("title") or [""])[0])
         doi = normalize_doi(it.get("DOI") or "")
         url = it.get("URL") or (f"https://doi.org/{doi}" if doi else "")
@@ -508,6 +529,7 @@ def search_crossref(query: str, days: int = 45, per_page: int = 15) -> list[dict
             "doi": doi, "url": url, "oa_url": "", "pdf_url": "", "abstract": abstract,
             "topics": ", ".join(clean_text(s) for s in (it.get("subject") or [])[:6]), "discovered_via": "Crossref",
             "cited_by_count": int(it.get("is-referenced-by-count") or 0),
+            "affiliations": affiliations,
         }
         out.append(score_record(p, query, days))
     return out

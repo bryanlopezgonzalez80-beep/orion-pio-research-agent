@@ -24,15 +24,44 @@ CREATE TABLE IF NOT EXISTS papers (
   applications TEXT,
   limitations TEXT,
   evidence_level TEXT,
+  evidence_type TEXT,
   apa_citation TEXT,
+  geography_primary TEXT,
+  geography_tags TEXT,
+  geography_confidence DOUBLE PRECISION DEFAULT 0,
+  geography_basis TEXT,
+  study_location TEXT,
+  author_affiliation_location TEXT,
+  affiliation_locations TEXT,
+  publication_location TEXT,
+  geographic_mentions TEXT,
+  geo_pr INTEGER DEFAULT 0,
+  geo_us INTEGER DEFAULT 0,
+  geo_latam_caribbean INTEGER DEFAULT 0,
   read_full INTEGER DEFAULT 0 CHECK (read_full IN (0, 1)),
   favorite INTEGER DEFAULT 0 CHECK (favorite IN (0, 1)),
   created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text),
   updated_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS evidence_type TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS geography_primary TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS geography_tags TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS geography_confidence DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS geography_basis TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS study_location TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS author_affiliation_location TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS affiliation_locations TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS publication_location TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS geographic_mentions TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS geo_pr INTEGER DEFAULT 0;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS geo_us INTEGER DEFAULT 0;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS geo_latam_caribbean INTEGER DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_papers_date ON papers(published_date);
 CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi);
 CREATE INDEX IF NOT EXISTS idx_papers_source ON papers(source);
+CREATE INDEX IF NOT EXISTS idx_papers_geo_pr ON papers(geo_pr) WHERE geo_pr = 1;
+CREATE INDEX IF NOT EXISTS idx_papers_geo_us ON papers(geo_us) WHERE geo_us = 1;
+CREATE INDEX IF NOT EXISTS idx_papers_geo_latam ON papers(geo_latam_caribbean) WHERE geo_latam_caribbean = 1;
 
 CREATE TABLE IF NOT EXISTS clients (
   id BIGSERIAL PRIMARY KEY,
