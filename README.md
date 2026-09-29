@@ -90,3 +90,20 @@ La Fase 7 comprueba cada hora la API, PostgreSQL, persistencia, actividad de rad
 ## Seguridad de producción
 
 Antes de habilitar el modo de producción, configura `ORION_ENV`, una clave interna robusta y orígenes CORS HTTPS explícitos. Orion falla cerrado si esta configuración es incompleta. Consulta `docs/SECURITY.md` para autenticación, headers, rotación y respuesta a incidentes.
+
+
+## Deep Harvest PIO
+
+Orion's daily refresh now uses a high-recall discovery engine instead of a small fixed topic sample.
+
+- Sweeps the full PIO topic taxonomy plus umbrella and geographic queries.
+- Queries Crossref, PubMed/NCBI, and Europe PMC across the taxonomy.
+- Adds arXiv for AI/technology/future-of-work topics.
+- Uses Semantic Scholar automatically when its key is configured.
+- Rotates OpenAlex safely when no OpenAlex key is configured; OpenAlex is not required.
+- Persists every successful query immediately.
+- Advances a resumable historical Crossref backfill month by month.
+- Exposes `GET /api/v1/radar/status` and asynchronous `POST /api/v1/radar/refresh` for the Site's "Actualizar Radar ahora" flow.
+- Keeps Google Scholar, APA PsycNet, SIOP, SSRN, Academy of Management, and DOAJ as directed complementary sources when automated ingestion is unavailable or not authorized.
+
+The design targets maximum practical, lawful coverage; it does not claim literal coverage of every page or licensed database on the internet.
