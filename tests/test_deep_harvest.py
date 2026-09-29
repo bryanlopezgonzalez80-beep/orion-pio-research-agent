@@ -11,9 +11,13 @@ pytestmark = pytest.mark.integration
 
 def test_coverage_catalog_is_broad_and_global():
     queries = deep_harvest.coverage_queries()
-    assert len(queries) >= 80
+    assert len(queries) >= 150
     assert len(queries) == len({q.casefold() for q in queries})
     assert "industrial organizational psychology" in queries
+    assert "diversity inclusion workplace" in queries
+    assert "human factors work performance" in queries
+    assert "return to office employees" in queries
+    assert "psicología industrial organizacional Puerto Rico" in queries
     assert any("Puerto Rico" in q for q in queries)
     assert any("Latin America" in q or "América Latina" in q for q in queries)
     assert len(deep_harvest.PIO_JOURNALS) >= 20
@@ -90,6 +94,64 @@ def test_live_sweep_covers_every_query_and_rotates_keyless_openalex(monkeypatch,
     assert "arXiv" in calls[-1][1]
     assert result["source_totals"]["Crossref"]["queries"] == 3
     assert settings["deep_harvest.openalex_rotation"] == 1
+
+
+def test_live_sweep_resumes_after_runtime_budget(monkeypatch, sample_paper):
+    queries = ["first", "second", "third"]
+    calls = []
+    settings = {"deep_harvest.live_rotation": 0}
+    ticks = iter([0.0, 0.0, 20.0, 20.0])
+
+    monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+    monkeypatch.delenv("SEMANTIC_SCHOLAR_API_KEY", raising=False)
+    monkeypatch.setenv("ORION_OPENALEX_QUERIES_PER_RUN", "0")
+    monkeypatch.setattr(deep_harvest, "coverage_queries", lambda: queries)
+    monkeypatch.setattr(deep_harvest, "PIO_JOURNALS", [])
+    monkeypatch.setattr(
+        deep_harvest,
+        "get_setting",
+        lambda key, default=None: settings.get(key, default),
+    )
+    monkeypatch.setattr(
+        deep_harvest,
+        "set_setting",
+        lambda key, value: settings.__setitem__(key, value),
+    )
+    monkeypatch.setattr(deep_harvest.time, "monotonic", lambda: next(ticks, 20.0))
+    monkeypatch.setattr(deep_harvest, "upsert_papers", lambda papers: None)
+
+    def fake_search(query, **kwargs):
+        calls.append(query)
+        return {
+            "received": 1,
+            "results": [dict(sample_paper, id=f"id:{query}", title=query)],
+            "errors": [],
+            "source_meta": [],
+        }
+
+    monkeypatch.setattr(deep_harvest, "execute_academic_search", fake_search)
+
+    first = deep_harvest.run_live_sweep(max_runtime_seconds=10)
+
+    assert calls == ["first"]
+    assert first["queries_processed"] == 1
+    assert first["queries_remaining"] == 2
+    assert first["stopped_for_runtime_budget"] is True
+    assert first["next_query_rotation"] == 1
+    assert settings["deep_harvest.live_rotation"] == 1
+
+    # A later run starts at the next query instead of starving the tail.
+    ticks2 = iter([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    monkeypatch.setattr(deep_harvest.time, "monotonic", lambda: next(ticks2, 0.0))
+    calls.clear()
+
+    second = deep_harvest.run_live_sweep(max_runtime_seconds=10)
+
+    assert calls == ["second", "third", "first"]
+    assert second["queries_processed"] == 3
+    assert second["queries_remaining"] == 0
+    assert second["query_rotation_start"] == 1
+    assert settings["deep_harvest.live_rotation"] == 1
 
 
 def test_live_sweep_uses_all_openalex_queries_when_key_is_configured(monkeypatch, sample_paper):
@@ -212,7 +274,7 @@ def test_harvest_status_exposes_secondary_sources_without_secrets(monkeypatch):
     )
     status = deep_harvest.harvest_status()
 
-    assert status["coverage_query_count"] >= 80
+    assert status["coverage_query_count"] >= 150
     assert status["backfill_cursor"] == "2025-01-01"
     names = {item["name"] for item in status["secondary_sources"]}
     assert {"Google Scholar", "APA PsycNet", "SIOP", "SSRN"} <= names
