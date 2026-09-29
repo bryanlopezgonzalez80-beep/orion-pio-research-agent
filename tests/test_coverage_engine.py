@@ -71,7 +71,7 @@ def test_comprehensive_refresh_persists_chunks_and_progress(monkeypatch, sample_
     monkeypatch.setattr(
         coverage_engine,
         "search_crossref_range",
-        lambda query, start_date, end_date, per_page: [
+        lambda query, start_date, end_date, per_page, max_pages=1: [
             dict(
                 sample_paper,
                 id=f"historical:{query}",
