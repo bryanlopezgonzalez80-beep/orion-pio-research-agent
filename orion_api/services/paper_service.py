@@ -11,9 +11,11 @@ TEXT_FIELDS = {
     "applications", "limitations", "evidence_level", "apa_citation",
     "evidence_type", "geography_primary", "study_location",
     "author_affiliation_location", "publication_location",
+    "peer_review_status", "publication_type", "retraction_status",
+    "correction_status", "access_status", "best_access_url", "access_provider",
 }
-LIST_FIELDS = {"geography_tags", "affiliation_locations", "geographic_mentions"}
-INTEGER_FIELDS = {"year", "cited_by_count", "read_full", "favorite", "geo_pr", "geo_us", "geo_latam_caribbean"}
+LIST_FIELDS = {"geography_tags", "affiliation_locations", "geographic_mentions", "evidence_flags"}
+INTEGER_FIELDS = {"year", "cited_by_count", "read_full", "favorite", "geo_pr", "geo_us", "geo_latam_caribbean", "doi_verified", "metadata_sources_count", "requires_login", "fulltext_available"}
 FLOAT_FIELDS = {"relevance_score", "geography_confidence"}
 
 
@@ -42,6 +44,13 @@ def _normalize_paper(paper: dict) -> dict:
         except (TypeError, ValueError):
             basis = {}
     normalized["geography_basis"] = basis if isinstance(basis, dict) else {}
+    provenance = normalized.get("metadata_provenance")
+    if isinstance(provenance, str):
+        try:
+            provenance = json.loads(provenance)
+        except (TypeError, ValueError):
+            provenance = {}
+    normalized["metadata_provenance"] = provenance if isinstance(provenance, dict) else {}
     return normalized
 
 
@@ -54,6 +63,11 @@ def list_papers(
     year: int | None = None,
     favorites_only: bool = False,
     geography: str | None = None,
+    peer_reviewed: bool | None = None,
+    open_access: bool | None = None,
+    full_text: bool | None = None,
+    evidence_type: str | None = None,
+    retracted: bool | None = None,
 ) -> list[dict]:
     papers = data_store.list_papers(
         limit=limit,
@@ -63,6 +77,11 @@ def list_papers(
         year=year,
         favorites_only=favorites_only,
         geography=geography,
+        peer_reviewed=peer_reviewed,
+        open_access=open_access,
+        full_text=full_text,
+        evidence_type=evidence_type,
+        retracted=retracted,
     )
     return [_normalize_paper(paper) for paper in papers]
 

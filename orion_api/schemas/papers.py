@@ -30,6 +30,14 @@ class PaperResponse(BaseModel):
     limitations: str = ""
     evidence_level: str = ""
     evidence_type: str = ""
+    peer_review_status: str = "UNKNOWN"
+    publication_type: str = ""
+    retraction_status: str = "UNKNOWN"
+    correction_status: str = "UNKNOWN"
+    doi_verified: int = 0
+    metadata_sources_count: int = 1
+    metadata_provenance: dict[str, Any] = Field(default_factory=dict)
+    evidence_flags: list[str] = Field(default_factory=list)
     apa_citation: str = ""
     geography_primary: str = ""
     geography_tags: list[str] = Field(default_factory=list)
@@ -43,6 +51,11 @@ class PaperResponse(BaseModel):
     geo_pr: int = 0
     geo_us: int = 0
     geo_latam_caribbean: int = 0
+    access_status: str = "UNKNOWN"
+    best_access_url: str = ""
+    access_provider: str = ""
+    requires_login: int = 0
+    fulltext_available: int = 0
     read_full: int = 0
     favorite: int = 0
 

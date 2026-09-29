@@ -24,10 +24,17 @@ def papers(
         Literal["puerto_rico", "united_states", "latam_caribbean"] | None,
         Query(),
     ] = None,
+    peer_reviewed: bool | None = None,
+    open_access: bool | None = None,
+    full_text: bool | None = None,
+    evidence_type: Annotated[str | None, Query(min_length=2, max_length=50)] = None,
+    retracted: bool | None = None,
 ) -> PaperListResponse:
     items = paper_service.list_papers(
         limit=limit, offset=offset, query=query, source=source, year=year,
         geography=geography,
+        peer_reviewed=peer_reviewed, open_access=open_access,
+        full_text=full_text, evidence_type=evidence_type, retracted=retracted,
     )
     return PaperListResponse(items=items, limit=limit, offset=offset, count=len(items))
 
