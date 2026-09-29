@@ -78,6 +78,19 @@ def init_schema(con):
       last_run TEXT, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS orion_settings(
       key TEXT PRIMARY KEY, value_json TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS orion_coverage_runs(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trigger TEXT NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      topics_total INTEGER NOT NULL DEFAULT 0,
+      topics_completed INTEGER NOT NULL DEFAULT 0,
+      results_seen INTEGER NOT NULL DEFAULT 0,
+      unique_processed INTEGER NOT NULL DEFAULT 0,
+      source_counts_json TEXT NOT NULL DEFAULT '{}',
+      domain_counts_json TEXT NOT NULL DEFAULT '{}',
+      errors_json TEXT NOT NULL DEFAULT '[]');
     """)
 
 def make_cache_key(source, query, days, per_source):
@@ -203,3 +216,64 @@ def platform_stats(*, path=None):
           "alerts":first_value(con.execute("SELECT COUNT(*) FROM orion_alerts WHERE enabled=1").fetchone()),
           "cache_entries":first_value(con.execute("SELECT COUNT(*) FROM orion_search_cache WHERE expires_at>?",(_iso(),)).fetchone()),
         }
+
+
+def create_coverage_run(trigger: str, topics_total: int, *, path=None) -> int:
+    with connect(path) as con:
+        return insert_returning_id(
+            con,
+            "INSERT INTO orion_coverage_runs(trigger,status,started_at,topics_total) VALUES(?,?,?,?)",
+            (trigger.strip() or "scheduled", "running", _iso(), int(topics_total)),
+        )
+
+
+def update_coverage_run(
+    run_id: int,
+    *,
+    status: str | None = None,
+    topics_completed: int | None = None,
+    results_seen: int | None = None,
+    unique_processed: int | None = None,
+    source_counts: dict | None = None,
+    domain_counts: dict | None = None,
+    errors: list | None = None,
+    completed: bool = False,
+    path=None,
+):
+    fields=[]; params=[]
+    for column, value in (
+        ("status", status),
+        ("topics_completed", topics_completed),
+        ("results_seen", results_seen),
+        ("unique_processed", unique_processed),
+    ):
+        if value is not None:
+            fields.append(f"{column}=?"); params.append(value)
+    if source_counts is not None:
+        fields.append("source_counts_json=?"); params.append(json.dumps(source_counts,ensure_ascii=False))
+    if domain_counts is not None:
+        fields.append("domain_counts_json=?"); params.append(json.dumps(domain_counts,ensure_ascii=False))
+    if errors is not None:
+        fields.append("errors_json=?"); params.append(json.dumps(errors,ensure_ascii=False))
+    if completed:
+        fields.append("completed_at=?"); params.append(_iso())
+    if not fields:
+        return
+    params.append(int(run_id))
+    with connect(path) as con:
+        con.execute(f"UPDATE orion_coverage_runs SET {','.join(fields)} WHERE id=?", params)
+
+
+def latest_coverage_run(*, path=None):
+    with connect(path) as con:
+        row=con.execute("SELECT * FROM orion_coverage_runs ORDER BY id DESC LIMIT 1").fetchone()
+    if not row:
+        return None
+    item=dict(row)
+    for field in ("source_counts_json","domain_counts_json","errors_json"):
+        raw=item.pop(field, "{}" if field!="errors_json" else "[]")
+        try:
+            item[field.replace("_json","")]=json.loads(raw or ("[]" if field=="errors_json" else "{}"))
+        except Exception:
+            item[field.replace("_json","")]=[] if field=="errors_json" else {}
+    return item
