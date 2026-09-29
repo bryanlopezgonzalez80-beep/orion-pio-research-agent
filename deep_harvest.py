@@ -388,13 +388,23 @@ def run_live_sweep(
                 stopped_for_budget = True
                 break
             try:
-                papers = search_crossref_journal_window(
-                    journal,
-                    journal_start,
-                    date.today(),
-                    max_records=250,
-                    page_size=200,
-                )
+                papers = None
+                for attempt in range(3):
+                    try:
+                        papers = search_crossref_journal_window(
+                            journal,
+                            journal_start,
+                            date.today(),
+                            max_records=250,
+                            page_size=200,
+                        )
+                        break
+                    except Exception as exc:
+                        delay = _backfill_retry_delay(exc, attempt)
+                        if delay is None or attempt >= 2:
+                            raise
+                        time.sleep(delay)
+                papers = papers or []
                 journal_watch_received += len(papers)
                 journal_batch.extend(papers)
             except Exception as exc:
@@ -490,8 +500,12 @@ def _parse_cursor(value) -> date:
 
 
 def _backfill_retry_delay(exc: Exception, attempt: int) -> float | None:
+    """Return a bounded delay for Crossref 429 and transient 5xx responses."""
     response = getattr(exc, "response", None)
-    if getattr(response, "status_code", None) != 429:
+    status_code = getattr(response, "status_code", None)
+    if status_code != 429 and not (
+        isinstance(status_code, int) and 500 <= status_code <= 599
+    ):
         return None
     raw = (getattr(response, "headers", None) or {}).get("Retry-After")
     if raw:
@@ -499,7 +513,8 @@ def _backfill_retry_delay(exc: Exception, attempt: int) -> float | None:
             return min(30.0, max(0.0, float(raw)))
         except (TypeError, ValueError):
             pass
-    return min(15.0, 0.75 * (2 ** max(0, attempt)) + random.random() * 0.25)
+    base = 1.0 if status_code == 429 else 2.0
+    return min(20.0, base * (2 ** max(0, attempt)) + random.random() * 0.25)
 
 
 def _is_rate_limited(exc: Exception) -> bool:
