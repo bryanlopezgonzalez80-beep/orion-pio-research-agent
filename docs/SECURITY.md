@@ -125,3 +125,12 @@ If a credential may have been exposed:
 6. Document the incident without reproducing the secret and add a regression control.
 
 Database and internal error responses are intentionally generic. Application code must not log authentication headers, complete exceptions containing connection strings, request bodies containing credentials, or environment mappings.
+
+
+## Comprehensive Radar refresh
+
+- `GET /api/v1/radar/coverage` uses the protected read quota.
+- `POST /api/v1/radar/refresh` uses the protected write quota.
+- Provider API credentials never leave the server.
+- Only one manual comprehensive refresh is accepted per API process at a time.
+- The refresh endpoint does not accept arbitrary provider URLs, shell commands, or credentials from the client.
