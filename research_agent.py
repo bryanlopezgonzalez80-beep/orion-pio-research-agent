@@ -677,18 +677,26 @@ def search_europe_pmc(query: str, days: int = 45, per_page: int = 15) -> list[di
     for it in ((data.get("resultList") or {}).get("result") or []):
         title = clean_text(it.get("title"))
         doi = normalize_doi(it.get("doi") or "")
-        pmid = it.get("pmid") or it.get("pmcid") or it.get("id") or ""
-        url = f"https://europepmc.org/article/{it.get('source','MED')}/{pmid}" if pmid else (f"https://doi.org/{doi}" if doi else "")
+        pmid_value = str(it.get("pmid") or "").strip()
+        pmcid_value = str(it.get("pmcid") or "").strip()
+        native_id = pmid_value or pmcid_value or str(it.get("id") or "").strip()
+        url = f"https://europepmc.org/article/{it.get('source','MED')}/{native_id}" if native_id else (f"https://doi.org/{doi}" if doi else "")
         published = parse_date(it.get("firstPublicationDate") or it.get("firstIndexDate") or it.get("journalInfo", {}).get("printPublicationDate"))
         year = int((published or str(it.get("pubYear") or 0))[:4] or 0)
         journal = clean_text(((it.get("journalInfo") or {}).get("journal") or {}).get("title") or it.get("journalTitle"))
         authors = clean_text(it.get("authorString"))
         abstract = clean_text(it.get("abstractText"))
         is_oa = str(it.get("isOpenAccess", "")).upper() == "Y"
-        pmcid = it.get("pmcid") or ""
+        pmcid = pmcid_value
         pdf = f"https://europepmc.org/articles/{pmcid}?pdf=render" if is_oa and pmcid else ""
+        shared_id = (
+            f"doi:{doi}" if doi else
+            f"pmid:{pmid_value}" if pmid_value else
+            f"pmcid:{pmcid_value.casefold()}" if pmcid_value else
+            stable_id("Europe PMC", native_id, "", title)
+        )
         p = {
-            "id": stable_id("Europe PMC", str(pmid), doi, title), "title": title, "authors": authors, "year": year,
+            "id": shared_id, "title": title, "authors": authors, "year": year,
             "published_date": published, "source": "Europe PMC", "journal": journal, "work_type": clean_text(it.get("pubType")),
             "doi": doi, "url": url, "oa_url": url if is_oa else "", "pdf_url": pdf, "abstract": abstract,
             "topics": "", "discovered_via": "Europe PMC / PubMed", "cited_by_count": int(it.get("citedByCount") or 0),
@@ -766,8 +774,9 @@ def search_pubmed(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
         published = parse_date(it.get("pubdate") or it.get("epubdate"))
         year = int((published or "0")[:4] or 0)
         url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+        shared_id = f"doi:{doi}" if doi else f"pmid:{pmid}"
         p = {
-            "id": stable_id("PubMed", str(pmid), doi, title),
+            "id": shared_id,
             "title": title,
             "authors": authors,
             "year": year,
