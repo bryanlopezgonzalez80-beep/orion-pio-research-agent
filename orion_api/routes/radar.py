@@ -29,11 +29,49 @@ def _iso_now() -> str:
 
 def _run_manual_refresh() -> None:
     try:
+        started_at = _iso_now()
         set_setting(
             _MANUAL_STATUS_KEY,
-            {"state": "running", "started_at": _iso_now()},
+            {
+                "state": "running",
+                "phase": "taxonomy",
+                "started_at": started_at,
+                "queries_processed": 0,
+                "queries_total": 0,
+                "received": 0,
+                "unique_seen": 0,
+                "journal_watch_processed": 0,
+                "journal_watch_total": 0,
+                "source_totals": {},
+            },
         )
-        result = run_deep_harvest(include_backfill=False)
+
+        def report_progress(progress: dict) -> None:
+            set_setting(
+                _MANUAL_STATUS_KEY,
+                {
+                    "state": "running",
+                    "phase": progress.get("phase") or "taxonomy",
+                    "started_at": started_at,
+                    "updated_at": _iso_now(),
+                    "queries_processed": int(progress.get("queries_processed") or 0),
+                    "queries_total": int(progress.get("queries_total") or 0),
+                    "received": int(progress.get("received") or 0),
+                    "unique_seen": int(progress.get("unique_seen") or 0),
+                    "journal_watch_processed": int(
+                        progress.get("journal_watch_processed") or 0
+                    ),
+                    "journal_watch_total": int(
+                        progress.get("journal_watch_total") or 0
+                    ),
+                    "source_totals": progress.get("source_totals") or {},
+                },
+            )
+
+        result = run_deep_harvest(
+            include_backfill=False,
+            progress_callback=report_progress,
+        )
         live = result.get("live") or {}
         set_setting(
             _MANUAL_STATUS_KEY,
@@ -45,6 +83,9 @@ def _run_manual_refresh() -> None:
                 "received": live.get("received", 0),
                 "unique_seen": live.get("unique_seen", 0),
                 "errors": len(live.get("errors") or []),
+                "source_totals": live.get("source_totals") or {},
+                "journal_watch_processed": live.get("journal_watch_processed", 0),
+                "journal_watch_total": live.get("journal_watch_count", 0),
             },
         )
     except Exception as exc:

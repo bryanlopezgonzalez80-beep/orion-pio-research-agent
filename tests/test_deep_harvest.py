@@ -154,6 +154,63 @@ def test_live_sweep_resumes_after_runtime_budget(monkeypatch, sample_paper):
     assert settings["deep_harvest.live_rotation"] == 1
 
 
+def test_live_sweep_emits_incremental_progress(monkeypatch, sample_paper):
+    queries = ["leadership effectiveness", "employee engagement"]
+    snapshots = []
+    settings = {}
+
+    monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+    monkeypatch.delenv("SEMANTIC_SCHOLAR_API_KEY", raising=False)
+    monkeypatch.setenv("ORION_OPENALEX_QUERIES_PER_RUN", "0")
+    monkeypatch.setattr(deep_harvest, "coverage_queries", lambda: queries)
+    monkeypatch.setattr(deep_harvest, "PIO_JOURNALS", [])
+    monkeypatch.setattr(
+        deep_harvest,
+        "get_setting",
+        lambda key, default=None: settings.get(key, default),
+    )
+    monkeypatch.setattr(
+        deep_harvest,
+        "set_setting",
+        lambda key, value: settings.__setitem__(key, value),
+    )
+    monkeypatch.setattr(deep_harvest, "upsert_papers", lambda papers: None)
+    monkeypatch.setattr(deep_harvest.time, "monotonic", lambda: 0.0)
+
+    def fake_search(query, **kwargs):
+        return {
+            "received": 2,
+            "results": [dict(sample_paper, id=f"id:{query}", title=query)],
+            "errors": [],
+            "source_meta": [
+                {
+                    "source": "Crossref",
+                    "status": "ok",
+                    "count": 1,
+                    "network_requests": 1,
+                    "cache_hits": 0,
+                    "retries": 0,
+                    "rate_limited": False,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(deep_harvest, "execute_academic_search", fake_search)
+
+    result = deep_harvest.run_live_sweep(
+        max_runtime_seconds=60,
+        progress_callback=lambda payload: snapshots.append(dict(payload)),
+    )
+
+    assert result["queries_processed"] == 2
+    assert snapshots[0]["queries_processed"] == 0
+    assert snapshots[-1]["queries_processed"] == 2
+    assert snapshots[-1]["queries_total"] == 2
+    assert snapshots[-1]["received"] == 4
+    assert snapshots[-1]["unique_seen"] == 2
+    assert snapshots[-1]["source_totals"]["Crossref"]["results"] == 2
+
+
 def test_live_sweep_uses_all_openalex_queries_when_key_is_configured(monkeypatch, sample_paper):
     queries = ["leadership", "teams"]
     calls = []

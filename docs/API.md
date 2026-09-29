@@ -114,3 +114,15 @@ The daily cloud job and manual refresh endpoint share the same high-recall engin
 Search itself also widens to a historical provider pass when neither the local library nor the recent live search finds a match. This reduces the chance that a valid older PIO topic appears empty.
 
 The system aims for maximum practical and lawful coverage. It does not scrape licensed databases or services that do not expose an authorized API, and it never claims that every indexed record is peer reviewed merely because its metadata came from a trusted index.
+
+
+## Deep Harvest live progress
+
+While a manual `POST /api/v1/radar/refresh` is running, `GET /api/v1/radar/status`
+updates `manual_refresh` incrementally. The safe progress payload includes the
+current phase, processed/total taxonomy queries, records received, unique papers
+seen, journal-watch progress, and aggregate per-source counters. It does not
+expose provider credentials, database URLs, or raw exception text.
+
+The Site may poll this status every 8–10 seconds and stop when
+`manual_refresh.state` becomes `completed` or `failed`.

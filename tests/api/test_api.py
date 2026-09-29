@@ -135,6 +135,7 @@ def test_radar_is_accumulated_and_new_results_do_not_replace_old(client, sample_
 
 def test_radar_status_and_manual_refresh_are_nonblocking(client, monkeypatch):
     state = {}
+    snapshots = []
     monkeypatch.setattr(
         radar_route,
         "harvest_status",
@@ -145,24 +146,42 @@ def test_radar_status_and_manual_refresh_are_nonblocking(client, monkeypatch):
         "get_setting",
         lambda key, default=None: state.get(key, default),
     )
-    monkeypatch.setattr(
-        radar_route,
-        "set_setting",
-        lambda key, value: state.__setitem__(key, value),
-    )
-    monkeypatch.setattr(
-        radar_route,
-        "run_deep_harvest",
-        lambda include_backfill=False: {
+
+    def save_setting(key, value):
+        state[key] = value
+        if key == radar_route._MANUAL_STATUS_KEY:
+            snapshots.append(dict(value))
+
+    monkeypatch.setattr(radar_route, "set_setting", save_setting)
+
+    def fake_harvest(include_backfill=False, progress_callback=None):
+        assert include_backfill is False
+        progress_callback(
+            {
+                "phase": "taxonomy",
+                "queries_processed": 40,
+                "queries_total": 99,
+                "received": 70,
+                "unique_seen": 50,
+                "journal_watch_processed": 0,
+                "journal_watch_total": 23,
+                "source_totals": {"Crossref": {"results": 50}},
+            }
+        )
+        return {
             "live": {
                 "queries_processed": 99,
                 "queries_total": 99,
                 "received": 123,
                 "unique_seen": 88,
                 "errors": [],
+                "source_totals": {"Crossref": {"results": 80}},
+                "journal_watch_processed": 23,
+                "journal_watch_count": 23,
             }
-        },
-    )
+        }
+
+    monkeypatch.setattr(radar_route, "run_deep_harvest", fake_harvest)
 
     status = client.get("/api/v1/radar/status")
     refresh = client.post("/api/v1/radar/refresh")
@@ -172,9 +191,16 @@ def test_radar_status_and_manual_refresh_are_nonblocking(client, monkeypatch):
     assert status.json()["coverage_query_count"] == 99
     assert refresh.status_code == 202
     assert refresh.json()["status"] == "queued"
+    assert any(
+        item.get("state") == "running"
+        and item.get("queries_processed") == 40
+        and item.get("queries_total") == 99
+        for item in snapshots
+    )
     # TestClient executes Starlette background tasks before returning.
     assert after.json()["manual_refresh"]["state"] == "completed"
     assert after.json()["manual_refresh"]["queries_processed"] == 99
+    assert after.json()["manual_refresh"]["source_totals"]["Crossref"]["results"] == 80
 
 
 def test_paper_detail_supports_text_id_with_slash(client, sample_paper):
