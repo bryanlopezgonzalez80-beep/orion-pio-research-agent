@@ -262,7 +262,7 @@ def test_deep_harvest_runs_global_then_geography_then_backfill(monkeypatch):
     monkeypatch.setattr(
         deep_harvest,
         "run_historical_backfill",
-        lambda: order.append("backfill") or {"received": 3},
+        lambda **kwargs: order.append("backfill") or {"received": 3},
     )
     monkeypatch.setattr(
         deep_harvest,

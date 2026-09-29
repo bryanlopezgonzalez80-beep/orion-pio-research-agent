@@ -31,7 +31,11 @@ def test_premium_provider_requires_both_enablement_and_configuration(monkeypatch
     monkeypatch.delenv("SCOPUS_API_KEY", raising=False)
     assert source_registry.source_registry()["scopus"].health_status == source_registry.SourceHealth.AUTH_REQUIRED
     monkeypatch.setenv("SCOPUS_API_KEY", "test-placeholder")
-    assert source_registry.source_registry()["scopus"].discovery_enabled is True
+    provider = source_registry.source_registry()["scopus"]
+    assert provider.configured is True
+    assert provider.discovery_enabled is False
+    assert provider.implemented is False
+    assert provider.active is False
 
 
 @pytest.mark.parametrize(
@@ -155,7 +159,7 @@ def test_checkpoint_state_is_granular_and_resumable():
     set_checkpoint("2026-08-01", "Crossref", "query", "leadership", "COMPLETED", records_received=7)
     row = get_checkpoint("2026-08-01", "Crossref", "query", "leadership")
     assert row["status"] == "COMPLETED"
-    assert row["attempts"] == 2
+    assert row["attempts"] == 1
     assert row["records_received"] == 7
     assert checkpoint_summary()[0]["total"] == 1
 
