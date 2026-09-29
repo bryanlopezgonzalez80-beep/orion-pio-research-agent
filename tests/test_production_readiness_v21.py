@@ -11,6 +11,8 @@ import data_store
 import deep_harvest
 import source_registry
 from orion_api.main import create_app
+from orion_api.routes import radar as radar_route
+from orion_api.services.paper_service import _normalize_paper
 from platform_store import enrichment_summary, get_checkpoint
 
 pytestmark = pytest.mark.integration
@@ -264,9 +266,152 @@ def test_v21_status_contract_is_additive_and_fast_shape(client):
     assert body["historical"]["target_months_per_run"] == 12
     assert body["historical"]["estimated_months_remaining"] is None
     assert body["enrichment"] == {"completed": 0, "pending": 0, "by_status": {}}
+    assert set(("registered", "implemented", "configured", "authorized", "active")) <= body["providers"].keys()
+    assert body["providers"]["registered"] >= body["providers"]["active"]
+    assert body["providers"]["registry"] == body["provider_registry"]
     assert "coverage_query_count" in body
 
 
 def test_api_rejects_non_allowlisted_filter_values(client):
     assert client.get("/api/v1/papers?peer_review_status=trusted").status_code == 422
     assert client.get("/api/v1/radar?access_status=free").status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("paper_id", "evidence_type", "peer_review_status"),
+    [
+        ("preprint", "PREPRINT", "NOT_PEER_REVIEWED"),
+        ("systematic", "SYSTEMATIC_REVIEW", "CONFIRMED"),
+        ("meta", "META_ANALYSIS", "CONFIRMED"),
+        ("unknown-review", "UNKNOWN", "UNKNOWN"),
+    ],
+)
+def test_v21_evidence_types_and_unknown_peer_review_round_trip(
+    client, sample_paper, paper_id, evidence_type, peer_review_status
+):
+    data_store.upsert_papers([{**sample_paper, "id": paper_id, "doi": f"10.1/{paper_id}"}])
+    con = data_store.connect()
+    try:
+        con.execute(
+            "UPDATE papers SET evidence_type=?, peer_review_status=? WHERE id=?",
+            (evidence_type, peer_review_status, paper_id),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    response = client.get("/api/v1/papers", params={"evidence_type": evidence_type})
+
+    assert response.status_code == 200
+    item = next(item for item in response.json()["items"] if item["id"] == paper_id)
+    assert item["evidence_type"] == evidence_type
+    assert item["peer_review_status"] == peer_review_status
+
+
+@pytest.mark.parametrize(
+    ("paper_id", "access_status", "requires_login", "open_access"),
+    [
+        ("oa", "OPEN_ACCESS", 0, 1),
+        ("institution", "INSTITUTIONAL_ACCESS", 1, 0),
+        ("provider", "PROVIDER_LOGIN", 1, 0),
+        ("doi", "DOI_ONLY", 0, 0),
+        ("metadata", "METADATA_ONLY", 0, 0),
+    ],
+)
+def test_v21_access_states_are_preserved_for_site_actions(
+    client, sample_paper, paper_id, access_status, requires_login, open_access
+):
+    data_store.upsert_papers([{**sample_paper, "id": paper_id, "doi": f"10.1/{paper_id}"}])
+    con = data_store.connect()
+    try:
+        con.execute(
+            "UPDATE papers SET access_status=?, requires_login=?, open_access=? WHERE id=?",
+            (access_status, requires_login, open_access, paper_id),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    response = client.get("/api/v1/papers", params={"access_status": access_status})
+
+    assert response.status_code == 200
+    item = next(item for item in response.json()["items"] if item["id"] == paper_id)
+    assert item["access_status"] == access_status
+    assert item["requires_login"] == requires_login
+    assert item["open_access"] == open_access
+
+
+@pytest.mark.parametrize("status", ["RETRACTED", "EXPRESSION_OF_CONCERN"])
+def test_v21_integrity_alert_states_round_trip(client, sample_paper, status):
+    paper_id = status.casefold()
+    data_store.upsert_papers([{**sample_paper, "id": paper_id, "doi": f"10.1/{paper_id}"}])
+    con = data_store.connect()
+    try:
+        con.execute("UPDATE papers SET retraction_status=? WHERE id=?", (status, paper_id))
+        con.commit()
+    finally:
+        con.close()
+
+    response = client.get("/api/v1/papers", params={"retraction_status": status})
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["retraction_status"] == status
+
+
+def test_v21_partial_and_null_paper_fields_normalize_safely():
+    normalized = _normalize_paper({"id": "partial", "title": None, "geography_basis": None})
+
+    assert normalized["title"] == "Sin título"
+    assert normalized["peer_review_status"] == "UNKNOWN"
+    assert normalized["geography_tags"] == []
+    assert normalized["geography_basis"] == {}
+    assert normalized["alternative_access_options"] == []
+    assert normalized["open_access"] == 0
+
+
+def test_affiliation_only_never_becomes_study_location(sample_paper):
+    data_store.upsert_papers([{
+        **sample_paper,
+        "id": "affiliation-only",
+        "title": "Workplace study",
+        "study_location": "",
+        "author_affiliation_location": "Puerto Rico",
+        "affiliation_locations": ["Puerto Rico"],
+        "geography_tags": ["Puerto Rico"],
+        "geography_basis": {"Puerto Rico": ["affiliation"]},
+    }])
+
+    stored = data_store.get_paper("affiliation-only")
+    assert stored["study_location"] == ""
+    assert json.loads(stored["affiliation_locations"]) == ["Puerto Rico"]
+    assert json.loads(stored["geography_basis"]) == {"Puerto Rico": ["affiliation"]}
+
+
+def test_manual_refresh_exposes_completed_with_warnings(client, monkeypatch):
+    state = {}
+    monkeypatch.setattr(radar_route, "get_setting", lambda key, default=None: state.get(key, default))
+    monkeypatch.setattr(radar_route, "set_setting", lambda key, value: state.__setitem__(key, value))
+    monkeypatch.setattr(
+        radar_route,
+        "run_deep_harvest",
+        lambda **kwargs: {
+            "status": "COMPLETED_WITH_WARNINGS",
+            "live": {"errors": ["sanitized"], "received": 2, "unique_seen": 1},
+            "geography": {},
+        },
+    )
+
+    response = client.post("/api/v1/radar/refresh")
+
+    assert response.status_code == 202
+    assert state[radar_route._MANUAL_STATUS_KEY]["state"] == "completed_with_warnings"
+
+
+def test_site_v21_spec_defines_terminal_error_and_mobile_contract():
+    spec = (data_store.Path(__file__).parents[1] / "site_migration" / "SITE_V21_SPEC.md").read_text(encoding="utf-8")
+    for value in (
+        "completed_with_warnings", "`429`", "`503`", "`504`",
+        "Mobile/iPhone", "backfill_month_tasks_completed",
+        "backfill_tasks_completed_total", "registered", "active",
+    ):
+        assert value in spec

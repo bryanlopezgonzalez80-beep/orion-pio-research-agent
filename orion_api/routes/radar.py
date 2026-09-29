@@ -86,10 +86,16 @@ def _run_manual_refresh() -> None:
         )
         live = result.get("live") or {}
         geography = result.get("geography") or {}
+        result_status = str(result.get("status") or "COMPLETED").upper()
+        completed_state = (
+            "completed_with_warnings"
+            if result_status == "COMPLETED_WITH_WARNINGS"
+            else "completed"
+        )
         set_setting(
             _MANUAL_STATUS_KEY,
             {
-                "state": "completed",
+                "state": completed_state,
                 "completed_at": _iso_now(),
                 "queries_processed": live.get("queries_processed", 0),
                 "queries_total": live.get("queries_total", 0),

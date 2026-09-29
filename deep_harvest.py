@@ -744,6 +744,11 @@ def harvest_status() -> dict:
             months_with_pending.add(str(item.get("month") or ""))
     oldest_completed = min(completed_months - months_with_pending, default=None)
     provider_health = get_source_metrics()
+    provider_registry = public_source_registry()
+    provider_lifecycle = {
+        field: sum(1 for provider in provider_registry if provider.get(field) is True)
+        for field in ("registered", "implemented", "configured", "authorized", "active")
+    }
     enrichment = enrichment_summary()
     run_metrics = {
         "new_papers_this_run": int(last_run.get("new_papers_this_run") or 0),
@@ -782,9 +787,13 @@ def harvest_status() -> dict:
         "citation_graph": {"papers_discovered": int(get_setting(f"{STATE_PREFIX}.citation_papers_discovered", 0) or 0)},
         "historical_target_months": int(os.getenv("ORION_BACKFILL_TARGET_MONTHS_PER_RUN", "12")),
         "checkpoints": checkpoints,
-        "provider_registry": public_source_registry(),
+        "provider_registry": provider_registry,
         "provider_health": provider_health,
-        "providers": {"health": provider_health},
+        "providers": {
+            "health": provider_health,
+            "registry": provider_registry,
+            **provider_lifecycle,
+        },
         "secondary_sources": [
             {
                 "name": name,
