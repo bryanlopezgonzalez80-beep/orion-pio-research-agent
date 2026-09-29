@@ -86,7 +86,7 @@ def main():
         "## Comprehensive PIO coverage",
         f"- Topics completed: {coverage['topics_completed']} / {coverage['topics_total']}",
         f"- Provider records seen: {coverage['results_seen']}",
-        f"- Unique papers processed: {coverage['final_batch_unique']}",
+        f"- Unique papers processed: {coverage['unique_processed']}",
         f"- Provider warnings: {coverage['error_count']}",
         "",
         "### Results by source",
