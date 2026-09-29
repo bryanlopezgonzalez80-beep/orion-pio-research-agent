@@ -139,6 +139,7 @@ def run_live_sweep(
 ) -> dict:
     """Sweep the full PIO taxonomy and persist results incrementally."""
     queries = coverage_queries()
+    started_at = _utcnow()
     started = time.monotonic()
 
     # Anonymous OpenAlex usage has a much smaller daily budget. Without a key,
@@ -200,7 +201,8 @@ def run_live_sweep(
 
     result = {
         "mode": "live_sweep",
-        "started_at": _utcnow().isoformat(timespec="seconds"),
+        "started_at": started_at.isoformat(timespec="seconds"),
+        "completed_at": _utcnow().isoformat(timespec="seconds"),
         "queries_total": len(queries),
         "queries_processed": processed,
         "queries_remaining": max(0, len(queries) - processed),
