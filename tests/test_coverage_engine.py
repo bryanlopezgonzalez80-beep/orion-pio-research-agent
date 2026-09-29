@@ -52,7 +52,12 @@ def test_comprehensive_refresh_persists_chunks_and_progress(monkeypatch, sample_
     monkeypatch.setattr(coverage_engine, "upsert_papers", lambda papers: saved.extend(papers))
 
     def fake_search(query, **kwargs):
-        paper = dict(sample_paper, id=f"id:{query}", title=f"Study about {query}")
+        paper = dict(
+            sample_paper,
+            id=f"id:{query}",
+            title=f"Study about {query}",
+            topic_relevance_percent=100,
+        )
         return {
             "results": [paper],
             "source_meta": [{"source": "Crossref", "count": 1}],
