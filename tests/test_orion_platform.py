@@ -186,6 +186,9 @@ def test_academic_route_exposes_trusted_complementary_sources():
     assert {"Academy of Management", "DOAJ"} <= set(plan["manual_sources"])
     for source in plan["manual_sources"]:
         assert source_search_url(source, "leadership").startswith("https://")
+    assert source_search_url("DOAJ", "psychological safety").startswith(
+        "https://doaj.org/search?"
+    )
 
 
 def test_semantic_scholar_default_requires_key(monkeypatch):
