@@ -43,11 +43,14 @@ SOURCE_SPECS = (
     SourceSpec("Crossref","academic","DOI metadata registry",True,True,"CROSSREF_EMAIL","https://www.crossref.org/",notes="Metadata-focused; email enables polite-pool identification."),
     SourceSpec("Semantic Scholar","academic","Scholarly index",True,True,"SEMANTIC_SCHOLAR_API_KEY","https://www.semanticscholar.org/","https://www.semanticscholar.org/me/account"),
     SourceSpec("Europe PMC","academic","Biomedical literature index",True,True,official_url="https://europepmc.org/"),
+    SourceSpec("PubMed","academic","U.S. National Library of Medicine literature index",True,True,"NCBI_API_KEY","https://pubmed.ncbi.nlm.nih.gov/","https://www.ncbi.nlm.nih.gov/account/",notes="NCBI E-utilities; an API key is optional and only raises supported request rate."),
     SourceSpec("arXiv","academic","Preprint repository",True,True,official_url="https://arxiv.org/",notes="Preprints are not equivalent to peer-reviewed evidence."),
     SourceSpec("Google Scholar","academic","Discovery service",False,True,official_url="https://scholar.google.com/"),
     SourceSpec("APA PsycNet","academic","APA literature platform",False,False,official_url="https://psycnet.apa.org/",login_url="https://my.apa.org/"),
     SourceSpec("SSRN","academic","Working-paper repository",False,True,official_url="https://www.ssrn.com/",login_url="https://hq.ssrn.com/login/pubsigninjoin.cfm"),
     SourceSpec("SIOP","academic","Professional association",False,True,official_url="https://www.siop.org/",login_url="https://my.siop.org/"),
+    SourceSpec("Academy of Management","academic","Scholarly management journals",False,False,official_url="https://journals.aom.org/"),
+    SourceSpec("DOAJ","academic","Curated open-access journal directory",False,True,official_url="https://doaj.org/"),
     SourceSpec("OSL / SUTRA","legal_pr","Official Puerto Rico legislative source",False,True,official_url="https://sutra.oslpr.org/"),
     SourceSpec("Departamento de Estado PR","legal_pr","Official Puerto Rico laws source",False,True,official_url="https://www.estado.pr.gov/leyes-de-puerto-rico"),
     SourceSpec("Biblioteca Jurídica Virtual PR","legal_pr","Official Puerto Rico government legal library",False,True,official_url="https://bibliotecavirtual.estado.pr.gov/"),
@@ -98,14 +101,15 @@ def recommended_academic_sources(query):
     # Semantic Scholar is excellent, but unauthenticated requests have tight rate limits.
     # Promote it to the default route only when a key is configured; it remains user-selectable.
     if os.getenv("SEMANTIC_SCHOLAR_API_KEY"): sources.append("Semantic Scholar")
-    if any(t in q for t in ("wellbeing","burnout","stress","health","mental","fatigue","sleep")): sources.append("Europe PMC")
+    if any(t in q for t in ("wellbeing","burnout","stress","health","mental","fatigue","sleep","occupational")):
+        sources.extend(["Europe PMC","PubMed"])
     if any(t in q for t in ("ai ","artificial intelligence","machine learning","algorithm","automation","computational","large language")): sources.append("arXiv")
     return list(dict.fromkeys(sources))
 
 def route_query(query, domain="auto"):
     resolved=classify_query(query) if domain=="auto" else domain
     if resolved=="academic":
-        return {"domain":resolved,"automated_sources":recommended_academic_sources(query),"manual_sources":["Google Scholar","APA PsycNet","SIOP","SSRN"]}
+        return {"domain":resolved,"automated_sources":recommended_academic_sources(query),"manual_sources":["Google Scholar","APA PsycNet","SIOP","SSRN","Academy of Management","DOAJ"]}
     if resolved=="legal_pr":
         return {"domain":resolved,"automated_sources":[],"manual_sources":["OSL / SUTRA","Departamento de Estado PR","Biblioteca Jurídica Virtual PR","Rama Judicial de Puerto Rico"]}
     if resolved=="legal_us":
@@ -121,6 +125,8 @@ def source_search_url(source, query):
       "APA PsycNet":f"https://psycnet.apa.org/search/results?term={q}",
       "SIOP":f"https://www.google.com/search?q=site%3Asiop.org+{q}",
       "SSRN":f"https://papers.ssrn.com/sol3/results.cfm?txtKey_Words={q}",
+      "Academy of Management":f"https://journals.aom.org/action/doSearch?AllField={q}",
+      "DOAJ":f"https://www.google.com/search?q=site%3Adoaj.org%2Farticle+{q}",
       "OSL / SUTRA":f"https://www.google.com/search?q=site%3Asutra.oslpr.org+{q}",
       "Departamento de Estado PR":f"https://www.google.com/search?q=site%3Aestado.pr.gov+{q}",
       "Biblioteca Jurídica Virtual PR":f"https://www.google.com/search?q=site%3Abibliotecavirtual.estado.pr.gov+{q}",
