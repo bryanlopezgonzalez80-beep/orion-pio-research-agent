@@ -583,6 +583,91 @@ def search_crossref_window(
     return deduplicate(out)[:cap]
 
 
+def search_crossref_journal_window(
+    journal: str,
+    start_date: date,
+    end_date: date,
+    *,
+    max_records: int = 250,
+    page_size: int = 200,
+) -> list[dict]:
+    """Retrieve all bounded Crossref records for an exact journal title window."""
+    if end_date < start_date:
+        raise ValueError("end_date must be on or after start_date")
+    rows = max(1, min(int(page_size), 1000))
+    cap = max(1, int(max_records))
+    cursor = "*"
+    out: list[dict] = []
+    scoring_days = max(1, (date.today() - start_date).days + 1)
+
+    while len(out) < cap:
+        pace_source_request("Crossref")
+        params = {
+            "filter": (
+                f"container-title:{journal},"
+                f"from-pub-date:{start_date.isoformat()},"
+                f"until-pub-date:{end_date.isoformat()}"
+            ),
+            "rows": min(rows, cap - len(out)),
+            "cursor": cursor,
+            "mailto": os.getenv("CROSSREF_EMAIL", "") or None,
+        }
+        params = {k: v for k, v in params.items() if v is not None}
+        message = _get("https://api.crossref.org/works", params=params).json().get(
+            "message", {}
+        )
+        items = message.get("items") or []
+        for it in items:
+            authors = []
+            for a in it.get("author", [])[:8]:
+                name = " ".join(
+                    x for x in [a.get("given", ""), a.get("family", "")] if x
+                ).strip()
+                if name:
+                    authors.append(name)
+            title = clean_text((it.get("title") or [""])[0])
+            if not title:
+                continue
+            container = clean_text((it.get("container-title") or [""])[0])
+            # Crossref documents container-title as an exact-value filter, but
+            # keep this defensive check so a provider anomaly cannot pollute
+            # the curated journal stream.
+            if container and container.casefold() != journal.casefold():
+                continue
+            doi = normalize_doi(it.get("DOI") or "")
+            published = _crossref_date(it)
+            p = {
+                "id": stable_id("Crossref", doi, doi, title),
+                "title": title,
+                "authors": ", ".join(authors),
+                "year": int((published or "0")[:4] or 0),
+                "published_date": published,
+                "source": "Crossref",
+                "journal": container or journal,
+                "work_type": clean_text(it.get("type")),
+                "doi": doi,
+                "url": it.get("URL") or (f"https://doi.org/{doi}" if doi else ""),
+                "oa_url": "",
+                "pdf_url": "",
+                "abstract": clean_text(it.get("abstract")),
+                "topics": ", ".join(
+                    clean_text(s) for s in (it.get("subject") or [])[:6]
+                ),
+                "discovered_via": "Crossref PIO journal watch",
+                "cited_by_count": int(it.get("is-referenced-by-count") or 0),
+            }
+            out.append(score_record(p, journal, scoring_days))
+            if len(out) >= cap:
+                break
+
+        next_cursor = message.get("next-cursor")
+        if not items or len(items) < params["rows"] or not next_cursor:
+            break
+        cursor = next_cursor
+
+    return deduplicate(out)[:cap]
+
+
 def search_europe_pmc(query: str, days: int = 45, per_page: int = 15) -> list[dict]:
     start = date.today() - timedelta(days=days)
     q = f'({query}) AND FIRST_PDATE:[{start.isoformat()} TO {date.today().isoformat()}]'
