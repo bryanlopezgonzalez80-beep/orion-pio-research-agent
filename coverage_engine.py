@@ -145,7 +145,8 @@ def run_comprehensive_refresh(
                         variant,
                         start_date,
                         end_date,
-                        per_page=200,
+                        per_page=500,
+                        max_pages=2,
                     )
                     source_results["Crossref"] += len(papers)
                     domain_results[f"{topic.domain} · historical"] += len(papers)
