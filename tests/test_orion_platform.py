@@ -81,9 +81,46 @@ def test_rate_limit_retry_uses_bounded_backoff_without_header():
     response.status_code = 429
     exc = requests.HTTPError("rate limited", response=response)
 
-    assert orion_platform._rate_limit_delay(exc, 0) == 0.75
-    assert orion_platform._rate_limit_delay(exc, 8) == 8.0
+    assert orion_platform._rate_limit_delay(exc, 0) == 1.0
+    assert orion_platform._rate_limit_delay(exc, 8) == 15.0
     assert orion_platform._rate_limit_delay(RuntimeError("other"), 0) is None
+
+
+def test_transient_503_retries_with_exponential_backoff(tmp_path, monkeypatch):
+    monkeypatch.setenv("ORION_DB_PATH", str(tmp_path / "test.db"))
+    calls = {"n": 0}
+    sleeps = []
+
+    def unavailable_then_ok(query, days, per_page):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            response = requests.Response()
+            response.status_code = 503
+            raise requests.HTTPError("service unavailable", response=response)
+        return [{"id": "recovered", "title": "Recovered", "published_date": "2026-09-01", "relevance_score": 8}]
+
+    out = execute_academic_search(
+        "leadership",
+        sources=["OpenAlex"],
+        searchers={"OpenAlex": unavailable_then_ok},
+        retries=2,
+        sleep_fn=sleeps.append,
+        force_refresh=True,
+    )
+
+    assert calls["n"] == 2
+    assert sleeps == [1.0]
+    assert out["unique"] == 1
+    assert out["errors"] == []
+
+
+def test_transient_503_retry_after_is_honored():
+    response = requests.Response()
+    response.status_code = 503
+    response.headers["Retry-After"] = "2.5"
+    exc = requests.HTTPError("service unavailable", response=response)
+
+    assert orion_platform._transient_retry_delay(exc, 0) == 2.5
 
 
 def test_retry_and_deduplicate(tmp_path,monkeypatch):

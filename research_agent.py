@@ -43,7 +43,7 @@ def source_rate_policy(source: str) -> dict:
     if source == "Crossref":
         polite = bool(os.getenv("CROSSREF_EMAIL"))
         return {
-            "minimum_interval_seconds": (1.0 / 3.0) if polite else 1.0,
+            "minimum_interval_seconds": 0.40 if polite else 1.10,
             "guidance": (
                 "Polite pool: up to 3 list requests/second when mailto is configured."
                 if polite
@@ -435,7 +435,7 @@ def search_openalex(query: str, days: int = 45, per_page: int = 15) -> list[dict
     params = {
         "search": query,
         "filter": f"from_publication_date:{start.isoformat()},to_publication_date:{date.today().isoformat()}",
-        "per-page": min(per_page, 50),
+        "per_page": min(per_page, 50),
         "sort": "publication_date:desc",
         "api_key": os.getenv("OPENALEX_API_KEY", "") or None,
     }

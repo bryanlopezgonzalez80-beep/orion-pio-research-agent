@@ -73,13 +73,15 @@ def test_openalex_optional_key_is_sent(monkeypatch, fake_response):
     monkeypatch.setattr(research_agent, "_get", fake_get)
     assert research_agent.search_openalex("leadership") == []
     assert captured["params"]["api_key"] == "openalex-test-key"
+    assert captured["params"]["per_page"] == 15
+    assert "per-page" not in captured["params"]
 
 
 def test_provider_rate_policies_and_pacing(monkeypatch):
     monkeypatch.delenv("CROSSREF_EMAIL", raising=False)
-    assert research_agent.source_rate_policy("Crossref")["minimum_interval_seconds"] == 1.0
+    assert research_agent.source_rate_policy("Crossref")["minimum_interval_seconds"] == 1.10
     monkeypatch.setenv("CROSSREF_EMAIL", "researcher@example.test")
-    assert research_agent.source_rate_policy("Crossref")["minimum_interval_seconds"] == pytest.approx(1 / 3)
+    assert research_agent.source_rate_policy("Crossref")["minimum_interval_seconds"] == 0.40
     assert research_agent.source_rate_policy("Semantic Scholar")["minimum_interval_seconds"] == 1.0
     monkeypatch.delenv("NCBI_API_KEY", raising=False)
     assert research_agent.source_rate_policy("PubMed")["minimum_interval_seconds"] == pytest.approx(1 / 3)
