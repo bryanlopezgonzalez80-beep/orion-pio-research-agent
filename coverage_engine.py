@@ -71,6 +71,7 @@ def run_comprehensive_refresh(
     domain_results = Counter()
     errors: list[str] = []
     all_results: list[dict] = []
+    processed_ids: set[str] = set()
     completed = 0
 
     try:
@@ -101,6 +102,7 @@ def run_comprehensive_refresh(
             if len(all_results) >= 500:
                 unique_chunk = _safe_unique(all_results)
                 upsert_papers(unique_chunk)
+                processed_ids.update(str(p.get("id") or "") for p in unique_chunk if p.get("id"))
                 all_results.clear()
 
             if completed % 10 == 0 or completed == len(selected):
@@ -115,7 +117,8 @@ def run_comprehensive_refresh(
 
         final_unique = _safe_unique(all_results)
         upsert_papers(final_unique)
-        total_unique = len(final_unique)
+        processed_ids.update(str(p.get("id") or "") for p in final_unique if p.get("id"))
+        total_unique = len(processed_ids)
         update_coverage_run(
             run_id,
             status="success" if not errors else "success_with_warnings",
@@ -148,12 +151,13 @@ def run_comprehensive_refresh(
         partial_unique = _safe_unique(all_results)
         if partial_unique:
             upsert_papers(partial_unique)
+            processed_ids.update(str(p.get("id") or "") for p in partial_unique if p.get("id"))
         update_coverage_run(
             run_id,
             status="failed",
             topics_completed=completed,
             results_seen=sum(source_results.values()),
-            unique_processed=len(partial_unique),
+            unique_processed=len(processed_ids),
             source_counts=dict(source_results),
             domain_counts=dict(domain_results),
             errors=errors[-200:],
