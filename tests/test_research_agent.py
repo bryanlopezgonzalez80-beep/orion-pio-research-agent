@@ -20,6 +20,8 @@ def test_text_doi_id_and_date_normalization():
     assert research_agent.parse_date("published 2024-02-03") == "2024-02-03"
     assert research_agent.parse_date("year 2023") == "2023-01-01"
     assert research_agent.parse_date([2022, 7]) == "2022-07-01"
+    assert research_agent.parse_date("2025 Mar 04") == "2025-03-04"
+    assert research_agent.parse_date("2025 March") == "2025-03-01"
     assert research_agent.parse_date(["bad"]) == ""
 
 
@@ -199,6 +201,7 @@ def test_pubmed_parser_uses_ncbi_esearch_and_esummary(monkeypatch, fake_response
     assert paper["source"] == "PubMed"
     assert paper["doi"] == "10.1000/pubmed"
     assert paper["url"] == "https://pubmed.ncbi.nlm.nih.gov/12345/"
+    assert paper["published_date"] == "2025-03-04"
     assert "A. Rivera" in paper["authors"]
     assert calls[0][1]["api_key"] == "test-key"
     assert calls[1][1]["api_key"] == "test-key"
