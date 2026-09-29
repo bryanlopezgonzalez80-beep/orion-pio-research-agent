@@ -26,6 +26,8 @@ def _normalize_paper(paper: dict) -> dict:
     normalized["title"] = normalized.get("title") or "Sin título"
     for field in TEXT_FIELDS:
         normalized[field] = normalized.get(field) or ""
+    for field in ("evidence_type", "peer_review_status", "retraction_status", "correction_status", "access_status"):
+        normalized[field] = normalized.get(field) or "UNKNOWN"
     for field in INTEGER_FIELDS:
         normalized[field] = int(normalized.get(field) or 0)
     for field in FLOAT_FIELDS:

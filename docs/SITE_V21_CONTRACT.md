@@ -20,6 +20,10 @@ The Site calls the Orion API server-side using `X-Orion-API-Key`. It never conne
 - `citation_graph.papers_discovered`;
 - `providers.health` and the existing registry/health arrays.
 
+`providers` also contains `registry` plus numeric lifecycle summaries:
+`registered`, `implemented`, `configured`, `authorized`, and `active`. These
+counts are independent; clients must never infer active from registered.
+
 Corpus totals and current-run metrics are deliberately separate. `estimated_months_remaining` is `null` until a trustworthy estimate exists.
 
 During backfill, `backfill_month_tasks_completed` / `backfill_month_tasks_total`
@@ -58,3 +62,14 @@ Show a prominent warning when retracted or under expression of concern. Access b
 Access observations never downgrade a previously confirmed route. Precedence is
 Open Access, institutional/provider access, publisher access, DOI-only, then
 metadata/unknown; weaker later routes remain available as alternatives.
+
+## Manual refresh terminal states
+
+`manual_refresh.state` is `queued` or `running` while polling is required. The
+terminal states are `completed`, `completed_with_warnings`, and `failed`.
+Clients stop polling for all three terminal states and preserve accumulated Radar
+results when warnings or failures occur.
+
+The complete Site behavior and responsive acceptance criteria are specified in
+`site_migration/SITE_V21_SPEC.md`. That specification does not publish or modify
+Site v20.
