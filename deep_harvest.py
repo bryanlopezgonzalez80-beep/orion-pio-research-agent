@@ -296,12 +296,13 @@ def run_live_sweep(
     errors: list[str] = []
     source_totals: dict[str, Counter] = {}
     processed = 0
+    taxonomy_budget_seconds = max_runtime_seconds * 0.80
     received = 0
     unique_seen: dict[str, dict] = {}
     stopped_for_budget = False
 
     for query in ordered_queries:
-        if time.monotonic() - started >= max_runtime_seconds:
+        if time.monotonic() - started >= taxonomy_budget_seconds:
             stopped_for_budget = True
             break
         sources = _live_sources(query, openalex_queries)
@@ -337,10 +338,21 @@ def run_live_sweep(
 
     journal_watch_received = 0
     journal_watch_unique = 0
+    journal_watch_processed = 0
     journal_start = date.today() - timedelta(days=days)
+    journal_rotation = int(get_setting(f"{STATE_PREFIX}.journal_rotation", 0) or 0)
+    if PIO_JOURNALS:
+        journal_rotation %= len(PIO_JOURNALS)
+        ordered_journals = (
+            PIO_JOURNALS[journal_rotation:] + PIO_JOURNALS[:journal_rotation]
+        )
+    else:
+        journal_rotation = 0
+        ordered_journals = []
+
     if time.monotonic() - started < max_runtime_seconds:
         journal_batch: list[dict] = []
-        for journal in PIO_JOURNALS:
+        for journal in ordered_journals:
             if time.monotonic() - started >= max_runtime_seconds:
                 stopped_for_budget = True
                 break
@@ -358,6 +370,8 @@ def run_live_sweep(
                 errors.append(
                     f"journal watch {journal}: {type(exc).__name__}: {exc}"
                 )
+            finally:
+                journal_watch_processed += 1
         journal_unique = deduplicate(journal_batch)
         if journal_unique:
             upsert_papers(journal_unique)
@@ -367,6 +381,13 @@ def run_live_sweep(
                 if paper_id:
                     unique_seen[paper_id] = paper
             journal_watch_unique = len(unique_seen) - before
+
+    next_journal_rotation = (
+        (journal_rotation + journal_watch_processed) % len(PIO_JOURNALS)
+        if PIO_JOURNALS
+        else 0
+    )
+    set_setting(f"{STATE_PREFIX}.journal_rotation", next_journal_rotation)
 
     if not os.getenv("OPENALEX_API_KEY"):
         set_setting(f"{STATE_PREFIX}.openalex_rotation", next_rotation)
@@ -393,6 +414,9 @@ def run_live_sweep(
         "stopped_for_runtime_budget": stopped_for_budget,
         "openalex_queries_this_run": len(openalex_queries),
         "journal_watch_count": len(PIO_JOURNALS),
+        "journal_watch_processed": journal_watch_processed,
+        "journal_rotation_start": journal_rotation,
+        "next_journal_rotation": next_journal_rotation,
         "journal_watch_received": journal_watch_received,
         "journal_watch_unique": journal_watch_unique,
         "source_totals": {name: dict(values) for name, values in source_totals.items()},
