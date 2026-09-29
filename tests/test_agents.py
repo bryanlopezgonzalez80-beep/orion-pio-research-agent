@@ -22,8 +22,27 @@ def test_daily_agent_main_uses_mocks_and_temporary_reports(tmp_path, monkeypatch
     reports = tmp_path / "reports"
     reports.mkdir()
     monkeypatch.setattr(daily_agent, "REPORTS", reports)
-    monkeypatch.setattr(daily_agent, "CORE_TOPICS", ["leadership"])
     monkeypatch.setattr(daily_agent, "verify_database_backend", lambda: "sqlite")
+    monkeypatch.setattr(
+        daily_agent,
+        "run_comprehensive_refresh",
+        lambda trigger: {
+            "run_id": 1,
+            "date": "2026-09-29",
+            "trigger": trigger,
+            "status": "success",
+            "topics_total": 220,
+            "topics_completed": 220,
+            "source_query_counts": {"Crossref": 150},
+            "historical_year": 2015,
+            "source_result_counts": {"Crossref": 5},
+            "domain_result_counts": {"Leadership": 5},
+            "results_seen": 5,
+            "unique_processed": 4,
+            "error_count": 0,
+            "errors": [],
+        },
+    )
     monkeypatch.setattr(daily_agent, "alerts_due", lambda: [
         {"id": 1, "query": "Ley 80 Puerto Rico", "domain": "auto", "sources_json": "[]"},
         {"id": 2, "query": "teams", "domain": "academic", "sources_json": "invalid"},
@@ -32,17 +51,21 @@ def test_daily_agent_main_uses_mocks_and_temporary_reports(tmp_path, monkeypatch
         "domain": "legal_pr" if "Ley" in query else "academic",
         "manual_sources": ["SUTRA"], "automated_sources": ["OpenAlex"],
     })
-    monkeypatch.setattr(daily_agent, "_run", lambda query, sources=None: {
+    monkeypatch.setattr(daily_agent, "_run_alert", lambda query, sources=None: {
         "results": [dict(sample_paper, id=query)], "errors": [], "received": 1, "unique": 1,
     })
     saved, marked = [], []
     monkeypatch.setattr(daily_agent, "upsert_papers", lambda papers: saved.extend(papers))
     monkeypatch.setattr(daily_agent, "mark_alert_run", marked.append)
+
     daily_agent.main()
-    assert len(saved) == 2
+
+    assert len(saved) == 1
     assert marked == [1, 2]
     json_file = next(reports.glob("daily_*.json"))
-    assert json.loads(json_file.read_text(encoding="utf-8"))["results_seen"] == 2
+    payload = json.loads(json_file.read_text(encoding="utf-8"))
+    assert payload["coverage"]["results_seen"] == 5
+    assert payload["coverage"]["topics_completed"] == 220
     assert next(reports.glob("daily_*.md")).stat().st_size > 0
 
 
@@ -123,7 +146,9 @@ def test_cloud_agents_fail_before_work_when_postgres_is_unavailable(agent, monke
     )
     if agent is daily_agent:
         monkeypatch.setattr(
-            agent, "_run", lambda *args, **kwargs: pytest.fail("daily work started")
+            agent,
+            "run_comprehensive_refresh",
+            lambda *args, **kwargs: pytest.fail("daily work started"),
         )
     else:
         monkeypatch.setattr(
