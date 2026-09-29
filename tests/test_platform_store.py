@@ -48,6 +48,22 @@ def test_source_health_opens_and_resets_circuit(tmp_path, monkeypatch):
     assert recovered["last_error"] == ""
 
 
+def test_source_inactive_clears_failure_and_circuit_without_counting_success(tmp_path):
+    path = tmp_path / "health.db"
+    for _ in range(3):
+        platform_store.record_source_failure("Semantic Scholar", "rate limited", path=path)
+
+    platform_store.record_source_inactive("Semantic Scholar", path=path)
+
+    health = platform_store.get_source_health(path=path)[0]
+    assert health["last_status"] == "inactive"
+    assert health["success_count"] == 0
+    assert health["failure_count"] == 3
+    assert health["consecutive_failures"] == 0
+    assert health["circuit_open_until"] is None
+    assert health["last_error"] == ""
+
+
 def test_sqlite_source_health_preserves_existing_history(tmp_path):
     path = tmp_path / "health.db"
     platform_store.record_source_success("OpenAlex", path=path)
