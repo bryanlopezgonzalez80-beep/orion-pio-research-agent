@@ -258,7 +258,7 @@ def test_stale_source_error_is_inactive_not_warning():
             "failure_count": 3,
             "consecutive_failures": 3,
             "circuit_open_until": None,
-            "last_checked": (NOW - timedelta(hours=10)).isoformat(),
+            "last_checked": (NOW - timedelta(hours=31)).isoformat(),
         },
         {
             "source": "OpenAlex",
@@ -289,6 +289,45 @@ def test_stale_source_error_is_inactive_not_warning():
     assert source["metrics"]["inactive"] == 1
     semantic = next(item for item in source["metrics"]["sources"] if item["source"] == "Semantic Scholar")
     assert semantic["status"] == "inactive"
+
+
+def test_targeted_search_does_not_make_daily_providers_inactive():
+    sources = [
+        {
+            "source": "Crossref",
+            "last_status": "ok",
+            "success_count": 4,
+            "failure_count": 0,
+            "consecutive_failures": 0,
+            "circuit_open_until": None,
+            "last_checked": (NOW - timedelta(hours=10)).isoformat(),
+        },
+        {
+            "source": "OpenAlex",
+            "last_status": "ok",
+            "success_count": 4,
+            "failure_count": 0,
+            "consecutive_failures": 0,
+            "circuit_open_until": None,
+            "last_checked": (NOW - timedelta(minutes=5)).isoformat(),
+        },
+    ]
+    connection = FakeConnection(
+        latest_search=(NOW - timedelta(minutes=1)).isoformat(),
+        sources=sources,
+    )
+
+    checks = monitor.check_database(
+        environ={"DATABASE_URL": FAKE_DATABASE_URL},
+        connector=lambda config: connection,
+        table_lister=postgres_tables,
+        now=NOW,
+    )
+
+    source = checks["source_health"]
+    assert source["status"] == "OK"
+    assert source["metrics"]["healthy"] == 2
+    assert source["metrics"]["inactive"] == 0
 
 
 def test_open_circuit_is_critical():
