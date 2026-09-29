@@ -42,13 +42,24 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from orion_platform import execute_academic_search
+          from platform_store import record_source_inactive
+
+          sources = ["OpenAlex"]
+          if os.getenv("SEMANTIC_SCHOLAR_API_KEY"):
+              sources.append("Semantic Scholar")
+          else:
+              # Anonymous Semantic Scholar traffic shares a global quota and can
+              # be throttled by unrelated users. Keep it registered/implemented
+              # but inactive until a dedicated key is configured.
+              record_source_inactive("Semantic Scholar")
 
           result = execute_academic_search(
               "industrial organizational psychology leadership",
               days=30,
               per_source=3,
-              sources=["OpenAlex", "Semantic Scholar"],
+              sources=sources,
               max_keep=12,
               retries=3,
               cache_ttl_hours=1,
@@ -65,7 +76,15 @@ jobs:
               for item in result["source_meta"]
           }
           print(json.dumps(summary, indent=2, sort_keys=True))
-          failed = [name for name, item in summary.items() if item["status"] != "ok"]
+          if "Semantic Scholar" not in sources:
+              summary["Semantic Scholar"] = {
+                  "status": "inactive",
+                  "reason": "dedicated API key not configured",
+              }
+          failed = [
+              name for name, item in summary.items()
+              if item["status"] not in {"ok", "inactive"}
+          ]
           if failed:
               raise SystemExit("Provider recovery failed: " + ", ".join(failed))
           PY
