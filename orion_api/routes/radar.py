@@ -124,13 +124,23 @@ def radar(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
     geography: Annotated[
-        Literal["puerto_rico", "united_states", "latam_caribbean"] | None,
+        Literal["puerto_rico", "united_states", "latam_caribbean", "global"] | None,
         Query(),
     ] = None,
+    source: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    year: Annotated[int | None, Query(ge=1800, le=2200)] = None,
+    evidence_type: Annotated[str | None, Query(min_length=2, max_length=50)] = None,
+    peer_review_status: Literal["CONFIRMED", "LIKELY", "UNKNOWN", "NOT_PEER_REVIEWED"] | None = None,
+    access_status: Literal["OPEN_ACCESS", "INSTITUTIONAL_ACCESS", "PROVIDER_LOGIN", "PUBLISHER_ACCESS", "DOI_ONLY", "METADATA_ONLY", "UNKNOWN"] | None = None,
+    retraction_status: Literal["RETRACTED", "EXPRESSION_OF_CONCERN", "CORRECTED", "UNKNOWN"] | None = None,
+    open_access: bool | None = None,
 ) -> PaperListResponse:
     """Return the accumulated research radar instead of only the latest search."""
     items = paper_service.list_papers(
-        limit=limit, offset=offset, geography=geography
+        limit=limit, offset=offset, geography=geography, source=source, year=year,
+        evidence_type=evidence_type, peer_review_status=peer_review_status,
+        access_status=access_status, retraction_status=retraction_status,
+        open_access=open_access,
     )
     return PaperListResponse(items=items, limit=limit, offset=offset, count=len(items))
 
