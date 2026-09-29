@@ -204,6 +204,43 @@ def test_pubmed_parser_uses_ncbi_esearch_and_esummary(monkeypatch, fake_response
     assert calls[1][1]["api_key"] == "test-key"
 
 
+def test_crossref_journal_window_uses_exact_container_filter(monkeypatch, fake_response):
+    captured = []
+
+    def fake_get(url, **kwargs):
+        captured.append(kwargs["params"].copy())
+        return fake_response(
+            {
+                "message": {
+                    "items": [
+                        {
+                            "title": ["A new construct at work"],
+                            "DOI": "10.10/journal-watch",
+                            "published": {"date-parts": [[2026, 8, 1]]},
+                            "container-title": ["Journal of Applied Psychology"],
+                            "type": "journal-article",
+                        }
+                    ]
+                }
+            }
+        )
+
+    monkeypatch.setattr(research_agent, "_get", fake_get)
+    monkeypatch.setattr(research_agent, "pace_source_request", lambda *a, **k: 0)
+
+    papers = research_agent.search_crossref_journal_window(
+        "Journal of Applied Psychology",
+        research_agent.date(2026, 8, 1),
+        research_agent.date(2026, 8, 31),
+        max_records=10,
+    )
+
+    assert len(papers) == 1
+    assert papers[0]["doi"] == "10.10/journal-watch"
+    assert papers[0]["discovered_via"] == "Crossref PIO journal watch"
+    assert "container-title:Journal of Applied Psychology" in captured[0]["filter"]
+
+
 def test_europe_pmc_parser_handles_open_access_and_empty_results(monkeypatch, fake_response):
     payload = {"resultList": {"result": [{
         "id": "1", "pmcid": "PMC1", "source": "MED", "title": "Wellbeing", "pubYear": "2025",
