@@ -44,7 +44,7 @@ The daily agent performs a high-recall sweep rather than only the old eight-topi
 - arXiv is added for technology / AI / automation topics.
 - Semantic Scholar participates automatically when its API key is configured.
 - OpenAlex remains usable without a key, but because anonymous usage has a much smaller daily budget Orion rotates a bounded set of OpenAlex queries per run instead of exhausting the provider. This is intentionally compatible with deployments that choose not to configure an OpenAlex key.
-- A resumable Crossref historical backfill walks older literature month by month and persists its cursor in `orion_settings`. It defaults to four months per daily run and a 1950 floor; both are configurable.
+- A resumable Crossref historical backfill walks older literature month by month and persists its cursor in `orion_settings`. It defaults to four months per daily run and a 1900 floor; both are configurable. A curated core PIO journal watch uses Crossref's exact `container-title` filter so papers with novel terminology are still captured.
 - Every query is persisted immediately. Later provider failures do not roll back earlier discoveries.
 
 This is designed for **maximum practical coverage**, not a claim that Orion contains literally every scholarly page on the internet. Licensed databases or services without a permitted public API remain directed secondary sources rather than scraped sources.
