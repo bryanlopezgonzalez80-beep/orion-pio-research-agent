@@ -9,7 +9,12 @@ from coverage_catalog import COVERAGE_TOPICS, CoverageTopic
 from data_store import upsert_papers
 from orion_platform import execute_academic_search
 from platform_store import create_coverage_run, update_coverage_run
-from research_agent import deduplicate
+from research_agent import (
+    academic_query_variants,
+    deduplicate,
+    pace_source_request,
+    search_crossref_range,
+)
 
 
 DEFAULT_RECENT_DAYS = 4
@@ -53,6 +58,8 @@ def _safe_unique(papers: Iterable[dict]) -> list[dict]:
             continue
         if not any((paper.get("doi"), paper.get("url"), paper.get("oa_url"), paper.get("pdf_url"))):
             continue
+        if float(paper.get("topic_relevance_percent") or 0) < 20.0:
+            continue
         usable.append(paper)
     return deduplicate(usable)
 
@@ -65,7 +72,11 @@ def run_comprehensive_refresh(
     topics: Iterable[CoverageTopic] | None = None,
 ) -> dict:
     selected = list(topics or COVERAGE_TOPICS)
-    run_id = create_coverage_run(trigger, len(selected))
+    # Every run performs two complementary passes:
+    # 1) recent incremental discovery across all configured trusted indexes;
+    # 2) one historical year across the full catalog in Crossref.
+    total_tasks = len(selected) * 2
+    run_id = create_coverage_run(trigger, total_tasks)
     source_requests = Counter()
     source_results = Counter()
     domain_results = Counter()
@@ -115,6 +126,56 @@ def run_comprehensive_refresh(
                     errors=errors[-100:],
                 )
 
+        # Historical backfill: sweep one complete publication year per day.
+        # A stable 100-year rotation means Orion progressively fills the
+        # historical corpus without re-downloading every year on every run.
+        today = date.today()
+        historical_offset = (today - date(2020, 1, 1)).days % 100
+        historical_year = today.year - historical_offset
+        start_date = date(historical_year, 1, 1)
+        end_date = min(date(historical_year, 12, 31), today)
+
+        for topic in selected:
+            variants = academic_query_variants(topic.query) or [topic.query]
+            for variant in variants:
+                try:
+                    pace_source_request("Crossref")
+                    source_requests["Crossref"] += 1
+                    papers = search_crossref_range(
+                        variant,
+                        start_date,
+                        end_date,
+                        per_page=200,
+                    )
+                    source_results["Crossref"] += len(papers)
+                    domain_results[f"{topic.domain} · historical"] += len(papers)
+                    all_results.extend(papers)
+                except Exception as exc:
+                    errors.append(
+                        f"historical {historical_year} {topic.query}: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+            completed += 1
+
+            if len(all_results) >= 500:
+                unique_chunk = _safe_unique(all_results)
+                upsert_papers(unique_chunk)
+                processed_ids.update(
+                    str(p.get("id") or "") for p in unique_chunk if p.get("id")
+                )
+                all_results.clear()
+
+            if completed % 10 == 0 or completed == total_tasks:
+                update_coverage_run(
+                    run_id,
+                    topics_completed=completed,
+                    results_seen=sum(source_results.values()),
+                    unique_processed=len(processed_ids),
+                    source_counts=dict(source_results),
+                    domain_counts=dict(domain_results),
+                    errors=errors[-100:],
+                )
+
         final_unique = _safe_unique(all_results)
         upsert_papers(final_unique)
         processed_ids.update(str(p.get("id") or "") for p in final_unique if p.get("id"))
@@ -135,9 +196,10 @@ def run_comprehensive_refresh(
             "date": date.today().isoformat(),
             "trigger": trigger,
             "status": "success" if not errors else "success_with_warnings",
-            "topics_total": len(selected),
+            "topics_total": total_tasks,
             "topics_completed": completed,
             "source_query_counts": dict(source_requests),
+            "historical_year": historical_year,
             "source_result_counts": dict(source_results),
             "domain_result_counts": dict(domain_results),
             "results_seen": sum(source_results.values()),
