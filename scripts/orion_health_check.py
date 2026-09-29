@@ -168,12 +168,10 @@ def check_database(
         inactive = 0
         circuits_open = 0
         sources = []
-        latest_search_ts = _parse_timestamp(latest_search)
-        inactive_before = (
-            latest_search_ts - timedelta(hours=2)
-            if latest_search_ts is not None
-            else None
-        )
+        # Provider freshness is independent from the newest search-history row.
+        # A targeted/manual search must not make unrelated providers look stale.
+        # Daily Radar runs once per day, so allow a 30-hour freshness window.
+        inactive_before = checked_at - timedelta(hours=30)
         for row in source_rows:
             item = dict(row)
             consecutive = int(item.get("consecutive_failures") or 0)
