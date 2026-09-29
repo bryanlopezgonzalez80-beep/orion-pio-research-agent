@@ -49,6 +49,15 @@ def test_paper_crud_deduplicates_and_preserves_richer_values(sample_paper):
     assert stored["favorite"] == 1
 
 
+def test_library_text_search_covers_topics_journal_authors_and_doi(sample_paper):
+    data_store.upsert_papers([sample_paper])
+
+    assert data_store.list_papers(query="psychological safety")[0]["id"] == sample_paper["id"]
+    assert data_store.list_papers(query="Revista PIO")[0]["id"] == sample_paper["id"]
+    assert data_store.list_papers(query="Ana Pérez")[0]["id"] == sample_paper["id"]
+    assert data_store.list_papers(query="10.1234/orion")[0]["id"] == sample_paper["id"]
+
+
 def test_paper_flags_analysis_filters_and_missing_record(sample_paper):
     data_store.upsert_papers([sample_paper])
     data_store.set_favorite(sample_paper["id"], True)
