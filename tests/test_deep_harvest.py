@@ -16,6 +16,8 @@ def test_coverage_catalog_is_broad_and_global():
     assert "industrial organizational psychology" in queries
     assert any("Puerto Rico" in q for q in queries)
     assert any("Latin America" in q or "América Latina" in q for q in queries)
+    assert len(deep_harvest.PIO_JOURNALS) >= 20
+    assert "Journal of Applied Psychology" in deep_harvest.PIO_JOURNALS
 
 
 def test_live_sweep_covers_every_query_and_rotates_keyless_openalex(monkeypatch, sample_paper):
@@ -32,6 +34,10 @@ def test_live_sweep_covers_every_query_and_rotates_keyless_openalex(monkeypatch,
     monkeypatch.delenv("SEMANTIC_SCHOLAR_API_KEY", raising=False)
     monkeypatch.setenv("ORION_OPENALEX_QUERIES_PER_RUN", "1")
     monkeypatch.setattr(deep_harvest, "coverage_queries", lambda: queries)
+    monkeypatch.setattr(deep_harvest, "PIO_JOURNALS", ["Journal of Applied Psychology"])
+    monkeypatch.setattr(
+        deep_harvest, "search_crossref_journal_window", lambda *a, **k: []
+    )
     monkeypatch.setattr(
         deep_harvest,
         "get_setting",
@@ -91,6 +97,10 @@ def test_live_sweep_uses_all_openalex_queries_when_key_is_configured(monkeypatch
     calls = []
     monkeypatch.setenv("OPENALEX_API_KEY", "test-only")
     monkeypatch.setattr(deep_harvest, "coverage_queries", lambda: queries)
+    monkeypatch.setattr(deep_harvest, "PIO_JOURNALS", ["Journal of Applied Psychology"])
+    monkeypatch.setattr(
+        deep_harvest, "search_crossref_journal_window", lambda *a, **k: []
+    )
     monkeypatch.setattr(deep_harvest, "set_setting", lambda *a, **k: None)
     monkeypatch.setattr(deep_harvest, "upsert_papers", lambda papers: None)
 
@@ -116,6 +126,10 @@ def test_historical_backfill_resumes_month_by_month(monkeypatch, sample_paper):
     saved = []
 
     monkeypatch.setattr(deep_harvest, "BACKFILL_QUERIES", ["leadership"])
+    monkeypatch.setattr(deep_harvest, "PIO_JOURNALS", ["Journal of Applied Psychology"])
+    monkeypatch.setattr(
+        deep_harvest, "search_crossref_journal_window", lambda *a, **k: []
+    )
     monkeypatch.setattr(
         deep_harvest,
         "get_setting",
@@ -155,6 +169,35 @@ def test_historical_backfill_resumes_month_by_month(monkeypatch, sample_paper):
     assert result["next_cursor"] == "2026-07-01"
     assert settings["deep_harvest.backfill_cursor"] == "2026-07-01"
     assert len(saved) == 2
+
+
+def test_historical_backfill_retries_month_after_provider_failure(monkeypatch):
+    settings = {"deep_harvest.backfill_cursor": "2026-09-01"}
+    monkeypatch.setattr(deep_harvest, "BACKFILL_QUERIES", ["leadership"])
+    monkeypatch.setattr(deep_harvest, "PIO_JOURNALS", [])
+    monkeypatch.setattr(
+        deep_harvest,
+        "get_setting",
+        lambda key, default=None: settings.get(key, default),
+    )
+    monkeypatch.setattr(
+        deep_harvest,
+        "set_setting",
+        lambda key, value: settings.__setitem__(key, value),
+    )
+    monkeypatch.setattr(deep_harvest, "upsert_papers", lambda papers: None)
+    monkeypatch.setattr(
+        deep_harvest,
+        "search_crossref_window",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("temporary provider error")),
+    )
+
+    result = deep_harvest.run_historical_backfill(months_per_run=2)
+
+    assert result["months_processed"] == 1
+    assert result["errors"]
+    assert result["next_cursor"] == "2026-09-01"
+    assert settings["deep_harvest.backfill_cursor"] == "2026-09-01"
 
 
 def test_harvest_status_exposes_secondary_sources_without_secrets(monkeypatch):
