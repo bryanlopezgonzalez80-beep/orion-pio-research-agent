@@ -283,10 +283,18 @@ def list_papers(
         conditions.append("favorite=1")
     if query:
         conditions.append(
-            "(LOWER(title) LIKE LOWER(?) OR LOWER(COALESCE(abstract,'')) LIKE LOWER(?))"
+            "("
+            "LOWER(title) LIKE LOWER(?) OR "
+            "LOWER(COALESCE(abstract,'')) LIKE LOWER(?) OR "
+            "LOWER(COALESCE(topics,'')) LIKE LOWER(?) OR "
+            "LOWER(COALESCE(journal,'')) LIKE LOWER(?) OR "
+            "LOWER(COALESCE(authors,'')) LIKE LOWER(?) OR "
+            "LOWER(COALESCE(doi,'')) LIKE LOWER(?) OR "
+            "LOWER(COALESCE(source,'')) LIKE LOWER(?)"
+            ")"
         )
         pattern = f"%{query.strip()}%"
-        params.extend((pattern, pattern))
+        params.extend((pattern,) * 7)
     if source:
         conditions.append("LOWER(source)=LOWER(?)")
         params.append(source.strip())
