@@ -187,6 +187,13 @@ def parse_date(value) -> str:
         m = re.search(r"\d{4}-\d{2}-\d{2}", value)
         if m:
             return m.group(0)
+        cleaned = re.sub(r"\s+", " ", value.strip())
+        for fmt in ("%Y %b %d", "%Y %B %d", "%Y %b", "%Y %B"):
+            try:
+                parsed = datetime.strptime(cleaned, fmt)
+                return parsed.date().isoformat()
+            except ValueError:
+                pass
         m = re.search(r"\d{4}", value)
         if m:
             return f"{m.group(0)}-01-01"
