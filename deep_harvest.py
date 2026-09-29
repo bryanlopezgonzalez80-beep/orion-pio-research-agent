@@ -373,7 +373,11 @@ def run_historical_backfill(
             }
         )
 
-        # Advance only after the month has been fully attempted and persisted.
+        # Do not skip a historical window after a transient provider failure.
+        # Successful records are already persisted, so retrying the same month
+        # on the next run is safe and improves completeness.
+        if month_errors:
+            break
         cursor = month_start
         set_setting(f"{STATE_PREFIX}.backfill_cursor", cursor.isoformat())
 
