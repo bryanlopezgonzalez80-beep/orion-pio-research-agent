@@ -51,6 +51,7 @@ def isolated_environment(tmp_path, monkeypatch):
         "ORION_GEO_US_QUERIES_PER_RUN",
         "ORION_GEO_LATAM_QUERIES_PER_RUN",
         "ORION_GEO_RUNTIME_SECONDS",
+        "ORION_LIVE_SWEEP_RUNTIME_SECONDS",
         "CORE_API_KEY",
         "PSYCINFO_API_ENABLED", "PSYCINFO_API_KEY", "PSYCINFO_API_AUTHORIZED",
         "SCOPUS_API_ENABLED", "SCOPUS_API_KEY", "SCOPUS_API_AUTHORIZED",
@@ -65,6 +66,16 @@ def isolated_environment(tmp_path, monkeypatch):
     import data_store
 
     monkeypatch.setattr(data_store, "DB_PATH", data_path)
+
+    # API status responses are intentionally cached in production, but each
+    # test owns a separate temporary database and must not inherit prior state.
+    try:
+        from orion_api.routes import radar as radar_route
+
+        monkeypatch.setattr(radar_route, "_STATUS_CACHE", None)
+        monkeypatch.setattr(radar_route, "_STATUS_CACHE_AT", 0.0)
+    except ImportError:
+        pass
 
 
 @pytest.fixture
