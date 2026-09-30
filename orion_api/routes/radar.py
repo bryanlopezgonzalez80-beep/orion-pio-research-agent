@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from threading import Lock
 import time
+from uuid import uuid4
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
@@ -27,6 +28,7 @@ _STATUS_CACHE: dict | None = None
 _STATUS_CACHE_AT = 0.0
 _STATUS_CACHE_LOCK = Lock()
 _MANUAL_STALE_SECONDS = 45 * 60
+_INSTANCE_ID = uuid4().hex
 
 
 def _iso_now() -> str:
@@ -40,6 +42,15 @@ def _manual_refresh_status() -> dict | None:
         return value
     if value.get("state") not in {"queued", "running"}:
         return value
+    if value.get("instance_id") != _INSTANCE_ID:
+        recovered = {
+            **value,
+            "state": "interrupted_retryable",
+            "interrupted_at": _iso_now(),
+            "message": "La instancia cambió durante la ejecución; puede reanudarse de forma segura.",
+        }
+        set_setting(_MANUAL_STATUS_KEY, recovered)
+        return recovered
     raw_heartbeat = (
         value.get("updated_at")
         or value.get("started_at")
@@ -73,6 +84,7 @@ def _run_manual_refresh() -> None:
             _MANUAL_STATUS_KEY,
             {
                 "state": "running",
+                "instance_id": _INSTANCE_ID,
                 "phase": "taxonomy",
                 "started_at": started_at,
                 "queries_processed": 0,
@@ -94,6 +106,7 @@ def _run_manual_refresh() -> None:
                 _MANUAL_STATUS_KEY,
                 {
                     "state": "running",
+                    "instance_id": _INSTANCE_ID,
                     "phase": progress.get("phase") or "taxonomy",
                     "started_at": started_at,
                     "updated_at": _iso_now(),
@@ -229,7 +242,7 @@ def refresh_radar(background_tasks: BackgroundTasks) -> dict:
         }
     set_setting(
         _MANUAL_STATUS_KEY,
-        {"state": "queued", "requested_at": _iso_now()},
+        {"state": "queued", "instance_id": _INSTANCE_ID, "requested_at": _iso_now()},
     )
     background_tasks.add_task(_run_manual_refresh)
     return {
