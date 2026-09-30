@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from threading import Lock
+import time
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
@@ -21,6 +22,10 @@ router = APIRouter(
 
 _REFRESH_LOCK = Lock()
 _MANUAL_STATUS_KEY = "deep_harvest.manual_refresh"
+_STATUS_CACHE_TTL_SECONDS = 20.0
+_STATUS_CACHE: dict | None = None
+_STATUS_CACHE_AT = 0.0
+_STATUS_CACHE_LOCK = Lock()
 
 
 def _iso_now() -> str:
@@ -153,10 +158,27 @@ def radar(
 
 @router.get("/status")
 def radar_status() -> dict:
-    """Return persisted deep-harvest coverage and the last manual refresh state."""
-    status = harvest_status()
-    status["manual_refresh"] = get_setting(_MANUAL_STATUS_KEY)
-    return status
+    """Return coverage with a short-lived cache so polling never overloads the database."""
+    global _STATUS_CACHE, _STATUS_CACHE_AT
+    now = time.monotonic()
+    cached = _STATUS_CACHE
+    if cached is not None and now - _STATUS_CACHE_AT < _STATUS_CACHE_TTL_SECONDS:
+        return {**cached, "manual_refresh": get_setting(_MANUAL_STATUS_KEY)}
+
+    if not _STATUS_CACHE_LOCK.acquire(blocking=False):
+        if cached is not None:
+            return {**cached, "manual_refresh": get_setting(_MANUAL_STATUS_KEY)}
+        _STATUS_CACHE_LOCK.acquire()
+    try:
+        now = time.monotonic()
+        if _STATUS_CACHE is None or now - _STATUS_CACHE_AT >= _STATUS_CACHE_TTL_SECONDS:
+            fresh = harvest_status()
+            fresh.pop("manual_refresh", None)
+            _STATUS_CACHE = fresh
+            _STATUS_CACHE_AT = now
+        return {**(_STATUS_CACHE or {}), "manual_refresh": get_setting(_MANUAL_STATUS_KEY)}
+    finally:
+        _STATUS_CACHE_LOCK.release()
 
 
 @router.post(
