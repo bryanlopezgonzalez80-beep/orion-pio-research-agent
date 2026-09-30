@@ -196,6 +196,7 @@ def test_first_value_and_returning_id_helpers():
 
 def test_ensure_postgres_schema_executes_schema(monkeypatch):
     calls = []
+    monkeypatch.setattr(connection, "_POSTGRES_SCHEMA_READY", False)
 
     class Con:
         engine = "postgres"
@@ -203,8 +204,13 @@ def test_ensure_postgres_schema_executes_schema(monkeypatch):
         def executescript(self, script):
             calls.append(script)
 
+        def commit(self):
+            calls.append("commit")
+
     connection.ensure_postgres_schema(Con())
     assert "CREATE TABLE IF NOT EXISTS papers" in calls[0]
+    connection.ensure_postgres_schema(Con())
+    assert len([item for item in calls if isinstance(item, str) and item.startswith("CREATE")]) == 1
 
     class SQLiteCon:
         engine = "sqlite"
