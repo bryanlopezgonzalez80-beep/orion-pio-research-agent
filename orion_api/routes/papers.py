@@ -21,9 +21,10 @@ def papers(
     source: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
     year: Annotated[int | None, Query(ge=1800, le=2200)] = None,
     geography: Annotated[
-        Literal["puerto_rico", "united_states", "latam_caribbean", "global"] | None,
+        Literal["puerto_rico", "united_states", "latam_caribbean", "global", "unknown"] | None,
         Query(),
     ] = None,
+    geography_relation: Literal["any", "study", "affiliation_or_mention"] | None = None,
     peer_reviewed: bool | None = None,
     open_access: bool | None = None,
     full_text: bool | None = None,
@@ -36,12 +37,19 @@ def papers(
     items = paper_service.list_papers(
         limit=limit, offset=offset, query=query, source=source, year=year,
         geography=geography,
+        geography_relation=geography_relation,
         peer_reviewed=peer_reviewed, open_access=open_access,
         full_text=full_text, evidence_type=evidence_type, retracted=retracted,
         peer_review_status=peer_review_status, access_status=access_status,
         retraction_status=retraction_status,
     )
-    return PaperListResponse(items=items, limit=limit, offset=offset, count=len(items))
+    return PaperListResponse(
+        items=items,
+        limit=limit,
+        offset=offset,
+        count=len(items),
+        metadata={"geography": paper_service.geography_facets()},
+    )
 
 
 @router.get("/{paper_id:path}", response_model=PaperResponse)
