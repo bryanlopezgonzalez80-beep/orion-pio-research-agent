@@ -27,7 +27,8 @@ _STATUS_CACHE_TTL_SECONDS = 20.0
 _STATUS_CACHE: dict | None = None
 _STATUS_CACHE_AT = 0.0
 _STATUS_CACHE_LOCK = Lock()
-_MANUAL_STALE_SECONDS = 45 * 60
+_MANUAL_STALE_SECONDS = 90 * 60
+_MANUAL_RUNTIME_SECONDS = 40 * 60
 _INSTANCE_ID = uuid4().hex
 
 
@@ -132,18 +133,22 @@ def _run_manual_refresh() -> None:
                 },
             )
 
-        # Manual refreshes run as short rotating slices so they never monopolize
-        # the single web instance. Results and the rotation cursor are persisted,
-        # so repeated slices build the full catalog safely.
+        # The task runs in Starlette's background thread pool, so the HTTP
+        # response and status polling remain available while the complete
+        # taxonomy is refreshed.
         live = run_live_sweep(
             per_source=10,
-            max_runtime_seconds=45,
+            max_runtime_seconds=_MANUAL_RUNTIME_SECONDS,
             progress_callback=report_progress,
         )
         geography = {}
-        completed_state = (
-            "completed_with_warnings" if live.get("errors") else "completed"
-        )
+        remaining = int(live.get("queries_remaining") or 0)
+        if remaining:
+            completed_state = "partial_retryable"
+        else:
+            completed_state = (
+                "completed_with_warnings" if live.get("errors") else "completed"
+            )
         set_setting(
             _MANUAL_STATUS_KEY,
             {
@@ -153,6 +158,7 @@ def _run_manual_refresh() -> None:
                 "queries_total": live.get("queries_total", 0),
                 "received": live.get("received", 0),
                 "unique_seen": live.get("unique_seen", 0),
+                "queries_remaining": remaining,
                 "errors": len(live.get("errors") or []),
                 "source_totals": live.get("source_totals") or {},
                 "journal_watch_processed": live.get("journal_watch_processed", 0),

@@ -4,6 +4,7 @@ import sqlite3
 import time
 from collections.abc import Mapping
 from pathlib import Path
+from threading import Lock
 from typing import Iterable
 
 from .config import DatabaseConfig, get_database_config
@@ -11,6 +12,10 @@ from .config import DatabaseConfig, get_database_config
 
 class DatabaseConnectionError(RuntimeError):
     """A connection failure whose message never includes credentials."""
+
+
+_POSTGRES_SCHEMA_LOCK = Lock()
+_POSTGRES_SCHEMA_READY = False
 
 
 def convert_placeholders(sql: str, engine: str) -> str:
@@ -167,10 +172,18 @@ def connect_database(
 
 
 def ensure_postgres_schema(connection: ConnectionProxy):
+    global _POSTGRES_SCHEMA_READY
     if connection.engine != "postgres":
         return
-    schema_path = Path(__file__).with_name("schema_postgres.sql")
-    connection.executescript(schema_path.read_text(encoding="utf-8"))
+    if _POSTGRES_SCHEMA_READY:
+        return
+    with _POSTGRES_SCHEMA_LOCK:
+        if _POSTGRES_SCHEMA_READY:
+            return
+        schema_path = Path(__file__).with_name("schema_postgres.sql")
+        connection.executescript(schema_path.read_text(encoding="utf-8"))
+        connection.commit()
+        _POSTGRES_SCHEMA_READY = True
 
 
 def first_value(row):

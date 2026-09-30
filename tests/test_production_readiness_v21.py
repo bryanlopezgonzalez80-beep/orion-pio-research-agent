@@ -252,8 +252,8 @@ def test_postgres_schema_is_additive_and_contains_v21_contract():
         assert f"CREATE TABLE IF NOT EXISTS {table}" in schema
 
 
-def test_exact_global_query_contract_remains_188():
-    assert len(deep_harvest.coverage_queries()) == 188
+def test_exact_global_query_contract_is_251():
+    assert len(deep_harvest.coverage_queries()) == 251
 
 
 def test_v21_status_contract_is_additive_and_fast_shape(client):
@@ -393,11 +393,14 @@ def test_manual_refresh_exposes_completed_with_warnings(client, monkeypatch):
     monkeypatch.setattr(radar_route, "set_setting", lambda key, value: state.__setitem__(key, value))
     monkeypatch.setattr(
         radar_route,
-        "run_deep_harvest",
+        "run_live_sweep",
         lambda **kwargs: {
-            "status": "COMPLETED_WITH_WARNINGS",
-            "live": {"errors": ["sanitized"], "received": 2, "unique_seen": 1},
-            "geography": {},
+            "queries_processed": 251,
+            "queries_total": 251,
+            "queries_remaining": 0,
+            "errors": ["sanitized"],
+            "received": 2,
+            "unique_seen": 1,
         },
     )
 

@@ -469,7 +469,7 @@ def run_live_sweep(
         "queries_remaining": max(0, len(queries) - processed),
         "query_rotation_start": live_rotation,
         "next_query_rotation": next_live_rotation,
-        "received": received,
+        "received": received + journal_watch_received,
         "unique_seen": len(unique_seen),
         "errors": errors,
         "stopped_for_runtime_budget": stopped_for_budget,
@@ -717,7 +717,11 @@ def run_deep_harvest(
         progress_callback(dict(progress_state))
 
     corpus_before = int(db_stats().get("papers") or 0)
-    live = run_live_sweep(progress_callback=cumulative_progress)
+    configured_live_runtime = os.getenv("ORION_LIVE_SWEEP_RUNTIME_SECONDS")
+    live_kwargs = {"progress_callback": cumulative_progress}
+    if configured_live_runtime:
+        live_kwargs["max_runtime_seconds"] = int(configured_live_runtime)
+    live = run_live_sweep(**live_kwargs)
     geography = run_geographic_booster(progress_callback=cumulative_progress)
     backfill = run_historical_backfill(progress_callback=cumulative_progress) if include_backfill else None
     corpus_after = int(db_stats().get("papers") or 0)
