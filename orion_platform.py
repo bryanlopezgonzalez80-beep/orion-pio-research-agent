@@ -204,7 +204,7 @@ def _deduplicate(papers):
     return deduplicate(papers)
 
 def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_keep=150, retries=2, cache_ttl_hours=8, force_refresh=False, searchers=None, sleep_fn=time.sleep):
-    from research_agent import academic_query_variants, pace_source_request, score_record, source_rate_policy
+    from research_agent import academic_query_variants, is_spanish_query, pace_source_request, record_language, score_record, source_rate_policy
 
     started=time.perf_counter()
     using_default_searchers=searchers is None
@@ -296,6 +296,10 @@ def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_k
         )
 
     unique=[score_record(dict(p),query,days) for p in _deduplicate(gathered)]
+    for paper in unique:
+        paper["language"] = record_language(paper)
+    if is_spanish_query(query):
+        unique.sort(key=lambda p: (record_language(p) == "es", float(p.get("relevance_score") or 0), p.get("published_date") or ""), reverse=True)
     unique=_deduplicate(unique)[:int(max_keep)]
     duration_ms=int((time.perf_counter()-started)*1000)
     log_search(query,"academic",selected,len(gathered),len(unique),duration_ms,errors)
