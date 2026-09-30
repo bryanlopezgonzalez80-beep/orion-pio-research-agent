@@ -110,6 +110,36 @@ SOURCE_LABELS = {
     "arXiv": "arXiv",
 }
 
+SPANISH_QUERY_MARKERS = {
+    "el", "la", "los", "las", "de", "del", "para", "con", "una", "uno",
+    "qué", "que", "cómo", "como", "sobre", "laboral", "organizacional",
+    "psicología", "psicologia", "liderazgo", "empleados", "trabajo",
+}
+
+
+def is_spanish_query(query: str) -> bool:
+    """Detect Spanish intent so Spanish-language records can be prioritized."""
+    text = (query or "").casefold()
+    tokens = set(re.findall(r"[a-záéíóúñü]+", text))
+    return bool(tokens & SPANISH_QUERY_MARKERS) or bool(re.search(r"[áéíóúñü]", text))
+
+
+def record_language(record: dict) -> str:
+    """Return a normalized language label from provider metadata or text."""
+    raw = str(record.get("language") or record.get("lang") or "").casefold()
+    if raw in {"es", "spa", "spanish", "español"}:
+        return "es"
+    if raw in {"en", "eng", "english", "inglés"}:
+        return "en"
+    text = " ".join(str(record.get(k) or "") for k in ("title", "abstract", "topics")).casefold()
+    spanish_words = len(re.findall(r"\b(el|la|los|las|de|del|para|con|una|que|cómo|como|laboral|organizacional|psicología|liderazgo)\b", text))
+    english_words = len(re.findall(r"\b(the|of|for|with|and|workplace|organizational|psychology|leadership)\b", text))
+    if spanish_words > english_words and spanish_words >= 2:
+        return "es"
+    if english_words >= 2:
+        return "en"
+    return "unknown"
+
 DEFAULT_SOURCES = list(SOURCE_LABELS)
 DEFAULT_TOPICS = [
     "industrial organizational psychology",
@@ -470,6 +500,7 @@ def search_openalex(query: str, days: int = 45, per_page: int = 15) -> list[dict
             "id": stable_id("OpenAlex", w.get("id", ""), doi, w.get("title", "")),
             "title": clean_text(w.get("title")), "authors": clean_text(authors), "year": int(w.get("publication_year") or 0),
             "published_date": parse_date(w.get("publication_date")), "source": "OpenAlex", "journal": clean_text(src.get("display_name")),
+            "language": clean_text(w.get("language")),
             "work_type": clean_text(w.get("type")), "doi": doi,
             "url": loc.get("landing_page_url") or w.get("doi") or w.get("id") or "",
             "oa_url": best_oa.get("landing_page_url") or (w.get("doi") if oa.get("is_oa") else "") or "",
@@ -527,6 +558,7 @@ def search_crossref(query: str, days: int = 45, per_page: int = 15) -> list[dict
             "id": stable_id("Crossref", doi, doi, title), "title": title, "authors": ", ".join(authors), "year": year,
             "published_date": published, "source": "Crossref", "journal": journal, "work_type": clean_text(it.get("type")),
             "doi": doi, "url": url, "oa_url": "", "pdf_url": "", "abstract": abstract,
+            "language": clean_text(it.get("language")),
             "topics": ", ".join(clean_text(s) for s in (it.get("subject") or [])[:6]), "discovered_via": "Crossref",
             "cited_by_count": int(it.get("is-referenced-by-count") or 0),
             "affiliations": affiliations,
