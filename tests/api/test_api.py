@@ -280,7 +280,9 @@ def test_research_service_prefers_existing_library(monkeypatch, sample_paper):
     result = research_service.search("leadership", 10)
 
     assert result["origin"] == "library"
-    assert result["results"] == [sample_paper]
+    assert [paper["id"] for paper in result["results"]] == [sample_paper["id"]]
+    assert result["results"][0]["matched_query"] == "leadership"
+    assert result["results"][0]["topic_relevance_percent"] >= 0
     assert external_called == []
 
 
