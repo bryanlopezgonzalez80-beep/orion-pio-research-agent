@@ -154,8 +154,9 @@ def test_radar_status_and_manual_refresh_are_nonblocking(client, monkeypatch):
 
     monkeypatch.setattr(radar_route, "set_setting", save_setting)
 
-    def fake_harvest(include_backfill=False, progress_callback=None):
-        assert include_backfill is False
+    def fake_harvest(*, per_source, max_runtime_seconds, progress_callback=None):
+        assert per_source == 10
+        assert max_runtime_seconds == radar_route._MANUAL_RUNTIME_SECONDS
         progress_callback(
             {
                 "phase": "taxonomy",
@@ -169,19 +170,18 @@ def test_radar_status_and_manual_refresh_are_nonblocking(client, monkeypatch):
             }
         )
         return {
-            "live": {
-                "queries_processed": 99,
-                "queries_total": 99,
-                "received": 123,
-                "unique_seen": 88,
-                "errors": [],
-                "source_totals": {"Crossref": {"results": 80}},
-                "journal_watch_processed": 23,
-                "journal_watch_count": 23,
-            }
+            "queries_processed": 99,
+            "queries_total": 99,
+            "queries_remaining": 0,
+            "received": 123,
+            "unique_seen": 88,
+            "errors": [],
+            "source_totals": {"Crossref": {"results": 80}},
+            "journal_watch_processed": 23,
+            "journal_watch_count": 23,
         }
 
-    monkeypatch.setattr(radar_route, "run_deep_harvest", fake_harvest)
+    monkeypatch.setattr(radar_route, "run_live_sweep", fake_harvest)
 
     status = client.get("/api/v1/radar/status")
     refresh = client.post("/api/v1/radar/refresh")
