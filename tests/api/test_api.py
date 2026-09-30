@@ -634,3 +634,48 @@ def test_openapi_and_docs_are_available_without_secrets(client, monkeypatch):
     assert "X-Orion-API-Key" in schema.text
     assert docs.status_code == 200
     assert "openapi-secret" not in schema.text
+
+
+def test_geography_filters_expose_transparent_facets(client):
+    data_store.upsert_papers(
+        [
+            {
+                "id": "api:pr-study",
+                "title": "Study conducted in Puerto Rico",
+                "study_location": "Puerto Rico",
+                "geography_primary": "Puerto Rico",
+                "geography_tags": ["Puerto Rico"],
+                "geography_basis": {"Puerto Rico": ["study_location_explicit"]},
+                "geo_pr": 1,
+            },
+            {
+                "id": "api:us-affiliation",
+                "title": "United States affiliation only",
+                "author_affiliation_location": "United States",
+                "geography_primary": "United States",
+                "geography_tags": ["United States"],
+                "geography_basis": {"United States": ["affiliation"]},
+                "geo_us": 1,
+            },
+        ]
+    )
+
+    pr = client.get(
+        "/api/v1/radar",
+        params={"geography": "puerto_rico", "geography_relation": "study"},
+    )
+    us = client.get(
+        "/api/v1/radar",
+        params={
+            "geography": "united_states",
+            "geography_relation": "affiliation_or_mention",
+        },
+    )
+
+    assert pr.status_code == 200
+    assert {item["id"] for item in pr.json()["items"]} == {"api:pr-study"}
+    assert us.status_code == 200
+    assert {item["id"] for item in us.json()["items"]} == {"api:us-affiliation"}
+    facets = pr.json()["metadata"]["geography"]
+    assert facets["puerto_rico_study"] == 1
+    assert facets["united_states_affiliation_or_mention"] == 1
