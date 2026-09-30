@@ -193,3 +193,47 @@ def test_postgres_upsert_uses_greatest_dialect(sample_paper, monkeypatch):
     assert "GREATEST(COALESCE(papers.cited_by_count,0)" in events[0]
     assert "ON CONFLICT(id) DO UPDATE" in events[0]
     assert events[-2:] == ["commit", "close"]
+
+
+def test_geography_relation_filters_and_facets():
+    data_store.upsert_papers(
+        [
+            {
+                "id": "geo:pr-study",
+                "title": "Puerto Rico workplace study",
+                "study_location": "Puerto Rico",
+                "geography_primary": "Puerto Rico",
+                "geography_tags": ["Puerto Rico"],
+                "geography_basis": {"Puerto Rico": ["study_location_explicit"]},
+                "geo_pr": 1,
+            },
+            {
+                "id": "geo:pr-affiliation",
+                "title": "Affiliation-only record",
+                "author_affiliation_location": "Puerto Rico",
+                "geography_primary": "Puerto Rico",
+                "geography_tags": ["Puerto Rico"],
+                "geography_basis": {"Puerto Rico": ["affiliation"]},
+                "geo_pr": 1,
+            },
+            {"id": "geo:unknown", "title": "Unlocated evidence"},
+        ]
+    )
+
+    studies = data_store.list_papers(
+        geography="puerto_rico", geography_relation="study", limit=50
+    )
+    related = data_store.list_papers(
+        geography="puerto_rico",
+        geography_relation="affiliation_or_mention",
+        limit=50,
+    )
+    unknown = data_store.list_papers(geography="unknown", limit=50)
+    facets = data_store.geography_facets()
+
+    assert {paper["id"] for paper in studies} == {"geo:pr-study"}
+    assert {paper["id"] for paper in related} == {"geo:pr-affiliation"}
+    assert "geo:unknown" in {paper["id"] for paper in unknown}
+    assert facets["puerto_rico_study"] == 1
+    assert facets["puerto_rico_affiliation_or_mention"] == 1
+    assert facets["unidentified"] >= 1
