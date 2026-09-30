@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
-from deep_harvest import harvest_status, run_deep_harvest
+from deep_harvest import harvest_status, run_live_sweep
 from platform_store import get_setting, set_setting
 
 from ..dependencies import require_read_quota, require_search_quota
@@ -132,17 +132,17 @@ def _run_manual_refresh() -> None:
                 },
             )
 
-        result = run_deep_harvest(
-            include_backfill=False,
+        # Manual refreshes run as short rotating slices so they never monopolize
+        # the single web instance. Results and the rotation cursor are persisted,
+        # so repeated slices build the full catalog safely.
+        live = run_live_sweep(
+            per_source=10,
+            max_runtime_seconds=45,
             progress_callback=report_progress,
         )
-        live = result.get("live") or {}
-        geography = result.get("geography") or {}
-        result_status = str(result.get("status") or "COMPLETED").upper()
+        geography = {}
         completed_state = (
-            "completed_with_warnings"
-            if result_status == "COMPLETED_WITH_WARNINGS"
-            else "completed"
+            "completed_with_warnings" if live.get("errors") else "completed"
         )
         set_setting(
             _MANUAL_STATUS_KEY,
