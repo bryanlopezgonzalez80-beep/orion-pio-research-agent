@@ -191,6 +191,7 @@ def radar(
         Literal["puerto_rico", "united_states", "latam_caribbean", "global", "unknown"] | None,
         Query(),
     ] = None,
+    geography_relation: Literal["any", "study", "affiliation_or_mention"] | None = None,
     source: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
     year: Annotated[int | None, Query(ge=1800, le=2200)] = None,
     evidence_type: Annotated[str | None, Query(min_length=2, max_length=50)] = None,
