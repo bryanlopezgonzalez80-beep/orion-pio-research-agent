@@ -26,10 +26,44 @@ _STATUS_CACHE_TTL_SECONDS = 20.0
 _STATUS_CACHE: dict | None = None
 _STATUS_CACHE_AT = 0.0
 _STATUS_CACHE_LOCK = Lock()
+_MANUAL_STALE_SECONDS = 45 * 60
 
 
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _manual_refresh_status() -> dict | None:
+    """Return persisted progress and recover jobs abandoned by a process restart."""
+    value = get_setting(_MANUAL_STATUS_KEY)
+    if not isinstance(value, dict):
+        return value
+    if value.get("state") not in {"queued", "running"}:
+        return value
+    raw_heartbeat = (
+        value.get("updated_at")
+        or value.get("started_at")
+        or value.get("requested_at")
+    )
+    if not raw_heartbeat:
+        return value
+    try:
+        heartbeat = datetime.fromisoformat(str(raw_heartbeat).replace("Z", "+00:00"))
+        if heartbeat.tzinfo is None:
+            heartbeat = heartbeat.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return value
+    age = (datetime.now(timezone.utc) - heartbeat).total_seconds()
+    if age <= _MANUAL_STALE_SECONDS:
+        return value
+    recovered = {
+        **value,
+        "state": "interrupted_retryable",
+        "interrupted_at": _iso_now(),
+        "message": "La ejecución anterior se interrumpió; puede reanudarse de forma segura.",
+    }
+    set_setting(_MANUAL_STATUS_KEY, recovered)
+    return recovered
 
 
 def _run_manual_refresh() -> None:
@@ -163,11 +197,11 @@ def radar_status() -> dict:
     now = time.monotonic()
     cached = _STATUS_CACHE
     if cached is not None and now - _STATUS_CACHE_AT < _STATUS_CACHE_TTL_SECONDS:
-        return {**cached, "manual_refresh": get_setting(_MANUAL_STATUS_KEY)}
+        return {**cached, "manual_refresh": _manual_refresh_status()}
 
     if not _STATUS_CACHE_LOCK.acquire(blocking=False):
         if cached is not None:
-            return {**cached, "manual_refresh": get_setting(_MANUAL_STATUS_KEY)}
+            return {**cached, "manual_refresh": _manual_refresh_status()}
         _STATUS_CACHE_LOCK.acquire()
     try:
         now = time.monotonic()
@@ -176,7 +210,7 @@ def radar_status() -> dict:
             fresh.pop("manual_refresh", None)
             _STATUS_CACHE = fresh
             _STATUS_CACHE_AT = now
-        return {**(_STATUS_CACHE or {}), "manual_refresh": get_setting(_MANUAL_STATUS_KEY)}
+        return {**(_STATUS_CACHE or {}), "manual_refresh": _manual_refresh_status()}
     finally:
         _STATUS_CACHE_LOCK.release()
 
@@ -191,7 +225,7 @@ def refresh_radar(background_tasks: BackgroundTasks) -> dict:
     if not _REFRESH_LOCK.acquire(blocking=False):
         return {
             "status": "already_running",
-            "manual_refresh": get_setting(_MANUAL_STATUS_KEY),
+            "manual_refresh": _manual_refresh_status(),
         }
     set_setting(
         _MANUAL_STATUS_KEY,
