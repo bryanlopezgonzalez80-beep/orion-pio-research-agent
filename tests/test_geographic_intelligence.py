@@ -241,7 +241,7 @@ def test_status_is_backward_compatible_and_adds_geography(monkeypatch):
     )
     status = deep_harvest.harvest_status()
 
-    assert status["coverage_query_count"] == 188
+    assert status["coverage_query_count"] == 251
     assert status["backfill_cursor"] == "2025-01-01"
     assert status["geography"]["coverage"]["Puerto Rico"] == 10
 
@@ -274,7 +274,7 @@ def test_deep_harvest_runs_global_then_geography_then_backfill(monkeypatch):
 
     assert order == ["global", "geography", "backfill"]
     assert result["geography"]["received"] == 2
-    assert result["coverage_query_count"] == 188
+    assert result["coverage_query_count"] == 251
 
 
 def test_evidence_types_do_not_invent_peer_review_status():
@@ -283,7 +283,7 @@ def test_evidence_types_do_not_invent_peer_review_status():
     assert geo.classify_evidence_type({"source": "SIOP TIP", "work_type": "article"}) == "professional_publication"
 
 
-def test_global_taxonomy_remains_exactly_188_queries():
+def test_global_taxonomy_remains_exactly_251_queries():
     queries = deep_harvest.coverage_queries()
-    assert len(queries) == 188
-    assert len(set(query.casefold() for query in queries)) == 188
+    assert len(queries) == 251
+    assert len(set(query.casefold() for query in queries)) == 251
