@@ -66,6 +66,7 @@ def list_papers(
     year: int | None = None,
     favorites_only: bool = False,
     geography: str | None = None,
+    geography_relation: str | None = None,
     peer_reviewed: bool | None = None,
     open_access: bool | None = None,
     full_text: bool | None = None,
@@ -83,6 +84,7 @@ def list_papers(
         year=year,
         favorites_only=favorites_only,
         geography=geography,
+        geography_relation=geography_relation,
         peer_reviewed=peer_reviewed,
         open_access=open_access,
         full_text=full_text,
@@ -105,3 +107,7 @@ def update_favorite(paper_id: str, favorite: bool) -> dict | None:
         return None
     data_store.set_favorite(paper_id, favorite)
     return get_paper(paper_id)
+
+
+def geography_facets() -> dict:
+    return data_store.geography_facets()
