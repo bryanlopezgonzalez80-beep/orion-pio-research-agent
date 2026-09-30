@@ -4,7 +4,7 @@ from typing import Any
 
 import data_store
 from orion_platform import execute_academic_search, route_query, source_search_url
-from research_agent import academic_query_variants
+from research_agent import academic_query_variants, score_record
 
 from . import paper_service
 
@@ -26,7 +26,7 @@ def search(query: str, limit: int) -> dict[str, Any]:
                 break
         if len(existing_by_id) >= limit:
             break
-    existing = list(existing_by_id.values())[:limit]
+    # Re-score library hits against the current query; stored scores belong to older searches.\n    existing = [score_record(dict(paper), query, 46_000) for paper in list(existing_by_id.values())[:limit]]
     if existing:
         return {
             "query": query,
