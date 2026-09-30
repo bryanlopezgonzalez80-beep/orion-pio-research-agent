@@ -17,7 +17,7 @@ TEXT_FIELDS = {
 }
 LIST_FIELDS = {"geography_tags", "affiliation_locations", "geographic_mentions", "evidence_flags", "alternative_access_options"}
 INTEGER_FIELDS = {"year", "cited_by_count", "read_full", "favorite", "geo_pr", "geo_us", "geo_latam_caribbean", "doi_verified", "metadata_sources_count", "abstract_available", "requires_login", "institutional_access_possible", "open_access", "pdf_available", "html_available", "fulltext_available"}
-FLOAT_FIELDS = {"relevance_score", "geography_confidence"}
+FLOAT_FIELDS = {"relevance_score", "topic_relevance_percent", "geography_confidence"}
 
 
 def _normalize_paper(paper: dict) -> dict:
