@@ -26,7 +26,12 @@ def search(query: str, limit: int) -> dict[str, Any]:
                 break
         if len(existing_by_id) >= limit:
             break
-    # Re-score library hits against the current query; stored scores belong to older searches.\n    existing = [score_record(dict(paper), query, 46_000) for paper in list(existing_by_id.values())[:limit]]
+    # Re-score library hits against the current query; stored scores belong to
+    # older searches.
+    existing = [
+        score_record(dict(paper), query, 46_000)
+        for paper in list(existing_by_id.values())[:limit]
+    ]
     if existing:
         return {
             "query": query,
@@ -125,4 +130,3 @@ def search(query: str, limit: int) -> dict[str, Any]:
             "fallback_reason": "no_direct_results" if fallback else "no_results_available",
         },
     }
-
