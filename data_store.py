@@ -479,6 +479,7 @@ def list_papers(
     source: str | None = None,
     year: int | None = None,
     geography: str | None = None,
+    geography_relation: str | None = None,
     peer_reviewed: bool | None = None,
     open_access: bool | None = None,
     full_text: bool | None = None,
@@ -519,15 +520,37 @@ def list_papers(
         "united_states": "geo_us",
         "latam_caribbean": "geo_latam_caribbean",
     }
+    geography_labels = {
+        "puerto_rico": "Puerto Rico",
+        "united_states": "United States",
+        "latam_caribbean": "Latin America / Caribbean",
+    }
     if geography is not None:
-        if geography == "global":
+        if geography in {"global", "unknown"}:
             conditions.append("COALESCE(geo_pr,0)=0 AND COALESCE(geo_us,0)=0 AND COALESCE(geo_latam_caribbean,0)=0")
         else:
             column = geography_columns.get(geography)
-            if column is None:
+            label = geography_labels.get(geography)
+            if column is None or label is None:
                 raise ValueError("Unsupported geography filter")
             conditions.append(f"{column}=?")
             params.append(1)
+            if geography_relation == "study":
+                conditions.append("LOWER(COALESCE(study_location,''))=LOWER(?)")
+                params.append(label)
+            elif geography_relation == "affiliation_or_mention":
+                conditions.append(
+                    "LOWER(COALESCE(study_location,''))<>LOWER(?) AND ("
+                    "LOWER(COALESCE(author_affiliation_location,''))=LOWER(?) OR "
+                    "LOWER(COALESCE(publication_location,''))=LOWER(?) OR "
+                    "LOWER(COALESCE(geographic_mentions,'')) LIKE LOWER(?)"
+                    ")"
+                )
+                params.extend((label, label, label, f'%"{label}"%'))
+            elif geography_relation not in {None, "any"}:
+                raise ValueError("Unsupported geography relation filter")
+    elif geography_relation not in {None, "any"}:
+        raise ValueError("Geography relation requires a geography filter")
     if peer_reviewed is not None:
         conditions.append("peer_review_status=?" if peer_reviewed else "peer_review_status<>?")
         params.append("CONFIRMED")
@@ -562,6 +585,27 @@ def list_papers(
             params,
         ).fetchall()
         return [dict(row) for row in rows]
+    finally:
+        con.close()
+
+
+def geography_facets():
+    """Return transparent geographic counts without conflating study site and affiliation."""
+    con = connect()
+    try:
+        row = con.execute(
+            """SELECT
+              COUNT(*) AS total,
+              COALESCE(SUM(CASE WHEN LOWER(COALESCE(study_location,''))=LOWER('Puerto Rico') THEN 1 ELSE 0 END),0) AS puerto_rico_study,
+              COALESCE(SUM(CASE WHEN LOWER(COALESCE(study_location,''))=LOWER('United States') THEN 1 ELSE 0 END),0) AS united_states_study,
+              COALESCE(SUM(CASE WHEN LOWER(COALESCE(study_location,''))=LOWER('Latin America / Caribbean') THEN 1 ELSE 0 END),0) AS latam_caribbean_study,
+              COALESCE(SUM(CASE WHEN geo_pr=1 AND LOWER(COALESCE(study_location,''))<>LOWER('Puerto Rico') THEN 1 ELSE 0 END),0) AS puerto_rico_affiliation_or_mention,
+              COALESCE(SUM(CASE WHEN geo_us=1 AND LOWER(COALESCE(study_location,''))<>LOWER('United States') THEN 1 ELSE 0 END),0) AS united_states_affiliation_or_mention,
+              COALESCE(SUM(CASE WHEN geo_latam_caribbean=1 AND LOWER(COALESCE(study_location,''))<>LOWER('Latin America / Caribbean') THEN 1 ELSE 0 END),0) AS latam_caribbean_affiliation_or_mention,
+              COALESCE(SUM(CASE WHEN COALESCE(geo_pr,0)=0 AND COALESCE(geo_us,0)=0 AND COALESCE(geo_latam_caribbean,0)=0 THEN 1 ELSE 0 END),0) AS unidentified
+              FROM papers"""
+        ).fetchone()
+        return {key: int(value or 0) for key, value in dict(row).items()}
     finally:
         con.close()
 
