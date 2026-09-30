@@ -24,6 +24,7 @@ class PaperResponse(BaseModel):
     topics: str = ""
     cited_by_count: int = 0
     relevance_score: float = 0
+    language: str = "unknown"
     topic_relevance_percent: float = 0
     summary: str = ""
     why_it_matters: str = ""
