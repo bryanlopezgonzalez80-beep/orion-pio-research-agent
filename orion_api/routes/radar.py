@@ -188,7 +188,7 @@ def radar(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
     geography: Annotated[
-        Literal["puerto_rico", "united_states", "latam_caribbean", "global"] | None,
+        Literal["puerto_rico", "united_states", "latam_caribbean", "global", "unknown"] | None,
         Query(),
     ] = None,
     source: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
@@ -201,12 +201,19 @@ def radar(
 ) -> PaperListResponse:
     """Return the accumulated research radar instead of only the latest search."""
     items = paper_service.list_papers(
-        limit=limit, offset=offset, geography=geography, source=source, year=year,
+        limit=limit, offset=offset, geography=geography,
+        geography_relation=geography_relation, source=source, year=year,
         evidence_type=evidence_type, peer_review_status=peer_review_status,
         access_status=access_status, retraction_status=retraction_status,
         open_access=open_access,
     )
-    return PaperListResponse(items=items, limit=limit, offset=offset, count=len(items))
+    return PaperListResponse(
+        items=items,
+        limit=limit,
+        offset=offset,
+        count=len(items),
+        metadata={"geography": paper_service.geography_facets()},
+    )
 
 
 @router.get("/status")
