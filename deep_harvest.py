@@ -212,8 +212,18 @@ def _utcnow() -> datetime:
 def coverage_queries() -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
+    # Puerto Rico psychology topics have their own rotating geographic booster.
+    # Keeping them out of the global contract prevents a catalogue expansion
+    # from turning every refresh into hundreds of additional provider calls.
+    global_topic_groups = (
+        topics for name, topics in TOPIC_GROUPS.items()
+        if name not in {
+            "Psicología y sociedad en Puerto Rico",
+            "Práctica psicológica en Puerto Rico",
+        }
+    )
     for query in UMBRELLA_QUERIES + [
-        topic for topics in TOPIC_GROUPS.values() for topic in topics
+        topic for topics in global_topic_groups for topic in topics
     ] + EXPANSION_QUERIES + GEOGRAPHIC_QUERIES:
         cleaned = " ".join(str(query).split())
         key = cleaned.casefold()
