@@ -85,7 +85,21 @@ SOURCE_SPECS = (
     SourceSpec("Revista Caribeña de Psicología","academic","Caribbean psychology journal",False,True,official_url="https://revistacaribenadepsicologia.com/"),
     SourceSpec("Fórum Empresarial","academic","Puerto Rico business journal",False,True,official_url="https://revistas.upr.edu/index.php/forumempresarial"),
     SourceSpec("CONUCO","academic","Directed Puerto Rico repository",False,True,official_url="https://conuco.uprm.edu/",notes="Mixed academic and informational material; never assume peer review."),
-    SourceSpec("Repositorio Institucional UPR","academic","Directed Puerto Rico institutional repository",False,True,official_url="https://www.upr.edu/repositorio/",notes="Open repository metadata and content; item type and peer-review status must be verified per record."),
+    SourceSpec("Repositorio Institucional UPR","academic","Directed Puerto Rico institutional repository",False,True,official_url="https://repositorio.upr.edu/",notes="Open repository metadata and content; item type and peer-review status must be verified per record."),
+    SourceSpec("Portal de Revistas Académicas UPR","academic","Puerto Rico university journals portal",False,True,official_url="https://revistas.upr.edu/",notes="Includes peer-reviewed and other university publications; verify each journal and item."),
+    SourceSpec("Psicología(s) UPR","academic","Peer-reviewed Puerto Rico psychology journal",False,True,official_url="https://revistas.upr.edu/index.php/psicologias"),
+    SourceSpec("Revista Griot UPR","academic","Puerto Rico interdisciplinary journal",False,True,official_url="https://revistas.upr.edu/index.php/griot",notes="Interdisciplinary source; verify relevance and review status per item."),
+    SourceSpec("Instituto de Investigación Psicológica UPR","academic","Puerto Rico psychology research institute",False,True,official_url="https://graduados.uprrp.edu/decanato-auxiliar-de-investigacion/unidades-de-investigacion/",notes="Institutional research source; publications may be indexed elsewhere."),
+    SourceSpec("Tesis y Disertaciones Universidad Albizu","academic","Puerto Rico psychology theses and dissertations",False,True,official_url="https://albizu411.com/au-ada/es/centro-institucional-de-investigacion-cientifica/tesis-y-disertaciones/",notes="Graduate works; not peer-reviewed journal articles."),
+    SourceSpec("Tesis y Disertaciones PHSU","academic","Puerto Rico health sciences theses and dissertations",False,True,official_url="https://phsu.edu/library/thesis-and-dissertation.php",notes="Graduate works; not peer-reviewed journal articles."),
+    SourceSpec("Proyecto Tesis Inter Ponce","academic","Puerto Rico university thesis collection",False,True,official_url="https://cit.ponce.inter.edu/frm/Solicitud-Tesis-Prog-Graduado.aspx",notes="Institutional thesis collection; availability and review status vary."),
+    SourceSpec("Investigación UAGM","academic","Puerto Rico university research portal",False,True,official_url="https://uagm.edu/es/investigacion/inicio",notes="Institutional research portal; use for discovery and verify the primary publication."),
+    SourceSpec("Asociación de Psicología de Puerto Rico","academic","Puerto Rico professional association",False,True,official_url="https://www.asppr.net/",notes="Professional and scientific material; not every item is peer reviewed."),
+    SourceSpec("Observatorio de Salud Mental y Adicción PR","academic","Official Puerto Rico mental health data and studies",False,True,official_url="https://observatorio.assmca.pr.gov/",notes="Official data, dashboards and reports; not a journal index."),
+    SourceSpec("Biblioteca Virtual ASSMCA","academic","Official Puerto Rico mental health reports",False,True,official_url="https://www.assmca.pr.gov/originales/biblioteca-virtual",notes="Official reports and surveys; methodological quality must be assessed per document."),
+    SourceSpec("Comisión para la Prevención del Suicidio PR","academic","Official Puerto Rico suicide prevention reports",False,True,official_url="https://prevencionsuicidio.salud.pr.gov/",notes="Official reports, statistics and educational material; distinguish evidence from guidance."),
+    SourceSpec("Junta Examinadora de Psicólogos PR","academic","Official Puerto Rico psychology regulator",False,True,official_url="https://www.salud.pr.gov/CMS/130",notes="Primary source for regulations, licensing and professional standards; not a research index."),
+    SourceSpec("Instituto de Estadísticas de Puerto Rico","academic","Official Puerto Rico statistics",False,True,official_url="https://www.estadisticas.pr.gov/",notes="Official datasets and statistical products; relevance depends on the research question."),
     SourceSpec("OSL / SUTRA","legal_pr","Official Puerto Rico legislative source",False,True,official_url="https://sutra.oslpr.org/"),
     SourceSpec("Departamento de Estado PR","legal_pr","Official Puerto Rico laws source",False,True,official_url="https://www.estado.pr.gov/leyes-de-puerto-rico"),
     SourceSpec("Biblioteca Jurídica Virtual PR","legal_pr","Official Puerto Rico government legal library",False,True,official_url="https://bibliotecavirtual.estado.pr.gov/"),
@@ -115,9 +129,11 @@ TOPIC_GROUPS={
 "Compensation & Labor Relations":["total rewards","pay satisfaction","compensation fairness","employee benefits","variable pay incentives","union management relations","collective bargaining","employee participation","labor relations Puerto Rico","workplace policy compliance","psychological contract","job insecurity"],
 "Workforce & Operations":["workforce planning","strategic human resource management","HR business partner effectiveness","absenteeism","presenteeism","workforce aging","succession risk","knowledge retention","employee mobility","internal labor markets","gig work","contingent workforce","workplace safety climate"],
 "Communication & Conflict":["organizational communication","leader communication","feedback seeking","performance feedback","difficult conversations at work","mediation workplace conflict","negotiation organizations","emotion regulation at work","emotional labor","incivility prevention","respectful workplace","voice and silence behavior"],
+"Psicología y sociedad en Puerto Rico":["salud mental en Puerto Rico","ansiedad y depresión en Puerto Rico","prevención del suicidio en Puerto Rico","trauma y estrés postraumático en Puerto Rico","huracanes desastres y resiliencia en Puerto Rico","pobreza desigualdad y salud mental en Puerto Rico","migración diáspora e identidad puertorriqueña","colonialidad identidad y bienestar en Puerto Rico","violencia comunitaria en Puerto Rico","violencia de género en Puerto Rico","niñez adolescencia y familias en Puerto Rico","adultos mayores y cuidadores en Puerto Rico","uso de sustancias y adicciones en Puerto Rico","comunidades LGBTQ+ y salud mental en Puerto Rico","discapacidad y neurodiversidad en Puerto Rico","autismo y TDAH en Puerto Rico"],
+"Práctica psicológica en Puerto Rico":["psicología clínica en Puerto Rico","psicología de consejería en Puerto Rico","psicología escolar en Puerto Rico","psicología industrial organizacional en Puerto Rico","psicología social comunitaria en Puerto Rico","psicología de la salud en Puerto Rico","neuropsicología en Puerto Rico","psicología forense en Puerto Rico","telepsicología en Puerto Rico","evaluación psicológica en Puerto Rico","psicometría y pruebas adaptadas a Puerto Rico","ética profesional de la psicología en Puerto Rico","formación de psicólogos en Puerto Rico","servicios psicológicos culturalmente competentes en Puerto Rico","trabajo burnout y bienestar laboral en Puerto Rico","liderazgo y desarrollo organizacional en Puerto Rico"],
 }
 
-LEGAL_PR_TERMS={"puerto rico","pr law","ley ","reglamento","jurisprudencia","tribunal supremo de puerto rico","rama judicial","código civil","codigo civil","ley 80","ley 100","ley 180","despido injustificado","asamblea legislativa","senado de puerto rico","cámara de representantes","camara de representantes"}
+LEGAL_PR_TERMS={"pr law","ley ","reglamento","jurisprudencia","tribunal supremo de puerto rico","rama judicial","código civil","codigo civil","ley 80","ley 100","ley 180","despido injustificado","asamblea legislativa","senado de puerto rico","cámara de representantes","camara de representantes"}
 LEGAL_US_TERMS={"u.s. law","federal law","congress","supreme court","usc ","u.s.c","cfr ","federal register","title vii","ada ","nlra","flsa","eeoc","osha","federal court","constitution"}
 LEGAL_INTL_TERMS={"international law","treaty","united nations","icj","echr","hudoc","human rights law","international court","public international law","derecho internacional","tratado"}
 LEGAL_GENERIC={"law","legal","statute","regulation","case law","derecho","ley","jurisprudencia","reglamento"}
@@ -149,7 +165,15 @@ def recommended_academic_sources(query):
 def route_query(query, domain="auto"):
     resolved=classify_query(query) if domain=="auto" else domain
     if resolved=="academic":
-        return {"domain":resolved,"automated_sources":recommended_academic_sources(query),"manual_sources":["Google Scholar","APA PsycNet","SIOP","SSRN","Academy of Management","DOAJ"]}
+        manual=["Google Scholar","APA PsycNet","SIOP","SSRN","Academy of Management","DOAJ"]
+        if any(term in normalize_query(query) for term in ("puerto rico","puertorri","boricua","pr ")):
+            manual.extend([
+                "Repositorio Institucional UPR","Portal de Revistas Académicas UPR",
+                "Revista Puertorriqueña de Psicología","Psicología(s) UPR",
+                "Revista Caribeña de Psicología","Observatorio de Salud Mental y Adicción PR",
+                "Biblioteca Virtual ASSMCA","Comisión para la Prevención del Suicidio PR",
+            ])
+        return {"domain":resolved,"automated_sources":recommended_academic_sources(query),"manual_sources":manual}
     if resolved=="legal_pr":
         return {"domain":resolved,"automated_sources":[],"manual_sources":["OSL / SUTRA","Departamento de Estado PR","Biblioteca Jurídica Virtual PR","Rama Judicial de Puerto Rico"]}
     if resolved=="legal_us":
@@ -174,7 +198,21 @@ def source_search_url(source, query):
       "Revista Caribeña de Psicología":f"https://www.google.com/search?q=site%3Arevistacaribenadepsicologia.com+{q}",
       "Fórum Empresarial":f"https://www.google.com/search?q=site%3Arevistas.upr.edu+forumempresarial+{q}",
       "CONUCO":f"https://www.google.com/search?q=site%3Aconuco.uprm.edu+{q}",
-      "Repositorio Institucional UPR":f"https://www.google.com/search?q=site%3Aupr.edu%2Frepositorio+{q}",
+      "Repositorio Institucional UPR":f"https://www.google.com/search?q=site%3Arepositorio.upr.edu+{q}",
+      "Portal de Revistas Académicas UPR":f"https://www.google.com/search?q=site%3Arevistas.upr.edu+{q}",
+      "Psicología(s) UPR":f"https://www.google.com/search?q=site%3Arevistas.upr.edu%2Findex.php%2Fpsicologias+{q}",
+      "Revista Griot UPR":f"https://www.google.com/search?q=site%3Arevistas.upr.edu%2Findex.php%2Fgriot+{q}",
+      "Instituto de Investigación Psicológica UPR":f"https://www.google.com/search?q=site%3Auprrp.edu+%22Instituto+de+Investigaci%C3%B3n+Psicol%C3%B3gica%22+{q}",
+      "Tesis y Disertaciones Universidad Albizu":f"https://www.google.com/search?q=site%3Aalbizu.edu+tesis+disertacion+{q}",
+      "Tesis y Disertaciones PHSU":f"https://www.google.com/search?q=site%3Aphsu.edu+thesis+dissertation+{q}",
+      "Proyecto Tesis Inter Ponce":f"https://www.google.com/search?q=site%3Aponce.inter.edu+tesis+{q}",
+      "Investigación UAGM":f"https://www.google.com/search?q=site%3Auagm.edu+investigacion+{q}",
+      "Asociación de Psicología de Puerto Rico":f"https://www.google.com/search?q=site%3Aasppr.net+{q}",
+      "Observatorio de Salud Mental y Adicción PR":f"https://www.google.com/search?q=site%3Aobservatorio.assmca.pr.gov+{q}",
+      "Biblioteca Virtual ASSMCA":f"https://www.google.com/search?q=site%3Aassmca.pr.gov+{q}",
+      "Comisión para la Prevención del Suicidio PR":f"https://www.google.com/search?q=site%3Aprevencionsuicidio.salud.pr.gov+{q}",
+      "Junta Examinadora de Psicólogos PR":f"https://www.google.com/search?q=site%3Asalud.pr.gov+psicologos+{q}",
+      "Instituto de Estadísticas de Puerto Rico":f"https://www.google.com/search?q=site%3Aestadisticas.pr.gov+{q}",
       "OSL / SUTRA":f"https://www.google.com/search?q=site%3Asutra.oslpr.org+{q}",
       "Departamento de Estado PR":f"https://www.google.com/search?q=site%3Aestado.pr.gov+{q}",
       "Biblioteca Jurídica Virtual PR":f"https://www.google.com/search?q=site%3Abibliotecavirtual.estado.pr.gov+{q}",
