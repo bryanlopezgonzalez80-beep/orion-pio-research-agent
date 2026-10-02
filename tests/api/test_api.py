@@ -471,6 +471,17 @@ def test_library_reads_and_updates_existing_favorites(client, sample_paper):
     assert [item["id"] for item in listing.json()["items"]] == [sample_paper["id"]]
 
 
+def test_library_automatically_includes_unstarred_radar_papers(client, sample_paper):
+    radar_paper = dict(sample_paper, id="radar:auto-archived", favorite=0)
+    data_store.upsert_papers([radar_paper])
+
+    listing = client.get("/api/v1/library")
+
+    assert listing.status_code == 200
+    assert [item["id"] for item in listing.json()["items"]] == [radar_paper["id"]]
+    assert listing.json()["items"][0]["favorite"] == 0
+
+
 def test_library_rejects_unknown_paper(client):
     response = client.post("/api/v1/library", json={"paper_id": "missing"})
     assert response.status_code == 404
