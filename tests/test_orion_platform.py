@@ -281,3 +281,32 @@ def test_source_configuration_reports_only_configured_credentials(monkeypatch):
     rows = {row["name"]: row for row in orion_platform.source_configuration()}
     assert rows["Crossref"]["credential_configured"] is True
     assert rows["Semantic Scholar"]["credential_configured"] is False
+
+
+def test_puerto_rico_psychology_topics_and_directed_sources_are_exposed():
+    topics = orion_platform.TOPIC_GROUPS["Psicología y sociedad en Puerto Rico"]
+    assert "salud mental en Puerto Rico" in topics
+    assert "migración diáspora e identidad puertorriqueña" in topics
+    assert "Práctica psicológica en Puerto Rico" in orion_platform.TOPIC_GROUPS
+
+    rows = {row["name"]: row for row in orion_platform.source_configuration()}
+    expected = {
+        "Portal de Revistas Académicas UPR", "Psicología(s) UPR",
+        "Tesis y Disertaciones Universidad Albizu", "Tesis y Disertaciones PHSU",
+        "Observatorio de Salud Mental y Adicción PR", "Biblioteca Virtual ASSMCA",
+        "Comisión para la Prevención del Suicidio PR", "Junta Examinadora de Psicólogos PR",
+    }
+    assert expected <= rows.keys()
+    assert all(rows[name]["automated"] is False for name in expected)
+
+
+def test_puerto_rico_query_routes_to_local_directed_sources():
+    plan = orion_platform.route_query("salud mental en Puerto Rico")
+    assert "Repositorio Institucional UPR" in plan["manual_sources"]
+    assert "Revista Puertorriqueña de Psicología" in plan["manual_sources"]
+    assert "Observatorio de Salud Mental y Adicción PR" in plan["manual_sources"]
+    assert "Biblioteca Virtual ASSMCA" in plan["manual_sources"]
+
+    url = orion_platform.source_search_url("Psicología(s) UPR", "salud mental adolescentes")
+    assert "revistas.upr.edu" in url
+    assert "salud+mental+adolescentes" in url
