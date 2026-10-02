@@ -26,6 +26,19 @@ def test_registry_describes_open_and_disabled_premium_sources(monkeypatch):
     assert "API_KEY" not in json.dumps(source_registry.public_source_registry())
 
 
+def test_registry_includes_puerto_rico_psychology_ecosystem():
+    registry = source_registry.source_registry()
+    expected = {
+        "reps_pr", "upr_repository", "upr_journals", "upr_psicologias",
+        "upr_ipsi", "albizu_theses", "phsu_theses", "asppr",
+        "assmca_observatory", "assmca_library", "pr_suicide_prevention",
+        "pr_psychology_board", "pr_statistics",
+    }
+    assert expected <= registry.keys()
+    assert all(registry[key].geographic_strength.startswith("puerto-rico") for key in expected)
+    assert all(registry[key].active is False for key in expected)
+
+
 def test_premium_provider_requires_both_enablement_and_configuration(monkeypatch):
     monkeypatch.setenv("SCOPUS_API_ENABLED", "true")
     monkeypatch.delenv("SCOPUS_API_KEY", raising=False)
