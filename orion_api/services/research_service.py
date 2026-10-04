@@ -25,6 +25,7 @@ def _execute_search(query: str, **kwargs: Any) -> dict[str, Any]:
 
     
 def _merge_outcomes(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
+    outcomes = [outcome for outcome in outcomes if outcome]
     results = deduplicate(
         paper
         for outcome in outcomes
