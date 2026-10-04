@@ -39,16 +39,22 @@ jobs:
           COURTLISTENER_API_TOKEN: ${{ secrets.COURTLISTENER_API_TOKEN }}
           NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
           NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
-          # Reserve 35 of the job's 50 minutes for the live taxonomy sweep.
-          # Deep Harvest persists each completed query and resumes via checkpoints.
+          # Live taxonomy gets the protected runtime budget and persists each query.
           ORION_LIVE_SWEEP_RUNTIME_SECONDS: "2100"
+          # Historical work advances one month per run and resumes by checkpoint.
+          # This prevents backfill from consuming the report-generation window.
+          ORION_BACKFILL_TARGET_MONTHS_PER_RUN: "1"
+          ORION_BACKFILL_MONTHS_PER_RUN: "1"
+          # Geographic discovery remains bounded and independently rotated.
+          ORION_GEO_RUNTIME_SECONDS: "180"
         run: python daily_agent.py
       - name: Upload daily radar reports
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: orion-daily-radar-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             reports/daily_*.json
             reports/daily_*.md
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
