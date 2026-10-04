@@ -3,12 +3,15 @@ name: Orion Daily Radar
 on:
   workflow_dispatch:
   schedule:
-    # 07:00 Puerto Rico / AST (UTC-4) year-round
-    - cron: "0 11 * * *"
+    # 06:00 Puerto Rico / AST (UTC-4) year-round.
+    # GitHub Actions schedules use UTC; Puerto Rico remains UTC-4 year-round.
+    - cron: "0 10 * * *"
 
 permissions:
   contents: read
 
+# Only one refresh may write checkpoints and reports at a time. If a manual
+# run overlaps the scheduled run, it waits instead of duplicating harvest work.
 concurrency:
   group: orion-daily-radar
   cancel-in-progress: false
@@ -36,7 +39,8 @@ jobs:
           COURTLISTENER_API_TOKEN: ${{ secrets.COURTLISTENER_API_TOKEN }}
           NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
           NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
-          # Reserve 35 of the job's 50 minutes for all 251 taxonomy queries.
+          # Reserve 35 of the job's 50 minutes for the live taxonomy sweep.
+          # Deep Harvest persists each completed query and resumes via checkpoints.
           ORION_LIVE_SWEEP_RUNTIME_SECONDS: "2100"
         run: python daily_agent.py
       - name: Upload daily radar reports
