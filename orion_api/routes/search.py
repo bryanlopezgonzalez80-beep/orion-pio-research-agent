@@ -15,4 +15,16 @@ router = APIRouter(
 def search(
     request: SearchRequest,
 ) -> dict:
-    return research_service.search(request.query, request.limit)
+    try:
+        return research_service.search(
+            request.query,
+            request.limit,
+            days=request.days,
+            per_source=request.per_source,
+            sources=request.sources,
+            include_pr=request.include_pr,
+        )
+    except TypeError as exc:
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        return research_service.search(request.query, request.limit)

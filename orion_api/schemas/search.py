@@ -9,7 +9,11 @@ from .papers import PaperResponse
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=2, max_length=300)
-    limit: int = Field(default=20, ge=1, le=50)
+    limit: int = Field(default=100, ge=1, le=50)
+    days: int = Field(default=7_300, ge=1, le=46_000)
+    per_source: int = Field(default=25, ge=1, le=50)
+    sources: list[str] | None = None
+    include_pr: bool = False
 
     @field_validator("query")
     @classmethod
