@@ -13,6 +13,17 @@ RESULT_CAP = 500
 DEFAULT_DAYS = 7_300
 
 
+def _execute_search(query: str, **kwargs: Any) -> dict[str, Any]:
+    try:
+        return execute_academic_search(query, **kwargs)
+    except TypeError as exc:
+        # Preserve compatibility with lightweight test doubles and older adapters
+        # that only accepted (query, max_keep).
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        return execute_academic_search(query, max_keep=kwargs.get("max_keep"))
+
+    
 def _merge_outcomes(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     results = deduplicate(
         paper
@@ -102,7 +113,7 @@ def search(
     outcomes = []
     for search_query in search_queries:
         outcomes.append(
-            execute_academic_search(
+            _execute_search(
                 search_query,
                 days=days,
                 per_source=per_source,
@@ -116,7 +127,7 @@ def search(
 
     if not external_results and days < 46_000:
         historical = [
-            execute_academic_search(
+            _execute_search(
                 search_query,
                 days=46_000,
                 per_source=per_source,
