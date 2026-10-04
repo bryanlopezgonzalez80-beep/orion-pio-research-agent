@@ -141,6 +141,10 @@ def search(
         external_results = outcome["results"]
 
     results = deduplicate([*existing, *external_results])[:effective_limit]
+    fallback = []
+    if not results:
+        fallback = paper_service.list_papers(limit=effective_limit, offset=0)
+        results = fallback[:effective_limit]
     if results:
         data_store.upsert_papers(results)
     origin = "research" if external_results else ("library" if existing else "radar_fallback")
@@ -165,8 +169,8 @@ def search(
         "effective_limit": effective_limit,
         "days": days,
         "per_source": per_source,
-        "fallback_used": not external_results and bool(existing),
-        "fallback_reason": "no_direct_results" if not external_results and existing else None,
+        "fallback_used": bool(fallback),
+        "fallback_reason": "no_direct_results" if fallback else None,
     }
     return {
         "query": query,
