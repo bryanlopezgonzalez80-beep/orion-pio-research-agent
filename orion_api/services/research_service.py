@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import data_store
@@ -24,6 +25,27 @@ def _execute_search(query: str, **kwargs: Any) -> dict[str, Any]:
         return execute_academic_search(query, max_keep=kwargs.get("max_keep"))
 
     
+def _run_query(query: str, *, days: int, per_source: int, sources: list[str] | None, max_keep: int) -> dict[str, Any] | None:
+    return _execute_search(
+        query,
+        days=days,
+        per_source=per_source,
+        sources=sources,
+        max_keep=max_keep,
+        retries=1,
+        cache_ttl_hours=24,
+    )
+
+
+def _parallel_search(queries: list[str], *, days: int, per_source: int, sources: list[str] | None, max_keep: int) -> list[dict[str, Any] | None]:
+    if len(queries) <= 1:
+        return [_run_query(queries[0], days=days, per_source=per_source, sources=sources, max_keep=max_keep)] if queries else []
+    workers = min(len(queries), 3)
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="orion-search") as pool:
+        futures = [pool.submit(_run_query, query, days=days, per_source=per_source, sources=sources, max_keep=max_keep) for query in queries]
+        return [future.result() for future in futures]
+
+
 def _merge_outcomes(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     outcomes = [outcome for outcome in outcomes if outcome]
     results = deduplicate(
@@ -122,33 +144,24 @@ def search(
             },
         }
 
-    outcomes = []
-    for search_query in search_queries:
-        outcomes.append(
-            _execute_search(
-                search_query,
-                days=days,
-                per_source=per_source,
-                sources=automated_sources or None,
-                max_keep=effective_limit,
-                cache_ttl_hours=24,
-            )
-        )
+    outcomes = _parallel_search(
+        search_queries,
+        days=days,
+        per_source=per_source,
+        sources=automated_sources or None,
+        max_keep=effective_limit,
+    )
     outcome = _merge_outcomes(outcomes)
     external_results = outcome["results"]
 
     if not external_results and days < 46_000:
-        historical = [
-            _execute_search(
-                search_query,
-                days=46_000,
-                per_source=per_source,
-                sources=automated_sources or None,
-                max_keep=effective_limit,
-                cache_ttl_hours=24,
-            )
-            for search_query in search_queries
-        ]
+        historical = _parallel_search(
+            search_queries,
+            days=46_000,
+            per_source=per_source,
+            sources=automated_sources or None,
+            max_keep=effective_limit,
+        )
         outcome = _merge_outcomes(historical)
         external_results = outcome["results"]
 
