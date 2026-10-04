@@ -267,6 +267,23 @@ QUERY_ALIASES = {
     "job insecurity": ["job insecurity", "employment insecurity", "precarious work", "job uncertainty"],
 }
 
+# Related concepts broaden discovery without treating them as exact matches.
+# They are queried as a separate tier and scored lower than direct matches.
+RELATED_QUERY_ALIASES = {
+    "burnout": ["occupational stress", "emotional exhaustion", "work fatigue", "wellbeing", "job demands"],
+    "employee burnout": ["occupational stress", "emotional exhaustion", "work fatigue", "wellbeing", "job demands"],
+    "leadership": ["leader effectiveness", "manager behavior", "supervisor support", "leader development", "team leadership"],
+    "organizational development": ["organizational change", "change readiness", "learning organization", "culture change", "intervention"],
+    "employee engagement": ["work engagement", "job satisfaction", "organizational commitment", "employee voice", "retention"],
+    "psychological safety": ["interpersonal trust", "team climate", "employee voice", "learning behavior", "speaking up"],
+    "job satisfaction": ["employee wellbeing", "organizational commitment", "work engagement", "turnover intention", "retention"],
+    "employee turnover": ["turnover intention", "retention", "job embeddedness", "job satisfaction", "organizational commitment"],
+    "organizational culture": ["organizational climate", "shared values", "organizational identity", "culture change", "organizational trust"],
+    "training": ["learning transfer", "professional development", "skill development", "training effectiveness", "employee learning"],
+    "workplace wellbeing": ["mental health at work", "work-life balance", "employee resilience", "job demands", "work engagement"],
+    "artificial intelligence human resources workplace": ["people analytics", "algorithmic management", "AI hiring", "future of work", "automation and jobs"],
+}
+
 # Deterministic Spanish -> English expansion for common PIO / HR concepts.
 # Orion always keeps the original Spanish query and adds at most one English
 # variant so Spanish-language results remain discoverable while English-heavy
@@ -397,7 +414,7 @@ def _normalized(value: str) -> str:
 
 
 def academic_query_variants(query: str) -> list[str]:
-    """Return the original query plus at most one deterministic English expansion."""
+    """Return original, bilingual, and one related discovery variant."""
     original = re.sub(r"\s+", " ", (query or "").strip())
     if not original:
         return []
@@ -427,7 +444,18 @@ def academic_query_variants(query: str) -> list[str]:
     variants = [original]
     if changed and translated and _normalized(translated) != normalized:
         variants.append(translated)
-    return variants[:2]
+
+    # Add one controlled related query. Keep this bounded so broad discovery
+    # increases recall without multiplying provider calls indefinitely.
+    related_terms = []
+    for key, aliases in RELATED_QUERY_ALIASES.items():
+        if key in normalized or key in _normalized(translated):
+            related_terms.extend(aliases)
+    if related_terms:
+        related_query = " ".join(dict.fromkeys([original] + related_terms[:5]))
+        if _normalized(related_query) not in {_normalized(v) for v in variants}:
+            variants.append(related_query)
+    return variants[:3]
 
 
 def topic_relevance_percent(p: dict, query: str) -> float:
@@ -501,6 +529,17 @@ def score_record(p: dict, query: str, days: int) -> dict:
     topical = topic_relevance_percent(p, query)
     p["matched_query"] = query
     p["topic_relevance_percent"] = topical
+    # Preserve broad discovery while making the relationship explicit.
+    if topical >= 70:
+        tier, explanation = "directa", "El tema aparece directamente en el título, temas o resumen."
+    elif topical >= 45:
+        tier, explanation = "relacionada", "El artículo comparte conceptos, variables o mecanismos relevantes."
+    elif topical >= 25:
+        tier, explanation = "contextual", "El artículo aporta contexto útil aunque no use el término exacto."
+    else:
+        tier, explanation = "exploratoria", "El artículo fue recuperado por expansión temática y requiere revisión manual."
+    p["relevance_tier"] = tier
+    p["relevance_explanation"] = explanation
     # Backward-compatible 0–20 field, now based ONLY on topical match.
     p["relevance_score"] = round(topical / 5.0, 2)
     p["practical_score"] = min(10.0, round(practical + oa_bonus, 2))
