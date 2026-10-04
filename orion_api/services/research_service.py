@@ -104,7 +104,7 @@ def search(
             "origin": "library",
             "results": existing,
             "count": len(existing),
-            "metadata": {"external_search": False, "query_variants": query_variants, "manual_sources": manual_sources, "manual_links": manual_links, "fallback_used": False},
+            "metadata": {"external_search": False, "query_expanded": len(query_variants) > 1, "query_variants": query_variants, "manual_sources": manual_sources, "manual_links": manual_links, "fallback_used": False},
         }
 
     if plan["domain"] != "academic":
