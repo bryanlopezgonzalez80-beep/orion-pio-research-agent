@@ -247,12 +247,18 @@ def _deduplicate(papers):
     return deduplicate(papers)
 
 def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_keep=150, retries=2, cache_ttl_hours=8, force_refresh=False, searchers=None, sleep_fn=time.sleep):
-    from research_agent import academic_query_variants, is_spanish_query, pace_source_request, record_language, score_record, source_rate_policy
+    from research_agent import academic_query_variants, is_spanish_query, pace_source_request, record_language, related_discovery_variant, score_record, source_rate_policy
 
     started=time.perf_counter()
     using_default_searchers=searchers is None
     searchers=searchers or _default_searchers()
     query_variants=academic_query_variants(query) or [query]
+    # Contextual expansion is enabled only for live provider searches. Custom
+    # searchers/tests retain the legacy two-variant contract and avoid extra calls.
+    if using_default_searchers:
+        related = related_discovery_variant(query)
+        if related and related not in query_variants:
+            query_variants.append(related)
     selected=list(sources or recommended_academic_sources(query)); gathered=[]; errors=[]; source_meta=[]
     for source in selected:
         source_started=time.perf_counter()
