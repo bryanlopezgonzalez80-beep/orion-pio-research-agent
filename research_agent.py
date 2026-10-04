@@ -444,18 +444,22 @@ def academic_query_variants(query: str) -> list[str]:
     variants = [original]
     if changed and translated and _normalized(translated) != normalized:
         variants.append(translated)
+    return variants[:2]
 
-    # Add one controlled related query. Keep this bounded so broad discovery
-    # increases recall without multiplying provider calls indefinitely.
+
+def related_discovery_variant(query: str) -> str:
+    """Build one bounded contextual query without changing legacy variants."""
+    normalized = _normalized(query)
+    translated = " ".join(
+        SPANISH_QUERY_WORDS.get(token, token) for token in normalized.split()
+    )
     related_terms = []
     for key, aliases in RELATED_QUERY_ALIASES.items():
-        if key in normalized or key in _normalized(translated):
+        if key in normalized or key in translated:
             related_terms.extend(aliases)
-    if related_terms:
-        related_query = " ".join(dict.fromkeys([original] + related_terms[:5]))
-        if _normalized(related_query) not in {_normalized(v) for v in variants}:
-            variants.append(related_query)
-    return variants[:3]
+    if not related_terms:
+        return ""
+    return " ".join(dict.fromkeys([query] + related_terms[:5]))
 
 
 def topic_relevance_percent(p: dict, query: str) -> float:
