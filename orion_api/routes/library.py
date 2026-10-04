@@ -16,9 +16,10 @@ def library(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
 ) -> PaperListResponse:
-    items = paper_service.list_papers(
-        limit=limit, offset=offset, favorites_only=True
-    )
+    # Deep Harvest already persists every deduplicated Radar discovery. The
+    # Library is the durable view of that archive; favorites remain a separate
+    # user flag instead of deciding whether a paper is visible here.
+    items = paper_service.list_papers(limit=limit, offset=offset)
     return PaperListResponse(items=items, limit=limit, offset=offset, count=len(items))
 
 
