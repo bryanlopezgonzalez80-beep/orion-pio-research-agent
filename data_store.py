@@ -757,19 +757,26 @@ def get_survey_responses(survey_id: int):
 def db_stats():
     con = connect()
     stats = {}
+
+    def count(sql: str) -> int:
+        # PostgreSQL connections use psycopg's dict_row while SQLite uses
+        # sqlite3.Row. Give the aggregate a stable name supported by both.
+        row = con.execute(sql).fetchone()
+        return int(row["count"])
+
     for table in ("papers", "clients", "projects", "proposals", "generated_assets", "radar_runs", "surveys", "survey_responses"):
-        stats[table] = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-    stats["favorites"] = con.execute("SELECT COUNT(*) FROM papers WHERE favorite=1").fetchone()[0]
-    stats["read_full"] = con.execute("SELECT COUNT(*) FROM papers WHERE read_full=1").fetchone()[0]
-    stats["puerto_rico"] = con.execute("SELECT COUNT(*) FROM papers WHERE geo_pr=1").fetchone()[0]
-    stats["united_states"] = con.execute("SELECT COUNT(*) FROM papers WHERE geo_us=1").fetchone()[0]
-    stats["latam_caribbean"] = con.execute("SELECT COUNT(*) FROM papers WHERE geo_latam_caribbean=1").fetchone()[0]
-    stats["with_abstract"] = con.execute("SELECT COUNT(*) FROM papers WHERE LENGTH(COALESCE(abstract,''))>0").fetchone()[0]
-    stats["with_doi"] = con.execute("SELECT COUNT(*) FROM papers WHERE LENGTH(COALESCE(doi,''))>0").fetchone()[0]
-    stats["open_access"] = con.execute("SELECT COUNT(*) FROM papers WHERE access_status='OPEN_ACCESS'").fetchone()[0]
-    stats["requires_login"] = con.execute("SELECT COUNT(*) FROM papers WHERE requires_login=1").fetchone()[0]
-    stats["retracted"] = con.execute("SELECT COUNT(*) FROM papers WHERE retraction_status='RETRACTED'").fetchone()[0]
-    stats["multi_source_metadata"] = con.execute("SELECT COUNT(*) FROM papers WHERE metadata_sources_count>1").fetchone()[0]
+        stats[table] = count(f"SELECT COUNT(*) AS count FROM {table}")
+    stats["favorites"] = count("SELECT COUNT(*) AS count FROM papers WHERE favorite=1")
+    stats["read_full"] = count("SELECT COUNT(*) AS count FROM papers WHERE read_full=1")
+    stats["puerto_rico"] = count("SELECT COUNT(*) AS count FROM papers WHERE geo_pr=1")
+    stats["united_states"] = count("SELECT COUNT(*) AS count FROM papers WHERE geo_us=1")
+    stats["latam_caribbean"] = count("SELECT COUNT(*) AS count FROM papers WHERE geo_latam_caribbean=1")
+    stats["with_abstract"] = count("SELECT COUNT(*) AS count FROM papers WHERE LENGTH(COALESCE(abstract,''))>0")
+    stats["with_doi"] = count("SELECT COUNT(*) AS count FROM papers WHERE LENGTH(COALESCE(doi,''))>0")
+    stats["open_access"] = count("SELECT COUNT(*) AS count FROM papers WHERE access_status='OPEN_ACCESS'")
+    stats["requires_login"] = count("SELECT COUNT(*) AS count FROM papers WHERE requires_login=1")
+    stats["retracted"] = count("SELECT COUNT(*) AS count FROM papers WHERE retraction_status='RETRACTED'")
+    stats["multi_source_metadata"] = count("SELECT COUNT(*) AS count FROM papers WHERE metadata_sources_count>1")
     con.close()
     return stats
 

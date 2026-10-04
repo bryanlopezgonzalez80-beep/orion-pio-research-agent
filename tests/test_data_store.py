@@ -110,6 +110,29 @@ def test_surveys_round_trip_and_stats(sample_paper):
     assert stats["papers"] == stats["favorites"] == stats["read_full"] == 1
 
 
+def test_db_stats_supports_postgres_dict_rows(monkeypatch):
+    class DictRowCursor:
+        def fetchone(self):
+            return {"count": 1}
+
+    class DictRowConnection:
+        engine = "postgres"
+
+        def execute(self, sql):
+            assert "COUNT(*) AS count" in sql
+            return DictRowCursor()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(data_store, "connect", lambda: DictRowConnection())
+
+    stats = data_store.db_stats()
+
+    assert stats["papers"] == stats["favorites"] == stats["read_full"] == 1
+    assert stats["puerto_rico"] == stats["multi_source_metadata"] == 1
+
+
 def test_invalid_numeric_payload_rolls_back_without_partial_insert(sample_paper):
     invalid = {**sample_paper, "id": "bad", "year": "not-a-number"}
     with pytest.raises(ValueError):
