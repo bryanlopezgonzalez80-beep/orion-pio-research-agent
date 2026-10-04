@@ -356,6 +356,7 @@ def test_spanish_search_queries_original_and_english_variant(monkeypatch):
     assert calls == [
         "desarrollo organizacional y liderazgo",
         "organizational development and leadership",
+        "desarrollo organizacional y liderazgo organizational change change readiness learning organization culture change intervention",
     ]
     assert errors == []
     assert papers
