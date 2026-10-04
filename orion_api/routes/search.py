@@ -15,4 +15,4 @@ router = APIRouter(
 def search(
     request: SearchRequest,
 ) -> dict:
-    return research_service.search(request.query, request.limit)
+    return research_service.search(\n        request.query,\n        request.limit,\n        days=request.days,\n        per_source=request.per_source,\n        sources=request.sources,\n        include_pr=request.include_pr,\n    )
