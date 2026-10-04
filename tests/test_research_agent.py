@@ -325,6 +325,10 @@ def test_spanish_academic_query_variants_and_relevance():
         )
         >= 70
     )
+    direct = research_agent.score_record(dict(paper), "seguridad psicológica y liderazgo", 3650)
+    assert direct["relevance_tier"] == "directa"
+    contextual = research_agent.score_record({"title":"Work demands and employee wellbeing", "abstract":"Occupational stress and fatigue"}, "burnout", 3650)
+    assert contextual["relevance_tier"] in {"relacionada", "contextual", "exploratoria"}
 
 
 def test_spanish_search_queries_original_and_english_variant(monkeypatch):
