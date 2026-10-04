@@ -56,5 +56,5 @@ jobs:
           path: |
             reports/daily_*.json
             reports/daily_*.md
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
