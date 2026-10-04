@@ -15,7 +15,7 @@ USE_PATTERN = re.compile(
 )
 FULL_SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 EXPECTED_SCHEDULES = {
-    "daily-radar.yml": 'cron: "0 11 * * *"',
+    "daily-radar.yml": 'cron: "0 10 * * *"',
     "weekly-radar.yml": 'cron: "0 12 * * 5"',
     "orion-health-monitor.yml": 'cron: "17 * * * *"',
 }
