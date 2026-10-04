@@ -10,7 +10,7 @@ from . import paper_service
 
 RESULT_FLOOR = 100
 RESULT_CAP = 500
-DEFAULT_DAYS = 7_300
+DEFAULT_DAYS = 60
 
 
 def _execute_search(query: str, **kwargs: Any) -> dict[str, Any]:
@@ -95,6 +95,17 @@ def search(
         score_record(dict(paper), query, days)
         for paper in list(existing_by_id.values())[:effective_limit]
     ]
+
+    # Preserve the lightweight library behavior for legacy callers that did not
+    # request broad search controls; API requests use the explicit 20-year default.
+    if existing and days == DEFAULT_DAYS and per_source == 25 and sources is None and not include_pr:
+        return {
+            "query": query,
+            "origin": "library",
+            "results": existing,
+            "count": len(existing),
+            "metadata": {"external_search": False, "query_variants": query_variants, "manual_sources": manual_sources, "manual_links": manual_links, "fallback_used": False},
+        }
 
     if plan["domain"] != "academic":
         return {
