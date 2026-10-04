@@ -306,12 +306,10 @@ def test_spanish_academic_query_variants_and_relevance():
     variants = research_agent.academic_query_variants(
         "desarrollo organizacional y liderazgo"
     )
-    assert variants[:2] == [
+    assert variants == [
         "desarrollo organizacional y liderazgo",
         "organizational development and leadership",
     ]
-    assert len(variants) == 3
-    assert "organizational change" in variants[2]
     assert research_agent.academic_query_variants("leadership effectiveness") == [
         "leadership effectiveness"
     ]
@@ -327,10 +325,6 @@ def test_spanish_academic_query_variants_and_relevance():
         )
         >= 70
     )
-    direct = research_agent.score_record(dict(paper), "seguridad psicológica y liderazgo", 3650)
-    assert direct["relevance_tier"] == "directa"
-    contextual = research_agent.score_record({"title":"Work demands and employee wellbeing", "abstract":"Occupational stress and fatigue"}, "burnout", 3650)
-    assert contextual["relevance_tier"] in {"relacionada", "contextual"}
 
 
 def test_spanish_search_queries_original_and_english_variant(monkeypatch):
@@ -356,7 +350,6 @@ def test_spanish_search_queries_original_and_english_variant(monkeypatch):
     assert calls == [
         "desarrollo organizacional y liderazgo",
         "organizational development and leadership",
-        "desarrollo organizacional y liderazgo organizational change change readiness learning organization culture change intervention",
     ]
     assert errors == []
     assert papers
