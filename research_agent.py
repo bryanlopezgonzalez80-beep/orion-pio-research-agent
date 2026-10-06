@@ -24,7 +24,10 @@ load_dotenv()
 
 APP_VERSION = "3.0.0"
 USER_AGENT = "PIO-Intelligence-Hub/2.0 (research dashboard; personal use)"
-TIMEOUT = 25
+# Keep one slow provider from holding the full 251-topic sweep hostage.
+# Individual providers are isolated by execute_academic_search, which records
+# the timeout and continues with the remaining sources/topics.
+TIMEOUT = 12
 
 _SOURCE_PACING_LOCK = Lock()
 _SOURCE_NEXT_REQUEST_AT: dict[str, float] = {}

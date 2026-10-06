@@ -345,6 +345,7 @@ def run_live_sweep(
             stopped_for_budget = True
             break
         sources = _live_sources(query, openalex_queries)
+        emit_progress("query_started")
         try:
             outcome = execute_academic_search(
                 query,
@@ -352,9 +353,20 @@ def run_live_sweep(
                 per_source=per_source,
                 sources=sources,
                 max_keep=max(100, per_source * len(sources)),
-                retries=2,
+                retries=1,
                 cache_ttl_hours=4,
                 force_refresh=True,
+                progress_callback=lambda event, current=query: progress_callback({
+                    "phase": event.get("phase") or "source",
+                    "current_query": current,
+                    "current_source": event.get("source") or "",
+                    "queries_processed": processed,
+                    "queries_total": len(queries),
+                    "queries_remaining": max(0, len(queries) - processed),
+                    "received": received,
+                    "unique_seen": len(unique_seen),
+                    "source_totals": {name: dict(values) for name, values in source_totals.items()},
+                }) if progress_callback is not None else None,
             )
         except Exception as exc:
             errors.append(f"{query}: {type(exc).__name__}: {exc}")
