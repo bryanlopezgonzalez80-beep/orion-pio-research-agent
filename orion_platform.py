@@ -246,7 +246,7 @@ def _deduplicate(papers):
     from research_agent import deduplicate
     return deduplicate(papers)
 
-def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_keep=150, retries=2, cache_ttl_hours=8, force_refresh=False, searchers=None, sleep_fn=time.sleep):
+def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_keep=150, retries=2, cache_ttl_hours=8, force_refresh=False, searchers=None, sleep_fn=time.sleep, progress_callback=None):
     from research_agent import academic_query_variants, is_spanish_query, pace_source_request, record_language, related_discovery_variant, score_record, source_rate_policy
 
     started=time.perf_counter()
@@ -261,6 +261,11 @@ def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_k
             query_variants.append(related)
     selected=list(sources or recommended_academic_sources(query)); gathered=[]; errors=[]; source_meta=[]
     for source in selected:
+        if progress_callback is not None:
+            try:
+                progress_callback({"source": source, "query": query, "phase": "source"})
+            except Exception:
+                pass
         source_started=time.perf_counter()
         fn=searchers.get(source)
         policy=source_rate_policy(source)
@@ -336,6 +341,11 @@ def execute_academic_search(query, *, days=60, per_source=8, sources=None, max_k
             "minimum_interval_seconds":policy["minimum_interval_seconds"],
             "rate_guidance":policy["guidance"],
         })
+        if progress_callback is not None:
+            try:
+                progress_callback({"source": source, "query": query, "phase": "source_complete", "source_meta": source_meta[-1]})
+            except Exception:
+                pass
         record_source_metrics(
             source, requests=network_requests, successes=1 if any_success else 0,
             failures=1 if source_errors else 0, rate_limits=1 if rate_limited else 0,
