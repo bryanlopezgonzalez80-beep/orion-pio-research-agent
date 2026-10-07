@@ -185,7 +185,7 @@ def _run_manual_refresh() -> None:
             _REFRESH_LOCK.release()
 
 
-def _run_manual_backfill() -> None:
+def _run_manual_backfill(months_per_run: int | None = None) -> None:
     try:
         started_at = _iso_now()
         set_setting(_BACKFILL_STATUS_KEY, {
@@ -204,7 +204,7 @@ def _run_manual_backfill() -> None:
                 "records_received": progress.get("backfill_records_received", 0),
             })
 
-        result = run_historical_backfill(progress_callback=report_progress)
+        result = run_historical_backfill(months_per_run=months_per_run, progress_callback=report_progress)
         set_setting(_BACKFILL_STATUS_KEY, {
             "state": "completed_with_warnings" if result.get("errors") else "completed",
             "completed_at": _iso_now(), "next_cursor": result.get("next_cursor"),
@@ -302,10 +302,13 @@ def refresh_radar(background_tasks: BackgroundTasks) -> dict:
 
 
 @router.post("/backfill", status_code=202, dependencies=[Depends(require_search_quota)])
-def refresh_backfill(background_tasks: BackgroundTasks) -> dict:
+def refresh_backfill(background_tasks: BackgroundTasks, payload: dict | None = None) -> dict:
     """Start the resumable historical backfill without rerunning the live Radar."""
     if not _BACKFILL_LOCK.acquire(blocking=False):
         return {"status": "already_running", "manual_backfill": get_setting(_BACKFILL_STATUS_KEY)}
     set_setting(_BACKFILL_STATUS_KEY, {"state": "queued", "requested_at": _iso_now(), "blocks_configured": 4})
-    background_tasks.add_task(_run_manual_backfill)
-    return {"status": "queued", "message": "Historical backfill queued"}
+    months = int((payload or {}).get("months_per_run") or 0)
+    if months not in {24, 48, 96, 120}:
+        months = None
+    background_tasks.add_task(_run_manual_backfill, months)
+    return {"status": "queued", "message": "Historical backfill queued", "months_per_run": months}
