@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
-from deep_harvest import harvest_status, run_live_sweep
+from deep_harvest import harvest_status, run_live_sweep, run_historical_backfill
 from platform_store import get_setting, set_setting
 
 from ..dependencies import require_read_quota, require_search_quota
@@ -22,7 +22,9 @@ router = APIRouter(
 )
 
 _REFRESH_LOCK = Lock()
+_BACKFILL_LOCK = Lock()
 _MANUAL_STATUS_KEY = "deep_harvest.manual_refresh"
+_BACKFILL_STATUS_KEY = "deep_harvest.manual_backfill"
 _STATUS_CACHE_TTL_SECONDS = 20.0
 _STATUS_CACHE: dict | None = None
 _STATUS_CACHE_AT = 0.0
@@ -183,6 +185,40 @@ def _run_manual_refresh() -> None:
             _REFRESH_LOCK.release()
 
 
+def _run_manual_backfill() -> None:
+    try:
+        started_at = _iso_now()
+        set_setting(_BACKFILL_STATUS_KEY, {
+            "state": "running", "started_at": started_at,
+            "phase": "historical", "blocks_configured": 4,
+            "windows_completed": 0, "records_received": 0,
+        })
+
+        def report_progress(progress: dict) -> None:
+            set_setting(_BACKFILL_STATUS_KEY, {
+                "state": "running", "started_at": started_at,
+                "updated_at": _iso_now(), "phase": progress.get("phase", "historical"),
+                "backfill_month": progress.get("backfill_month"),
+                "tasks_completed": progress.get("backfill_tasks_completed_total", 0),
+                "tasks_total": progress.get("backfill_tasks_total", 0),
+                "records_received": progress.get("backfill_records_received", 0),
+            })
+
+        result = run_historical_backfill(progress_callback=report_progress)
+        set_setting(_BACKFILL_STATUS_KEY, {
+            "state": "completed_with_warnings" if result.get("errors") else "completed",
+            "completed_at": _iso_now(), "next_cursor": result.get("next_cursor"),
+            "months_processed": result.get("months_processed", 0),
+            "records_received": result.get("received", 0),
+            "errors": len(result.get("errors") or []),
+        })
+    except Exception as exc:
+        set_setting(_BACKFILL_STATUS_KEY, {"state": "failed", "completed_at": _iso_now(), "error": type(exc).__name__})
+    finally:
+        if _BACKFILL_LOCK.locked():
+            _BACKFILL_LOCK.release()
+
+
 @router.get("", response_model=PaperListResponse)
 def radar(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
@@ -224,11 +260,11 @@ def radar_status() -> dict:
     now = time.monotonic()
     cached = _STATUS_CACHE
     if cached is not None and now - _STATUS_CACHE_AT < _STATUS_CACHE_TTL_SECONDS:
-        return {**cached, "manual_refresh": _manual_refresh_status()}
+        return {**cached, "manual_refresh": _manual_refresh_status(), "manual_backfill": get_setting(_BACKFILL_STATUS_KEY)}
 
     if not _STATUS_CACHE_LOCK.acquire(blocking=False):
         if cached is not None:
-            return {**cached, "manual_refresh": _manual_refresh_status()}
+            return {**cached, "manual_refresh": _manual_refresh_status(), "manual_backfill": get_setting(_BACKFILL_STATUS_KEY)}
         _STATUS_CACHE_LOCK.acquire()
     try:
         now = time.monotonic()
@@ -237,7 +273,7 @@ def radar_status() -> dict:
             fresh.pop("manual_refresh", None)
             _STATUS_CACHE = fresh
             _STATUS_CACHE_AT = now
-        return {**(_STATUS_CACHE or {}), "manual_refresh": _manual_refresh_status()}
+        return {**(_STATUS_CACHE or {}), "manual_refresh": _manual_refresh_status(), "manual_backfill": get_setting(_BACKFILL_STATUS_KEY)}
     finally:
         _STATUS_CACHE_LOCK.release()
 
@@ -263,3 +299,13 @@ def refresh_radar(background_tasks: BackgroundTasks) -> dict:
         "status": "queued",
         "message": "Full PIO live sweep queued",
     }
+
+
+@router.post("/backfill", status_code=202, dependencies=[Depends(require_search_quota)])
+def refresh_backfill(background_tasks: BackgroundTasks) -> dict:
+    """Start the resumable historical backfill without rerunning the live Radar."""
+    if not _BACKFILL_LOCK.acquire(blocking=False):
+        return {"status": "already_running", "manual_backfill": get_setting(_BACKFILL_STATUS_KEY)}
+    set_setting(_BACKFILL_STATUS_KEY, {"state": "queued", "requested_at": _iso_now(), "blocks_configured": 4})
+    background_tasks.add_task(_run_manual_backfill)
+    return {"status": "queued", "message": "Historical backfill queued"}
