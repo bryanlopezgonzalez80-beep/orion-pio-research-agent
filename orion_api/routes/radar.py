@@ -6,9 +6,9 @@ import time
 from uuid import uuid4
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from deep_harvest import harvest_status, run_live_sweep, run_historical_backfill
+from deep_harvest import BACKFILL_FLOOR_YEAR, harvest_status, run_live_sweep, run_historical_backfill
 from platform_store import get_setting, set_setting
 
 from ..dependencies import require_read_quota, require_search_quota
@@ -197,26 +197,54 @@ def _backfill_status() -> dict | None:
 
 
 def _run_manual_backfill(months_per_run: int | None = None) -> None:
+    snapshot: dict = {}
     try:
         started_at = _iso_now()
-        set_setting(_BACKFILL_STATUS_KEY, {
+        months = months_per_run if months_per_run is not None else 24
+        snapshot = {
             "state": "running", "instance_id": _INSTANCE_ID, "started_at": started_at,
-            "phase": "historical", "blocks_configured": 4,
-            "windows_completed": 0, "records_received": 0,
-        })
+            "phase": "historical", "months_per_run": months,
+            "tasks_completed": 0, "tasks_total": 0, "tasks_scope": "run",
+            "months_processed": 0, "records_received": 0,
+        }
+        set_setting(_BACKFILL_STATUS_KEY, snapshot)
+        planned_months: int | None = None
+        previous_month: str | None = None
+        previous_month_records = 0
+        completed_month_records = 0
+        completed_months = 0
 
         def report_progress(progress: dict) -> None:
-            set_setting(_BACKFILL_STATUS_KEY, {
+            nonlocal snapshot, planned_months, previous_month
+            nonlocal previous_month_records, completed_month_records, completed_months
+            month = progress.get("backfill_month")
+            if planned_months is None and month:
+                try:
+                    first_month = datetime.fromisoformat(str(month))
+                    remaining_months = max(0, (first_month.year - BACKFILL_FLOOR_YEAR) * 12 + first_month.month)
+                    planned_months = min(months, remaining_months)
+                except ValueError:
+                    pass
+            if previous_month and month != previous_month:
+                completed_month_records += previous_month_records
+                completed_months += 1
+                previous_month_records = 0
+            previous_month = month
+            previous_month_records = max(previous_month_records, int(progress.get("backfill_records_received") or 0))
+            snapshot = {
                 "state": "running", "instance_id": _INSTANCE_ID, "started_at": started_at,
                 "updated_at": _iso_now(), "phase": progress.get("phase", "historical"),
-                "backfill_month": progress.get("backfill_month"),
+                "backfill_month": month, "months_per_run": months,
                 "tasks_completed": progress.get("backfill_tasks_completed_total", 0),
-                "tasks_total": progress.get("backfill_tasks_total", 0),
-                "records_received": progress.get("backfill_records_received", 0),
-            })
+                "tasks_total": int(progress.get("backfill_tasks_total") or 0) * (planned_months or 0),
+                "tasks_scope": "run", "months_processed": completed_months,
+                "records_received": completed_month_records + previous_month_records,
+            }
+            set_setting(_BACKFILL_STATUS_KEY, snapshot)
 
-        result = run_historical_backfill(months_per_run=months_per_run, progress_callback=report_progress)
+        result = run_historical_backfill(months_per_run=months, progress_callback=report_progress)
         set_setting(_BACKFILL_STATUS_KEY, {
+            **snapshot,
             "state": "completed_with_warnings" if result.get("errors") else "completed",
             "completed_at": _iso_now(), "next_cursor": result.get("next_cursor"),
             "months_processed": result.get("months_processed", 0),
@@ -224,7 +252,7 @@ def _run_manual_backfill(months_per_run: int | None = None) -> None:
             "errors": len(result.get("errors") or []),
         })
     except Exception as exc:
-        set_setting(_BACKFILL_STATUS_KEY, {"state": "failed", "completed_at": _iso_now(), "error": type(exc).__name__})
+        set_setting(_BACKFILL_STATUS_KEY, {**snapshot, "state": "failed", "completed_at": _iso_now(), "error": type(exc).__name__})
     finally:
         if _BACKFILL_LOCK.locked():
             _BACKFILL_LOCK.release()
@@ -284,7 +312,7 @@ def radar_status() -> dict:
             fresh.pop("manual_refresh", None)
             _STATUS_CACHE = fresh
             _STATUS_CACHE_AT = now
-        return {**(_STATUS_CACHE or {}), "manual_refresh": _manual_refresh_status(), "manual_backfill": get_setting(_BACKFILL_STATUS_KEY)}
+        return {**(_STATUS_CACHE or {}), "manual_refresh": _manual_refresh_status(), "manual_backfill": _backfill_status()}
     finally:
         _STATUS_CACHE_LOCK.release()
 
@@ -315,11 +343,13 @@ def refresh_radar(background_tasks: BackgroundTasks) -> dict:
 @router.post("/backfill", status_code=202, dependencies=[Depends(require_search_quota)])
 def refresh_backfill(background_tasks: BackgroundTasks, payload: dict | None = None) -> dict:
     """Start the resumable historical backfill without rerunning the live Radar."""
+    months = (payload or {}).get("months_per_run", 24)
+    # Validate before acquiring the lock: malformed input must never leave it held.
+    if type(months) is not int or months not in {24, 48, 96, 120}:
+        raise HTTPException(status_code=422, detail="Selecciona un plazo de 2, 4, 8 o 10 años.")
     if not _BACKFILL_LOCK.acquire(blocking=False):
-        return {"status": "already_running", "manual_backfill": get_setting(_BACKFILL_STATUS_KEY)}
-    set_setting(_BACKFILL_STATUS_KEY, {"state": "queued", "instance_id": _INSTANCE_ID, "requested_at": _iso_now(), "blocks_configured": 4})
-    months = int((payload or {}).get("months_per_run") or 0)
-    if months not in {24, 48, 96, 120}:
-        months = None
+        return {"status": "already_running", "manual_backfill": _backfill_status()}
+    set_setting(_BACKFILL_STATUS_KEY, {"state": "queued", "instance_id": _INSTANCE_ID, "requested_at": _iso_now(), "months_per_run": months})
     background_tasks.add_task(_run_manual_backfill, months)
     return {"status": "queued", "message": "Historical backfill queued", "months_per_run": months}
+
