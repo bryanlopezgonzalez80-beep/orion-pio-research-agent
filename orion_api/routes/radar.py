@@ -185,18 +185,29 @@ def _run_manual_refresh() -> None:
             _REFRESH_LOCK.release()
 
 
+def _backfill_status() -> dict | None:
+    value = get_setting(_BACKFILL_STATUS_KEY)
+    if not isinstance(value, dict) or value.get("state") not in {"queued", "running"}:
+        return value
+    if value.get("instance_id") != _INSTANCE_ID:
+        recovered = {**value, "state": "interrupted_retryable", "interrupted_at": _iso_now(), "message": "La corrida se interrumpió al reiniciar el servicio; puede reanudarse con seguridad."}
+        set_setting(_BACKFILL_STATUS_KEY, recovered)
+        return recovered
+    return value
+
+
 def _run_manual_backfill(months_per_run: int | None = None) -> None:
     try:
         started_at = _iso_now()
         set_setting(_BACKFILL_STATUS_KEY, {
-            "state": "running", "started_at": started_at,
+            "state": "running", "instance_id": _INSTANCE_ID, "started_at": started_at,
             "phase": "historical", "blocks_configured": 4,
             "windows_completed": 0, "records_received": 0,
         })
 
         def report_progress(progress: dict) -> None:
             set_setting(_BACKFILL_STATUS_KEY, {
-                "state": "running", "started_at": started_at,
+                "state": "running", "instance_id": _INSTANCE_ID, "started_at": started_at,
                 "updated_at": _iso_now(), "phase": progress.get("phase", "historical"),
                 "backfill_month": progress.get("backfill_month"),
                 "tasks_completed": progress.get("backfill_tasks_completed_total", 0),
@@ -260,11 +271,11 @@ def radar_status() -> dict:
     now = time.monotonic()
     cached = _STATUS_CACHE
     if cached is not None and now - _STATUS_CACHE_AT < _STATUS_CACHE_TTL_SECONDS:
-        return {**cached, "manual_refresh": _manual_refresh_status(), "manual_backfill": get_setting(_BACKFILL_STATUS_KEY)}
+        return {**cached, "manual_refresh": _manual_refresh_status(), "manual_backfill": _backfill_status()}
 
     if not _STATUS_CACHE_LOCK.acquire(blocking=False):
         if cached is not None:
-            return {**cached, "manual_refresh": _manual_refresh_status(), "manual_backfill": get_setting(_BACKFILL_STATUS_KEY)}
+            return {**cached, "manual_refresh": _manual_refresh_status(), "manual_backfill": _backfill_status()}
         _STATUS_CACHE_LOCK.acquire()
     try:
         now = time.monotonic()
@@ -306,7 +317,7 @@ def refresh_backfill(background_tasks: BackgroundTasks, payload: dict | None = N
     """Start the resumable historical backfill without rerunning the live Radar."""
     if not _BACKFILL_LOCK.acquire(blocking=False):
         return {"status": "already_running", "manual_backfill": get_setting(_BACKFILL_STATUS_KEY)}
-    set_setting(_BACKFILL_STATUS_KEY, {"state": "queued", "requested_at": _iso_now(), "blocks_configured": 4})
+    set_setting(_BACKFILL_STATUS_KEY, {"state": "queued", "instance_id": _INSTANCE_ID, "requested_at": _iso_now(), "blocks_configured": 4})
     months = int((payload or {}).get("months_per_run") or 0)
     if months not in {24, 48, 96, 120}:
         months = None
