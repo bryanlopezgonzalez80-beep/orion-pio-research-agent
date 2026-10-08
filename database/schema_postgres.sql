@@ -99,6 +99,7 @@ ALTER TABLE papers ADD COLUMN IF NOT EXISTS doi_url TEXT;
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS alternative_access_options TEXT DEFAULT '[]';
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS fulltext_available INTEGER DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_papers_date ON papers(published_date);
+CREATE INDEX IF NOT EXISTS idx_papers_library_order ON papers(relevance_score DESC, published_date DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi);
 CREATE INDEX IF NOT EXISTS idx_papers_source ON papers(source);
 CREATE INDEX IF NOT EXISTS idx_papers_geo_pr ON papers(geo_pr) WHERE geo_pr = 1;

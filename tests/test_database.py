@@ -107,6 +107,7 @@ def test_postgres_connection_errors_do_not_fallback_to_sqlite(monkeypatch):
     class FakePsycopg:
         @staticmethod
         def connect(*args, **kwargs):
+            assert kwargs["connect_timeout"] == 10
             raise OSError("unreachable")
 
     monkeypatch.setitem(__import__("sys").modules, "psycopg", FakePsycopg)
