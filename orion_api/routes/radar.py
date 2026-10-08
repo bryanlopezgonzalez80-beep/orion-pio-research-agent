@@ -10,6 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
 from deep_harvest import BACKFILL_FLOOR_YEAR, harvest_status, run_live_sweep, run_historical_backfill
 from platform_store import get_setting, set_setting
+from harvest_coordinator import active_harvest, exclusive_job, heartbeat_harvest
 
 from ..dependencies import require_read_quota, require_search_quota
 from ..schemas import PaperListResponse
@@ -45,7 +46,7 @@ def _manual_refresh_status() -> dict | None:
         return value
     if value.get("state") not in {"queued", "running"}:
         return value
-    if value.get("instance_id") != _INSTANCE_ID:
+    if value.get("instance_id") != _INSTANCE_ID and not active_harvest(_MANUAL_STATUS_KEY, value.get("instance_id")):
         recovered = {
             **value,
             "state": "interrupted_retryable",
@@ -80,6 +81,7 @@ def _manual_refresh_status() -> dict | None:
     return recovered
 
 
+@exclusive_job(_MANUAL_STATUS_KEY, lambda: _INSTANCE_ID, lambda: _REFRESH_LOCK)
 def _run_manual_refresh() -> None:
     try:
         started_at = _iso_now()
@@ -105,6 +107,7 @@ def _run_manual_refresh() -> None:
         )
 
         def report_progress(progress: dict) -> None:
+            heartbeat_harvest()
             set_setting(
                 _MANUAL_STATUS_KEY,
                 {
@@ -189,13 +192,14 @@ def _backfill_status() -> dict | None:
     value = get_setting(_BACKFILL_STATUS_KEY)
     if not isinstance(value, dict) or value.get("state") not in {"queued", "running"}:
         return value
-    if value.get("instance_id") != _INSTANCE_ID:
+    if value.get("instance_id") != _INSTANCE_ID and not active_harvest(_BACKFILL_STATUS_KEY, value.get("instance_id")):
         recovered = {**value, "state": "interrupted_retryable", "interrupted_at": _iso_now(), "message": "La corrida se interrumpió al reiniciar el servicio; puede reanudarse con seguridad."}
         set_setting(_BACKFILL_STATUS_KEY, recovered)
         return recovered
     return value
 
 
+@exclusive_job(_BACKFILL_STATUS_KEY, lambda: _INSTANCE_ID, lambda: _BACKFILL_LOCK)
 def _run_manual_backfill(months_per_run: int | None = None) -> None:
     snapshot: dict = {}
     try:
@@ -215,6 +219,7 @@ def _run_manual_backfill(months_per_run: int | None = None) -> None:
         completed_months = 0
 
         def report_progress(progress: dict) -> None:
+            heartbeat_harvest()
             nonlocal snapshot, planned_months, previous_month
             nonlocal previous_month_records, completed_month_records, completed_months
             month = progress.get("backfill_month")
@@ -245,7 +250,7 @@ def _run_manual_backfill(months_per_run: int | None = None) -> None:
         result = run_historical_backfill(months_per_run=months, progress_callback=report_progress)
         set_setting(_BACKFILL_STATUS_KEY, {
             **snapshot,
-            "state": "completed_with_warnings" if result.get("errors") else "completed",
+            "state": "partial_retryable" if result.get("partial") else "completed_with_warnings" if result.get("errors") else "completed",
             "completed_at": _iso_now(), "next_cursor": result.get("next_cursor"),
             "months_processed": result.get("months_processed", 0),
             "records_received": result.get("received", 0),
@@ -324,6 +329,8 @@ def radar_status() -> dict:
 )
 def refresh_radar(background_tasks: BackgroundTasks) -> dict:
     """Start a full live PIO taxonomy sweep without blocking the HTTP request."""
+    if active_harvest():
+        return {"status": "already_running", "manual_refresh": _manual_refresh_status(), "manual_backfill": _backfill_status()}
     if not _REFRESH_LOCK.acquire(blocking=False):
         return {
             "status": "already_running",
@@ -347,9 +354,10 @@ def refresh_backfill(background_tasks: BackgroundTasks, payload: dict | None = N
     # Validate before acquiring the lock: malformed input must never leave it held.
     if type(months) is not int or months not in {24, 48, 96, 120}:
         raise HTTPException(status_code=422, detail="Selecciona un plazo de 2, 4, 8 o 10 años.")
+    if active_harvest():
+        return {"status": "already_running", "manual_refresh": _manual_refresh_status(), "manual_backfill": _backfill_status()}
     if not _BACKFILL_LOCK.acquire(blocking=False):
         return {"status": "already_running", "manual_backfill": _backfill_status()}
     set_setting(_BACKFILL_STATUS_KEY, {"state": "queued", "instance_id": _INSTANCE_ID, "requested_at": _iso_now(), "months_per_run": months})
     background_tasks.add_task(_run_manual_backfill, months)
     return {"status": "queued", "message": "Historical backfill queued", "months_per_run": months}
-

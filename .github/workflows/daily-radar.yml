@@ -13,7 +13,7 @@ permissions:
 # Only one refresh may write checkpoints and reports at a time. If a manual
 # run overlaps the scheduled run, it waits instead of duplicating harvest work.
 concurrency:
-  group: orion-daily-radar
+  group: orion-harvest-writers
   cancel-in-progress: false
 
 jobs:
@@ -39,15 +39,9 @@ jobs:
           COURTLISTENER_API_TOKEN: ${{ secrets.COURTLISTENER_API_TOKEN }}
           NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
           NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
-          # Live taxonomy gets the protected runtime budget and persists each query.
-          ORION_LIVE_SWEEP_RUNTIME_SECONDS: "2100"
-          # Historical work advances one month per run and resumes by checkpoint.
-          # This prevents backfill from consuming the report-generation window.
-          ORION_BACKFILL_TARGET_MONTHS_PER_RUN: "1"
-          ORION_BACKFILL_MONTHS_PER_RUN: "1"
-          # Geographic discovery remains bounded and independently rotated.
-          ORION_GEO_RUNTIME_SECONDS: "180"
-        run: python daily_agent.py
+          # This job handles eight core topics and alerts. The complete taxonomy,
+          # geography and historical checkpoints belong to the independent job.
+        run: PYTHONPATH=. python scripts/scheduled_harvest.py --job daily --output reports/cloud_daily.json
       - name: Upload daily radar reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -56,5 +50,6 @@ jobs:
           path: |
             reports/daily_*.json
             reports/daily_*.md
+            reports/cloud_daily.json
           if-no-files-found: error
           retention-days: 30
