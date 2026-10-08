@@ -20,6 +20,13 @@ def client():
     return TestClient(create_app(), raise_server_exceptions=False)
 
 
+@pytest.mark.parametrize("path", ["library", "papers", "radar"])
+def test_archive_offsets_can_reach_existing_full_catalog(client, path):
+    response = client.get(f"/api/v1/{path}?limit=100&offset=145100", headers={"X-Orion-API-Key": "test-orion-key"})
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
 def test_health_healthy_is_sanitized(client, monkeypatch):
     monkeypatch.setattr(
         health_route,

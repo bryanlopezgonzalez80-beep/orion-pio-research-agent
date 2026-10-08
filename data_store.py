@@ -580,8 +580,11 @@ def list_papers(
     con = connect()
     try:
         rows = con.execute(
-            f"SELECT * FROM papers {where} "
-            "ORDER BY relevance_score DESC, published_date DESC LIMIT ? OFFSET ?",
+            "SELECT p.* FROM papers p JOIN ("
+            f"SELECT id FROM papers {where} "
+            "ORDER BY relevance_score DESC, published_date DESC, id DESC LIMIT ? OFFSET ?"
+            ") page ON page.id=p.id "
+            "ORDER BY p.relevance_score DESC, p.published_date DESC, p.id DESC",
             params,
         ).fetchall()
         return [dict(row) for row in rows]

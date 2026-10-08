@@ -155,7 +155,7 @@ def connect_database(
                 "PostgreSQL support requires psycopg[binary]"
             ) from exc
         try:
-            raw = psycopg.connect(config.database_url, row_factory=dict_row)
+            raw = psycopg.connect(config.database_url, row_factory=dict_row, connect_timeout=10)
         except Exception:
             raise DatabaseConnectionError(
                 "Unable to connect to the configured PostgreSQL database"

@@ -9,6 +9,17 @@ import data_store
 pytestmark = pytest.mark.integration
 
 
+def test_pagination_has_stable_ties_and_preserves_filters(sample_paper):
+    data_store.upsert_papers([
+        {**sample_paper, "id": name, "title": name, "doi": "", "source": source}
+        for name, source in [("a", "keep"), ("b", "skip"), ("c", "keep")]
+    ])
+    ids = [data_store.list_papers(limit=1, offset=i)[0]["id"] for i in range(3)]
+    assert ids == ["c", "b", "a"]
+    assert [p["id"] for p in data_store.list_papers(source="keep", limit=1, offset=1)] == ["a"]
+    assert data_store.list_papers(limit=1, offset=145125) == []
+
+
 def test_initialization_creates_all_tables():
     con = data_store.connect()
     try:

@@ -16,7 +16,7 @@ router = APIRouter(
 @router.get("", response_model=PaperListResponse)
 def papers(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+    offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
     query: Annotated[str | None, Query(min_length=2, max_length=300)] = None,
     source: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
     year: Annotated[int | None, Query(ge=1800, le=2200)] = None,

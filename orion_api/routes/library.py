@@ -14,7 +14,7 @@ router = APIRouter(prefix="/library", tags=["library"])
 )
 def library(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+    offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
 ) -> PaperListResponse:
     # Deep Harvest already persists every deduplicated Radar discovery. The
     # Library is the durable view of that archive; favorites remain a separate

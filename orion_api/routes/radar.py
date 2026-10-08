@@ -266,7 +266,7 @@ def _run_manual_backfill(months_per_run: int | None = None) -> None:
 @router.get("", response_model=PaperListResponse)
 def radar(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+    offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
     geography: Annotated[
         Literal["puerto_rico", "united_states", "latam_caribbean", "global", "unknown"] | None,
         Query(),
