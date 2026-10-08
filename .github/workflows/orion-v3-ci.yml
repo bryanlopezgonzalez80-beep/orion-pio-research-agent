@@ -35,4 +35,5 @@ jobs:
           --cov=research_agent --cov=data_store --cov=platform_store
           --cov=orion_platform --cov=deep_harvest --cov=export_utils --cov=orion_api
           --cov=scripts.orion_health_check
+          --cov=harvest_coordinator --cov=scripts.scheduled_harvest
           --cov-report=term-missing --cov-fail-under=90

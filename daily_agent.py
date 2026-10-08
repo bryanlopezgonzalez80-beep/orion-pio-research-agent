@@ -1,4 +1,4 @@
-"""Orion daily high-recall research refresh for 07:00 Puerto Rico (AST)."""
+"""Daily Radar at 06:00 Puerto Rico; the full cloud sweep runs separately."""
 from __future__ import annotations
 
 import json
@@ -7,6 +7,7 @@ from pathlib import Path
 
 from data_store import log_radar_run, upsert_papers, verify_database_backend
 from deep_harvest import coverage_queries, run_deep_harvest
+from harvest_coordinator import heartbeat_harvest
 from orion_platform import execute_academic_search, route_query
 from platform_store import alerts_due, mark_alert_run
 from research_agent import DEFAULT_SOURCES
@@ -41,13 +42,43 @@ def _run(query, sources=None):
     )
 
 
-def main():
+def core_daily_sweep():
+    summaries = []
+    received = 0
+    seen = set()
+    errors = []
+    for query in CORE_TOPICS:
+        heartbeat_harvest()
+        try:
+            outcome = _run(query)
+        except Exception as exc:
+            errors.append(query + ": " + type(exc).__name__)
+            summaries.append(query)
+            continue
+        papers = outcome.get("results") or []
+        if papers:
+            upsert_papers(papers)
+            seen.update(str(p.get("id")) for p in papers if p.get("id"))
+        received += int(outcome.get("received") or 0)
+        errors.extend(query + ": " + str(error) for error in outcome.get("errors") or [])
+        summaries.append(query)
+    return {
+        "coverage_query_count": len(CORE_TOPICS),
+        "live": {
+            "queries_processed": len(summaries), "queries_total": len(CORE_TOPICS),
+            "received": received, "unique_seen": len(seen), "errors": errors,
+            "source_totals": {}, "secondary_sources": [],
+        },
+        "geography": {}, "backfill": None,
+    }
+
+
+def main(*, core_only=False, include_backfill=True):
     verify_database_backend()
 
-    # The deep harvest sweeps the complete PIO taxonomy, persists each query
-    # incrementally, rotates constrained providers, and advances historical
-    # Crossref backfill. A single source failure does not abort the run.
-    deep = run_deep_harvest(include_backfill=True)
+    # The scheduled Daily is compact; the separate cloud job handles the full
+    # taxonomy and geography. Preserve full-sweep compatibility for old callers.
+    deep = core_daily_sweep() if core_only else run_deep_harvest(include_backfill=include_backfill)
 
     alert_results = []
     summaries = []
@@ -147,7 +178,7 @@ def main():
 
     log_radar_run(
         DEFAULT_SOURCES,
-        coverage_queries(),
+        CORE_TOPICS if core_only else coverage_queries(),
         total_seen,
         total_unique,
         errors,
@@ -222,6 +253,7 @@ def main():
         "\n".join(md), encoding="utf-8"
     )
     print(json.dumps(payload, ensure_ascii=False))
+    return payload
 
 
 if __name__ == "__main__":

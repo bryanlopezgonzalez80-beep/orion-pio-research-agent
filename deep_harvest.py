@@ -25,7 +25,7 @@ from research_agent import (
 )
 
 STATE_PREFIX = "deep_harvest"
-BACKFILL_FLOOR_YEAR = int(os.getenv("ORION_BACKFILL_FLOOR_YEAR", "1900"))
+BACKFILL_FLOOR_YEAR = int(os.getenv("ORION_BACKFILL_FLOOR_YEAR", "1940"))
 
 # Broad anchors catch work that uses neighboring terminology instead of a
 # canonical I-O Psychology label. TOPIC_GROUPS contributes the detailed layer.
@@ -553,6 +553,7 @@ def run_historical_backfill(
     records_per_query_month: int = 500,
     progress_callback: Callable[[dict], None] | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
+    max_runtime_seconds: int | None = None,
 ) -> dict:
     """Backfill older Crossref literature in resumable month-sized windows."""
     months = max(
@@ -572,6 +573,9 @@ def run_historical_backfill(
     total_received = 0
     unique_ids: set[str] = set()
     run_tasks_completed = 0
+    configured_runtime = max_runtime_seconds if max_runtime_seconds is not None else int(os.getenv("ORION_BACKFILL_RUNTIME_SECONDS", "0"))
+    started = time.monotonic()
+    stopped_for_budget = False
 
     for _ in range(months):
         month_end = cursor - timedelta(days=1)
@@ -594,6 +598,9 @@ def run_historical_backfill(
             if get_checkpoint(month_key, "Crossref", task_type, task_key) is None:
                 set_checkpoint(month_key, "Crossref", task_type, task_key, "PENDING")
         for task_type, task_key, fetch, max_records in tasks:
+            if configured_runtime > 0 and time.monotonic() - started >= configured_runtime:
+                stopped_for_budget = True
+                break
             checkpoint = get_checkpoint(month_key, "Crossref", task_type, task_key)
             if checkpoint and checkpoint.get("status") == "COMPLETED":
                 completed_tasks += 1
@@ -699,6 +706,8 @@ def run_historical_backfill(
         "unique_seen": len(unique_ids),
         "windows": windows,
         "errors": errors,
+        "stopped_for_budget": stopped_for_budget,
+        "partial": stopped_for_budget or any(window["tasks_completed"] < window["tasks_total"] for window in windows),
         "checkpoint_summary": checkpoint_summary(),
     }
     set_setting(f"{STATE_PREFIX}.last_backfill", result)
@@ -751,6 +760,12 @@ def run_deep_harvest(
         len(live.get("errors") or []) + len(geography.get("errors") or [])
         + len((backfill or {}).get("errors") or [])
     )
+    partial = (
+        bool(live.get("queries_remaining") or live.get("stopped_for_runtime_budget"))
+        or int(live.get("queries_processed") or 0) < int(live.get("queries_total") or 0)
+        or int(geography.get("queries_processed") or 0) < int(geography.get("queries_total") or 0)
+        or bool((backfill or {}).get("partial"))
+    )
     result = {
         "completed_at": _utcnow().isoformat(timespec="seconds"),
         "coverage_query_count": len(coverage_queries()),
@@ -758,7 +773,7 @@ def run_deep_harvest(
         "live": live,
         "geography": geography,
         "backfill": backfill,
-        "status": "COMPLETED_WITH_WARNINGS" if warnings else "COMPLETED",
+        "status": "PARTIAL_RETRYABLE" if partial else "COMPLETED_WITH_WARNINGS" if warnings else "COMPLETED",
         "total_papers_persisted": corpus_after,
         "new_papers_this_run": max(0, corpus_after - corpus_before),
         "records_received_this_run": int(live.get("received") or 0) + int(geography.get("received") or 0) + int((backfill or {}).get("received") or 0),

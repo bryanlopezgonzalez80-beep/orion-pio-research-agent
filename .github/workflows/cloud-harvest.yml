@@ -1,0 +1,72 @@
+name: Orion Cloud Deep and Historical Harvest
+
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Job to run"
+        type: choice
+        options: [verify, deep, backfill]
+        default: verify
+      historical_action:
+        description: "Historical schedule: preserve, pause or resume"
+        type: choice
+        options: [preserve, pause, resume]
+        default: preserve
+  schedule:
+    # 07:00 Puerto Rico: full taxonomy and geography, without historical work.
+    - cron: "0 11 * * *"
+    # 22:23, 04:23, 10:23 and 16:23 Puerto Rico: two-year historical blocks.
+    # Historical schedules remain paused until an explicit manual resume.
+    - cron: "23 2,8,14,20 * * *"
+  push:
+    branches: [main]
+    paths:
+      - scripts/scheduled_harvest.py
+      - harvest_coordinator.py
+      - .github/workflows/cloud-harvest.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orion-harvest-writers
+  cancel-in-progress: false
+
+jobs:
+  cloud-harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run independent harvest
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
+          CROSSREF_EMAIL: ${{ secrets.CROSSREF_EMAIL }}
+          NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+          NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
+          ORION_LIVE_SWEEP_RUNTIME_SECONDS: "2400"
+          ORION_GEO_RUNTIME_SECONDS: "180"
+          ORION_BACKFILL_RUNTIME_SECONDS: "3000"
+          ORION_BACKFILL_FLOOR_YEAR: "1940"
+          ORION_JOB_KIND: ${{ inputs.job || (github.event_name == 'schedule' && github.event.schedule == '23 2,8,14,20 * * *' && 'backfill') || 'deep' }}
+          ORION_HISTORICAL_ACTION: ${{ inputs.historical_action || 'preserve' }}
+          ORION_JOB_SCHEDULED: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
+        run: PYTHONPATH=. python scripts/scheduled_harvest.py --output reports/cloud_harvest.json
+      - name: Upload safe run summary
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: orion-cloud-harvest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/cloud_harvest.json
+          if-no-files-found: error
+          retention-days: 30
