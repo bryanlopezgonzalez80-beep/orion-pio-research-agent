@@ -54,7 +54,11 @@ def run_cloud_deep():
         partial = result.get("status") == "PARTIAL_RETRYABLE" or int(live.get("queries_processed") or 0) < int(live.get("queries_total") or 0)
         warnings = bool(live.get("errors") or (result.get("geography") or {}).get("errors"))
         snapshot.update(state="partial_retryable" if partial else "completed_with_warnings" if warnings else "completed",
-                        completed_at=_now(), received=result.get("records_received_this_run", 0))
+                        completed_at=_now(), received=result.get("records_received_this_run", 0),
+                        queries_processed=live.get("queries_processed", 0),
+                        queries_total=live.get("queries_total", 0),
+                        retry_queue_pending=live.get("retry_queue_pending", 0),
+                        retry_queue_deferred=live.get("retry_queue_deferred", 0))
         set_setting(LIVE_STATUS_KEY, dict(snapshot))
         return result
     except Exception as exc:
