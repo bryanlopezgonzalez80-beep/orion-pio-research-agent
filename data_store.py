@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from corpus_cache import corpus_cache
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional
@@ -592,6 +593,7 @@ def list_papers(
         con.close()
 
 
+@corpus_cache(ttl=120)
 def geography_facets():
     """Return transparent geographic counts without conflating study site and affiliation."""
     con = connect()
@@ -784,6 +786,7 @@ def db_stats():
     return stats
 
 
+@corpus_cache(ttl=120)
 def evidence_observability():
     """Return v21 corpus facets with one aggregate query (safe for polling)."""
     con = connect()
@@ -812,5 +815,16 @@ def evidence_observability():
               FROM papers"""
         ).fetchone()
         return {key: int(value or 0) for key, value in dict(row).items()}
+    finally:
+        con.close()
+
+
+def list_library_cursor(limit: int, after: str | None = None):
+    """Walk the archive by immutable ID using the primary-key index."""
+    con = connect()
+    try:
+        where, params = ("WHERE id < ?", [after]) if after is not None else ("", [])
+        rows = con.execute(f"SELECT * FROM papers {where} ORDER BY id DESC LIMIT ?", [*params, int(limit)]).fetchall()
+        return [dict(row) for row in rows]
     finally:
         con.close()

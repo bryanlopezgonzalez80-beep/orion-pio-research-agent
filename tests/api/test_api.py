@@ -697,3 +697,17 @@ def test_geography_filters_expose_transparent_facets(client):
     facets = pr.json()["metadata"]["geography"]
     assert facets["puerto_rico_study"] == 1
     assert facets["united_states_affiliation_or_mention"] == 1
+
+
+def test_library_cursor_contract_and_legacy_pagination(client, sample_paper):
+    data_store.upsert_papers([{**sample_paper, "id": str(i), "doi": "", "title": f"Entry {i}"} for i in range(3)])
+    first = client.get('/api/v1/library', params={"limit": 2, "cursor": "start"})
+    assert first.status_code == 200
+    body = first.json()
+    assert [p['id'] for p in body['items']] == ['2', '1']
+    second = client.get('/api/v1/library', params={"limit": 2, "cursor": body['metadata']['next_cursor']})
+    assert [p['id'] for p in second.json()['items']] == ['0']
+    assert second.json()['metadata']['next_cursor'] is None
+    assert client.get('/api/v1/library?cursor=bad!').status_code == 400
+    assert client.get('/api/v1/library?cursor=start&offset=2').status_code == 400
+    assert client.get('/api/v1/library?offset=2&limit=2').status_code == 200
