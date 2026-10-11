@@ -387,6 +387,10 @@ def run_live_sweep(
                 paper_id = str(paper.get("id") or "")
                 if paper_id:
                     unique_seen[paper_id] = paper
+        # Commit the resume position only after this query's records are durable.
+        # A service restart may replay the current query, but cannot skip unsaved
+        # records or force all previously saved queries to run again.
+        set_setting(f"{STATE_PREFIX}.live_rotation", (live_rotation + processed) % len(queries))
         emit_progress("taxonomy")
 
     journal_watch_received = 0

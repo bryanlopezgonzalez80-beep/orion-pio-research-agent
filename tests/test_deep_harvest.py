@@ -168,6 +168,39 @@ def test_live_sweep_resumes_after_runtime_budget(monkeypatch, sample_paper):
     assert settings["deep_harvest.live_rotation"] == 1
 
 
+def test_live_cursor_survives_restart_and_never_skips_failed_persistence(monkeypatch, sample_paper):
+    settings = {}
+    calls = []
+    saved = []
+    monkeypatch.setattr(deep_harvest, "coverage_queries", lambda: ["first", "second"])
+    monkeypatch.setattr(deep_harvest, "PIO_JOURNALS", [])
+    monkeypatch.setattr(deep_harvest, "get_setting", lambda key, default=None: settings.get(key, default))
+    monkeypatch.setattr(deep_harvest, "set_setting", lambda key, value: settings.__setitem__(key, value))
+    monkeypatch.setattr(deep_harvest.time, "monotonic", lambda: 0)
+
+    def search(query, **kwargs):
+        calls.append(query)
+        if len(calls) == 2:
+            raise KeyboardInterrupt("simulated process termination")
+        return {"received": 1, "results": [dict(sample_paper, id=query)], "source_meta": []}
+
+    monkeypatch.setattr(deep_harvest, "execute_academic_search", search)
+    monkeypatch.setattr(deep_harvest, "upsert_papers", lambda papers: saved.extend(papers))
+    with pytest.raises(KeyboardInterrupt):
+        deep_harvest.run_live_sweep()
+    assert saved[0]["id"] == "first"
+    assert settings["deep_harvest.live_rotation"] == 1
+
+    calls.clear()
+    def fail_save(papers):
+        raise RuntimeError("storage unavailable")
+    monkeypatch.setattr(deep_harvest, "upsert_papers", fail_save)
+    with pytest.raises(RuntimeError, match="storage unavailable"):
+        deep_harvest.run_live_sweep()
+    assert calls == ["second"]
+    assert settings["deep_harvest.live_rotation"] == 1
+
+
 def test_live_sweep_emits_incremental_progress(monkeypatch, sample_paper):
     queries = ["leadership effectiveness", "employee engagement"]
     snapshots = []
