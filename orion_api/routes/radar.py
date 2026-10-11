@@ -148,7 +148,7 @@ def _run_manual_refresh() -> None:
         )
         geography = {}
         remaining = int(live.get("queries_remaining") or 0)
-        if remaining:
+        if remaining or live.get("retry_queue_pending"):
             completed_state = "partial_retryable"
         else:
             completed_state = (
@@ -164,6 +164,8 @@ def _run_manual_refresh() -> None:
                 "received": live.get("received", 0),
                 "unique_seen": live.get("unique_seen", 0),
                 "queries_remaining": remaining,
+                "retry_queue_pending": live.get("retry_queue_pending", 0),
+                "retry_queue_deferred": live.get("retry_queue_deferred", 0),
                 "errors": len(live.get("errors") or []),
                 "source_totals": live.get("source_totals") or {},
                 "journal_watch_processed": live.get("journal_watch_processed", 0),

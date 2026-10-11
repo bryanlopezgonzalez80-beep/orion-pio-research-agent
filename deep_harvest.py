@@ -15,6 +15,7 @@ from typing import Callable
 
 from data_store import db_stats, evidence_observability, upsert_papers
 from source_registry import public_source_registry
+from harvest_retry_queue import QueryRetryQueue
 from geographic_intelligence import geography_status, run_geographic_booster
 from orion_platform import TOPIC_GROUPS, execute_academic_search, route_query, source_search_url
 from platform_store import checkpoint_summary, enrichment_summary, get_checkpoint, get_setting, get_source_metrics, set_checkpoint, set_setting
@@ -296,6 +297,10 @@ def run_live_sweep(
         live_rotation = 0
         ordered_queries = []
 
+    retry_queue = QueryRetryQueue(queries, get_setting, set_setting)
+    ordered_queries = retry_queue.ordered(ordered_queries)
+    next_live_rotation = live_rotation
+
     # Anonymous OpenAlex usage has a much smaller daily budget. Without a key,
     # rotate a bounded share of topics while Crossref/PubMed/Europe PMC still
     # sweep the entire taxonomy every run.
@@ -324,6 +329,7 @@ def run_live_sweep(
             "queries_processed": processed,
             "queries_total": len(queries),
             "queries_remaining": max(0, len(queries) - processed),
+            **retry_queue.summary(),
             "received": received,
             "unique_seen": len(unique_seen),
             "source_totals": {
@@ -345,6 +351,7 @@ def run_live_sweep(
             stopped_for_budget = True
             break
         sources = _live_sources(query, openalex_queries)
+        retry_queue.begin(query)
         emit_progress("query_started")
         try:
             outcome = execute_academic_search(
@@ -390,7 +397,10 @@ def run_live_sweep(
         # Commit the resume position only after this query's records are durable.
         # A service restart may replay the current query, but cannot skip unsaved
         # records or force all previously saved queries to run again.
-        set_setting(f"{STATE_PREFIX}.live_rotation", (live_rotation + processed) % len(queries))
+        if not outcome.get("errors"):
+            retry_queue.complete(query)
+        next_live_rotation = (queries.index(query) + 1) % len(queries)
+        set_setting(f"{STATE_PREFIX}.live_rotation", next_live_rotation)
         emit_progress("taxonomy")
 
     journal_watch_received = 0
@@ -479,11 +489,6 @@ def run_live_sweep(
     if not os.getenv("OPENALEX_API_KEY"):
         set_setting(f"{STATE_PREFIX}.openalex_rotation", next_rotation)
 
-    next_live_rotation = (
-        (live_rotation + processed) % len(queries)
-        if queries
-        else 0
-    )
     set_setting(f"{STATE_PREFIX}.live_rotation", next_live_rotation)
 
     result = {
@@ -493,6 +498,7 @@ def run_live_sweep(
         "queries_total": len(queries),
         "queries_processed": processed,
         "queries_remaining": max(0, len(queries) - processed),
+        **retry_queue.summary(),
         "query_rotation_start": live_rotation,
         "next_query_rotation": next_live_rotation,
         "received": received + journal_watch_received,
@@ -765,7 +771,7 @@ def run_deep_harvest(
         + len((backfill or {}).get("errors") or [])
     )
     partial = (
-        bool(live.get("queries_remaining") or live.get("stopped_for_runtime_budget"))
+        bool(live.get("queries_remaining") or live.get("stopped_for_runtime_budget") or live.get("retry_queue_pending"))
         or int(live.get("queries_processed") or 0) < int(live.get("queries_total") or 0)
         or int(geography.get("queries_processed") or 0) < int(geography.get("queries_total") or 0)
         or bool((backfill or {}).get("partial"))

@@ -192,6 +192,10 @@ def test_live_cursor_survives_restart_and_never_skips_failed_persistence(monkeyp
     assert settings["deep_harvest.live_rotation"] == 1
 
     calls.clear()
+    # The interrupted query resumes once its retry cooldown expires.
+    import harvest_retry_queue
+    retry_at = settings[harvest_retry_queue.KEY]["second"]["retry_at"]
+    monkeypatch.setattr(harvest_retry_queue.time, "time", lambda: retry_at + 1)
     def fail_save(papers):
         raise RuntimeError("storage unavailable")
     monkeypatch.setattr(deep_harvest, "upsert_papers", fail_save)
