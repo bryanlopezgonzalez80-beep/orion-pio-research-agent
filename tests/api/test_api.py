@@ -740,3 +740,14 @@ def test_progress_status_skips_corpus_aggregates_and_full_cache_lock(client, mon
 
 def test_progress_status_validates_view(client):
     assert client.get("/api/v1/radar/status?view=other").status_code == 422
+
+
+def test_catalog_page_can_skip_corpus_facets(client, monkeypatch):
+    from orion_api.services import paper_service
+    def unexpected():
+        raise AssertionError("A catalogue page must not scan aggregate facets")
+    monkeypatch.setattr(paper_service, "geography_facets", unexpected)
+    response = client.get("/api/v1/papers?limit=24&include_facets=false")
+    assert response.status_code == 200
+    assert response.json()["metadata"] == {}
+    assert len(response.json()["items"]) <= 24
