@@ -711,3 +711,32 @@ def test_library_cursor_contract_and_legacy_pagination(client, sample_paper):
     assert client.get('/api/v1/library?cursor=bad!').status_code == 400
     assert client.get('/api/v1/library?cursor=start&offset=2').status_code == 400
     assert client.get('/api/v1/library?offset=2&limit=2').status_code == 200
+
+
+def test_progress_status_skips_corpus_aggregates_and_full_cache_lock(client, monkeypatch):
+    from orion_api.routes import radar as route
+    from platform_store import set_setting
+
+    def unexpected():
+        raise AssertionError("Progress must not compute full corpus diagnostics")
+
+    monkeypatch.setattr(route, "harvest_status", unexpected)
+    set_setting("deep_harvest.last_run", {"coverage_query_count": 251, "live": {"queries_processed": 251}})
+    set_setting("deep_harvest.manual_backfill", {"state": "completed", "tasks_completed": 69})
+    set_setting("deep_harvest.backfill_cursor", "2024-03-01")
+    route._STATUS_CACHE_LOCK.acquire()
+    try:
+        response = client.get("/api/v1/radar/status?view=progress")
+    finally:
+        route._STATUS_CACHE_LOCK.release()
+    assert response.status_code == 200
+    body = response.json()
+    assert body["coverage_query_count"] == 251
+    assert body["last_live_sweep"]["queries_processed"] == 251
+    assert body["manual_backfill"]["tasks_completed"] == 69
+    assert body["backfill_cursor"] == "2024-03-01"
+    assert "corpus" not in body
+
+
+def test_progress_status_validates_view(client):
+    assert client.get("/api/v1/radar/status?view=other").status_code == 422
