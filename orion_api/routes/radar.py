@@ -300,8 +300,21 @@ def radar(
 
 
 @router.get("/status")
-def radar_status() -> dict:
+def radar_status(view: Literal["full", "progress"] = "full") -> dict:
     """Return coverage with a short-lived cache so polling never overloads the database."""
+    # Progress polling must not scan corpus facets, enrichment or checkpoint
+    # aggregates on a cold process. The full diagnostic view remains compatible.
+    if view == "progress":
+        last_run = get_setting("deep_harvest.last_run") or {}
+        return {
+            "coverage_query_count": last_run.get("coverage_query_count", 0),
+            "last_run": last_run,
+            "last_live_sweep": last_run.get("live"),
+            "last_backfill": get_setting("deep_harvest.last_backfill"),
+            "backfill_cursor": get_setting("deep_harvest.backfill_cursor"),
+            "manual_refresh": _manual_refresh_status(),
+            "manual_backfill": _backfill_status(),
+        }
     global _STATUS_CACHE, _STATUS_CACHE_AT
     now = time.monotonic()
     cached = _STATUS_CACHE
