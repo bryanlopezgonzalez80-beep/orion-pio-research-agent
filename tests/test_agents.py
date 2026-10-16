@@ -79,7 +79,7 @@ def test_weekly_agent_main_uses_mocks_and_temporary_reports(tmp_path, monkeypatc
     monkeypatch.setattr(weekly_agent, "REPORTS", reports)
     monkeypatch.setattr(weekly_agent, "DEFAULT_TOPICS", ["leadership"])
     monkeypatch.setattr(weekly_agent, "DEFAULT_SOURCES", ["OpenAlex"])
-    monkeypatch.setattr(weekly_agent, "verify_database_backend", lambda: "sqlite")
+    monkeypatch.setattr(weekly_agent, "verify_database_backend", lambda **kwargs: "sqlite")
     monkeypatch.setattr(weekly_agent, "search_all_sources", lambda *a, **k: ([sample_paper], []))
     monkeypatch.setattr(weekly_agent, "deduplicate", lambda papers: list(papers))
     saved, runs = [], []
@@ -144,7 +144,7 @@ def test_cloud_agents_fail_before_work_when_postgres_is_unavailable(agent, monke
     monkeypatch.setattr(
         agent,
         "verify_database_backend",
-        lambda: (_ for _ in ()).throw(
+        lambda **kwargs: (_ for _ in ()).throw(
             DatabaseConnectionError("Unable to connect to the configured PostgreSQL database")
         ),
     )

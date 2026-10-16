@@ -49,6 +49,7 @@ jobs:
       - name: Run independent harvest
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ORION_AUTO_CREATE_SCHEMA: "false"
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
           SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
           CROSSREF_EMAIL: ${{ secrets.CROSSREF_EMAIL }}

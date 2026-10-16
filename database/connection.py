@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import os
 import time
 from collections.abc import Mapping
 from pathlib import Path
@@ -12,6 +13,15 @@ from .config import DatabaseConfig, get_database_config
 
 class DatabaseConnectionError(RuntimeError):
     """A connection failure whose message never includes credentials."""
+
+
+class ReadOnlyDatabaseConnectionError(RuntimeError):
+    """The configured PostgreSQL connection is a replica or read-only session."""
+
+    safe_hint = (
+        "The configured PostgreSQL connection is read-only. Use Supabase's "
+        "Primary connection, not a Read Replica, for Orion's scheduled writers."
+    )
 
 
 _POSTGRES_SCHEMA_LOCK = Lock()
@@ -186,6 +196,46 @@ def ensure_postgres_schema(connection: ConnectionProxy):
         _POSTGRES_SCHEMA_READY = True
 
 
+def schema_bootstrap_enabled(environ: Mapping[str, str] | None = None) -> bool:
+    """Whether app connections may create/alter PostgreSQL schema objects.
+
+    Runtime workers should normally use a pre-provisioned schema and a role
+    limited to application DML. The default stays enabled for compatibility
+    with existing local and first-run deployments.
+    """
+    env = os.environ if environ is None else environ
+    value = env.get("ORION_AUTO_CREATE_SCHEMA")
+    if value is None:
+        return (env.get("ORION_ENV") or "").strip().casefold() != "production"
+    return value.strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def inspect_postgres_write_mode(connection: ConnectionProxy) -> dict[str, bool]:
+    """Inspect session and server read-only state without writing to the DB."""
+    if connection.engine != "postgres":
+        return {"read_only": False, "transaction_read_only": False, "in_recovery": False}
+    row = connection.execute(
+        "SELECT current_setting('transaction_read_only') AS transaction_read_only, "
+        "pg_is_in_recovery() AS in_recovery"
+    ).fetchone()
+    if isinstance(row, Mapping):
+        transaction_value = row.get("transaction_read_only")
+        recovery_value = row.get("in_recovery")
+    else:
+        transaction_value, recovery_value = row[0], row[1]
+
+    def truthy(value) -> bool:
+        return value is True or str(value).strip().casefold() in {"1", "true", "yes", "on"}
+
+    transaction_read_only = truthy(transaction_value)
+    in_recovery = truthy(recovery_value)
+    return {
+        "read_only": transaction_read_only or in_recovery,
+        "transaction_read_only": transaction_read_only,
+        "in_recovery": in_recovery,
+    }
+
+
 def first_value(row):
     if row is None:
         return None
@@ -239,6 +289,7 @@ def check_database_health(*, sqlite_path: str | Path | None = None) -> dict:
         "reachable": False,
         "basic_query": "fail",
         "latency_ms": None,
+        "read_only": None,
     }
     connection = None
     try:
@@ -247,6 +298,8 @@ def check_database_health(*, sqlite_path: str | Path | None = None) -> dict:
         value = row["ok"] if isinstance(row, dict) else row[0]
         result["reachable"] = value == 1
         result["basic_query"] = "pass" if value == 1 else "fail"
+        if connection.engine == "postgres":
+            result["read_only"] = inspect_postgres_write_mode(connection)["read_only"]
     except Exception:
         result["reachable"] = False
         result["basic_query"] = "fail"

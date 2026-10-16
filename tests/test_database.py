@@ -36,6 +36,36 @@ def test_invalid_database_urls_fail_closed(url):
         get_database_config(environ={"DATABASE_URL": url})
 
 
+def test_schema_bootstrap_is_disabled_for_production_and_can_be_overridden():
+    assert connection.schema_bootstrap_enabled(environ={}) is True
+    assert connection.schema_bootstrap_enabled(environ={"ORION_ENV": "production"}) is False
+    assert connection.schema_bootstrap_enabled(
+        environ={"ORION_ENV": "production", "ORION_AUTO_CREATE_SCHEMA": "true"}
+    ) is True
+    assert connection.schema_bootstrap_enabled(
+        environ={"ORION_AUTO_CREATE_SCHEMA": "false"}
+    ) is False
+
+
+@pytest.mark.parametrize(
+    "row,expected",
+    [
+        ({"transaction_read_only": "off", "in_recovery": False}, False),
+        ({"transaction_read_only": "on", "in_recovery": False}, True),
+        ({"transaction_read_only": "off", "in_recovery": True}, True),
+    ],
+)
+def test_postgres_write_mode_detects_read_only_connections(row, expected):
+    class Con:
+        engine = "postgres"
+
+        def execute(self, sql):
+            assert "current_setting('transaction_read_only')" in sql
+            return type("Cursor", (), {"fetchone": lambda self: row})()
+
+    assert connection.inspect_postgres_write_mode(Con())["read_only"] is expected
+
+
 def test_force_sqlite_ignores_database_url(tmp_path):
     config = get_database_config(
         tmp_path / "test.db",

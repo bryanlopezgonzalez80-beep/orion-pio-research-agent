@@ -38,7 +38,15 @@ def test_cloud_requires_postgres_before_touching_data(monkeypatch):
 @pytest.mark.parametrize("value,healthy", [(1, True), (0, False)])
 def test_database_health_probe_closes_connection(monkeypatch, value, healthy):
     connection = Mock()
-    connection.execute.return_value.fetchone.return_value = (value,)
+    connection.engine = "postgres"
+    def execute(sql):
+        cursor = Mock()
+        cursor.fetchone.return_value = (
+            {"transaction_read_only": "off", "in_recovery": False}
+            if "current_setting" in sql else (value,)
+        )
+        return cursor
+    connection.execute.side_effect = execute
     monkeypatch.setattr(runner, "get_database_config", lambda: SimpleNamespace(engine="postgres"))
     monkeypatch.setattr(runner, "connect_database", lambda config: connection)
     if healthy:
@@ -48,6 +56,23 @@ def test_database_health_probe_closes_connection(monkeypatch, value, healthy):
         with pytest.raises(RuntimeError):
             runner.require_persistent_database()
     connection.close.assert_called_once()
+
+
+def test_cloud_preflight_rejects_read_only_database_before_job_writes(monkeypatch):
+    connection = Mock()
+    connection.engine = "postgres"
+    connection.execute.return_value.fetchone.return_value = {
+        "transaction_read_only": "on",
+        "in_recovery": False,
+    }
+    monkeypatch.setattr(runner, "get_database_config", lambda: SimpleNamespace(engine="postgres"))
+    monkeypatch.setattr(runner, "connect_database", lambda config: connection)
+
+    with pytest.raises(runner.ReadOnlyDatabaseConnectionError):
+        runner.require_persistent_database()
+
+    connection.close.assert_called_once()
+    connection.commit.assert_not_called()
 
 
 @pytest.mark.parametrize("job,action,scheduled", [("unknown", "preserve", False), ("verify", "unknown", False), ("verify", "resume", True)])
@@ -237,4 +262,5 @@ def test_workflows_share_writer_group_and_separate_daily_from_deep():
         assert "group: orion-harvest-writers" in text
         assert "cancel-in-progress: false" in text
         assert "workflow_dispatch:" in text
+    assert 'ORION_AUTO_CREATE_SCHEMA: "false"' in text
     assert "--job daily" in daily
