@@ -1,6 +1,6 @@
 streamlit>=1.39
 pandas>=2.2
-requests>=2.32
+requests>=2.34.2
 openai>=3.24.0
 python-dotenv>=1.2.4
 feedparser>=6.0.14
