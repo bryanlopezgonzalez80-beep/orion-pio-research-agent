@@ -223,7 +223,7 @@ def test_docker_baseline_runs_non_root_and_excludes_sensitive_files():
     dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
     dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
 
-    assert "FROM python:3.12-slim" in dockerfile
+    assert "FROM python:3.14-slim" in dockerfile
     assert "COPY --chown=orion:orion . ." in dockerfile
     assert "USER orion" in dockerfile
     for excluded in (".env", ".streamlit/secrets.toml", "*.db", "tests", ".git"):
