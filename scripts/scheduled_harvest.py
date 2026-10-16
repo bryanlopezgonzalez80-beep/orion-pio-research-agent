@@ -9,7 +9,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from database.config import get_database_config
-from database.connection import connect_database, first_value
+from database.connection import (
+    ReadOnlyDatabaseConnectionError,
+    connect_database,
+    first_value,
+    inspect_postgres_write_mode,
+)
 from deep_harvest import run_deep_harvest
 from harvest_coordinator import exclusive_job, harvest_lock, heartbeat_harvest
 from platform_store import get_setting, set_setting
@@ -29,6 +34,8 @@ def require_persistent_database():
         raise RuntimeError("Cloud harvesting requires the shared PostgreSQL database.")
     connection = connect_database(config)
     try:
+        if inspect_postgres_write_mode(connection)["read_only"]:
+            raise ReadOnlyDatabaseConnectionError()
         if first_value(connection.execute("SELECT 1").fetchone()) != 1:
             raise RuntimeError("The shared database did not pass its health check.")
         connection.commit()
@@ -120,6 +127,8 @@ def main(argv=None):
         code = 1 if result.get("state") == "failed" else 0
     except Exception as exc:
         result = {"state": "failed", "error_type": type(exc).__name__}
+        if isinstance(exc, ReadOnlyDatabaseConnectionError):
+            result["error_hint"] = exc.safe_hint
         code = 1
     payload = {"job": args.job, "completed_at": _now(), **result}
     destination = Path(args.output)

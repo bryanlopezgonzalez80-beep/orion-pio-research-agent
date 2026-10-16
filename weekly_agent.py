@@ -14,7 +14,7 @@ REPORTS.mkdir(exist_ok=True)
 
 
 def main():
-    verify_database_backend()
+    verify_database_backend(require_writable=True)
     topics = DEFAULT_TOPICS[:10]
     sources = DEFAULT_SOURCES
     all_results, errors = [], []

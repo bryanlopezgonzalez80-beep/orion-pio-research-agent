@@ -1,19 +1,19 @@
 # Orion Monitoring and Observability
 
-Phase 7 adds a read-only system monitor that runs independently in GitHub Actions once per hour. It checks the public Render health endpoint and, when `DATABASE_URL` is configured, opens a PostgreSQL transaction in read-only mode to collect safe operational metrics.
+Phase 7 adds a read-only system monitor that runs independently in GitHub Actions once per hour. It checks the public Render health endpoint and, when `DATABASE_URL` is configured, confirms that the endpoint is not a read-only replica before opening a PostgreSQL transaction in read-only mode to collect safe operational metrics.
 
 ## Checks and severity
 
 | Check | Evidence | Severity rules |
 | --- | --- | --- |
-| Orion API | `/health` HTTP status and sanitized JSON | Critical unless HTTP 200 reports `status=ok`, PostgreSQL, and reachable database. |
-| PostgreSQL | Connection, read-only transaction, required tables | Critical if unavailable or required tables are missing. Skipped when `DATABASE_URL` is absent; SQLite is never used by this cloud check. |
+| Orion API | `/health` HTTP status and sanitized JSON | Critical unless HTTP 200 reports `status=ok`, PostgreSQL, a reachable database, and `read_only=false`. |
+| PostgreSQL | Connection mode, read-only transaction, required tables | Critical if the endpoint is a replica/read-only session, unavailable, or missing required tables. Skipped when `DATABASE_URL` is absent; SQLite is never used by this cloud check. |
 | Papers | Row count and latest `updated_at` | Warning when no papers exist. |
 | Daily Radar | Search-history count and latest `created_at` | Warning after 48 hours; critical after 72 hours. |
 | Weekly Radar | Latest `radar_runs.run_at` | Warning after 9 days; critical after 14 days. |
 | Source health | Status, consecutive failures, open circuits | Warning for failures; critical when a circuit breaker is open. |
 
-The monitor never selects `last_error`, prints exception messages, or includes connection URLs, keys, tokens, or API response bodies. PostgreSQL statements are limited to `SET TRANSACTION READ ONLY` and `SELECT`; the transaction is rolled back and closed after collection.
+The monitor never selects `last_error`, prints exception messages, or includes connection URLs, keys, tokens, or API response bodies. It probes connection mode using `SELECT`, rolls back that probe, then limits metric collection to `SET TRANSACTION READ ONLY` and `SELECT`. The transaction is rolled back and closed after collection.
 
 ## Run locally
 

@@ -66,6 +66,8 @@ class FakeConnection:
         latest_weekly=None,
         latest_paper=None,
         sources=None,
+        transaction_read_only="off",
+        in_recovery=False,
     ):
         self.papers = papers
         self.searches = searches
@@ -83,6 +85,8 @@ class FakeConnection:
                 "last_checked": (NOW - timedelta(hours=1)).isoformat(),
             }
         ]
+        self.transaction_read_only = transaction_read_only
+        self.in_recovery = in_recovery
         self.statements = []
         self.rolled_back = False
         self.closed = False
@@ -90,6 +94,11 @@ class FakeConnection:
     def execute(self, sql, params=None):
         normalized = " ".join(sql.split())
         self.statements.append((normalized, params))
+        if "current_setting('transaction_read_only')" in normalized:
+            return FakeCursor(one={
+                "transaction_read_only": self.transaction_read_only,
+                "in_recovery": self.in_recovery,
+            })
         if normalized == "SET TRANSACTION READ ONLY":
             return FakeCursor()
         if "COUNT(*)" in normalized and "FROM papers" in normalized:
@@ -119,7 +128,7 @@ def healthy_api_response():
     return FakeResponse(
         payload={
             "status": "ok",
-            "database": {"engine": "postgres", "reachable": True},
+            "database": {"engine": "postgres", "reachable": True, "read_only": False},
         }
     )
 
@@ -211,12 +220,30 @@ def test_database_metrics_are_read_only_and_healthy():
     assert checks["daily_radar"]["status"] == "OK"
     assert checks["weekly_radar"]["status"] == "OK"
     assert checks["source_health"]["metrics"]["healthy"] == 1
-    assert connection.statements[0][0] == "SET TRANSACTION READ ONLY"
+    assert "current_setting('transaction_read_only')" in connection.statements[0][0]
+    assert connection.statements[1][0] == "SET TRANSACTION READ ONLY"
     assert all(
         statement.startswith(("SET TRANSACTION READ ONLY", "SELECT"))
         for statement, _ in connection.statements
     )
     assert connection.rolled_back and connection.closed
+
+
+def test_database_monitor_detects_read_only_connection_before_read_only_snapshot():
+    connection = FakeConnection(transaction_read_only="on")
+
+    checks = monitor.check_database(
+        environ={"DATABASE_URL": FAKE_DATABASE_URL},
+        connector=lambda config: connection,
+        table_lister=postgres_tables,
+        now=NOW,
+    )
+
+    assert checks["database"]["status"] == "CRITICAL"
+    assert "Primary endpoint" in checks["database"]["summary"]
+    assert checks["papers"]["status"] == "SKIPPED"
+    assert len(connection.statements) == 1
+    assert connection.closed
 
 
 def test_source_failures_are_warning_without_exposing_last_error():

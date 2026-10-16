@@ -35,6 +35,7 @@ def test_health_healthy_is_sanitized(client, monkeypatch):
             "engine": "postgres",
             "reachable": True,
             "basic_query": "pass",
+            "read_only": False,
             "latency_ms": 4.2,
             "database_url": "must-not-leak",
         },
@@ -45,7 +46,7 @@ def test_health_healthy_is_sanitized(client, monkeypatch):
     assert response.status_code == 200
     assert response.json() == {
         "status": "ok",
-        "database": {"engine": "postgres", "reachable": True},
+        "database": {"engine": "postgres", "reachable": True, "read_only": False},
     }
     assert "must-not-leak" not in response.text
 
@@ -67,6 +68,27 @@ def test_health_database_down_returns_503_without_error_details(client, monkeypa
     assert response.status_code == 503
     assert response.json()["status"] == "unavailable"
     assert "secret" not in response.text
+
+
+def test_health_reports_read_only_database_as_degraded_without_restarting_api(client, monkeypatch):
+    monkeypatch.setattr(
+        health_route,
+        "check_database_health",
+        lambda: {
+            "engine": "postgres",
+            "reachable": True,
+            "basic_query": "pass",
+            "read_only": True,
+        },
+    )
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "degraded",
+        "database": {"engine": "postgres", "reachable": True, "read_only": True},
+    }
 
 
 def _seed_papers(sample_paper):

@@ -37,6 +37,7 @@ jobs:
       - name: Run weekly research agent
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ORION_AUTO_CREATE_SCHEMA: "false"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}

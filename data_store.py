@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 import os
-from database.connection import connect_database, ensure_postgres_schema, insert_returning_id
+from database.connection import (
+    connect_database,
+    ensure_postgres_schema,
+    insert_returning_id,
+    schema_bootstrap_enabled,
+)
 
 DB_PATH = Path(os.getenv("PIO_DB_PATH") or Path(__file__).with_name("pio_dashboard.db"))
 
@@ -82,17 +87,22 @@ PAPER_COLUMNS = {
 def connect():
     con = connect_database(sqlite_path=DB_PATH)
     if con.engine == "postgres":
-        ensure_postgres_schema(con)
-        con.commit()
+        if schema_bootstrap_enabled():
+            ensure_postgres_schema(con)
+            con.commit()
     else:
         _init_schema(con)
     return con
 
 
-def verify_database_backend() -> str:
+def verify_database_backend(*, require_writable: bool = False) -> str:
     """Fail fast if the configured database cannot be opened."""
     con = connect()
     try:
+        if require_writable and con.engine == "postgres":
+            from database.connection import ReadOnlyDatabaseConnectionError, inspect_postgres_write_mode
+            if inspect_postgres_write_mode(con)["read_only"]:
+                raise ReadOnlyDatabaseConnectionError()
         return con.engine
     finally:
         con.close()

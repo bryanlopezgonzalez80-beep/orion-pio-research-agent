@@ -12,7 +12,7 @@ from typing import Callable, Mapping
 import requests
 
 from database.config import get_database_config
-from database.connection import connect_database, first_value, list_tables
+from database.connection import connect_database, first_value, inspect_postgres_write_mode, list_tables
 
 DEFAULT_API_URL = "https://orion-pio-api.onrender.com/health"
 MAIN_TABLES = {
@@ -54,6 +54,7 @@ def check_api(
                     and isinstance(database, dict)
                     and database.get("engine") == "postgres"
                     and database.get("reachable") is True
+                    and database.get("read_only") is False
                 )
                 if valid:
                     return _result(
@@ -62,6 +63,7 @@ def check_api(
                         http_status=200,
                         engine="postgres",
                         database_reachable=True,
+                        database_read_only=False,
                     )
                 last_problem = "health payload failed validation"
         except Exception as exc:
@@ -137,6 +139,25 @@ def check_database(
         if config.engine != "postgres":
             return _skipped_database_checks()
         connection = connector(config)
+        write_mode = inspect_postgres_write_mode(connection)
+        if write_mode["read_only"]:
+            unavailable = _result(
+                "CRITICAL",
+                "Configured PostgreSQL endpoint is read-only; scheduled Orion jobs require the Primary endpoint",
+                read_only=True,
+                in_recovery=write_mode["in_recovery"],
+            )
+            skipped = _result("SKIPPED", "Write endpoint unavailable")
+            return {
+                "database": unavailable,
+                "papers": skipped,
+                "daily_radar": skipped,
+                "weekly_radar": skipped,
+                "source_health": skipped,
+            }
+        # The mode probe opened a read-only transaction on this connection.
+        # Clear it before starting the explicitly read-only monitoring snapshot.
+        connection.rollback()
         connection.execute("SET TRANSACTION READ ONLY")
         tables = set(table_lister(connection))
         missing = sorted(MAIN_TABLES - tables)

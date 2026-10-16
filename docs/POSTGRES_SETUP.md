@@ -4,6 +4,8 @@
 
 `DATABASE_URL` is the connection string supplied by a PostgreSQL service. Orion accepts `postgresql://` and `postgres://`. Store the real value only in the local shell's secure environment or the deployment provider's secret manager.
 
+Scheduled Orion jobs require the Supabase **Primary** database connection. A Read Replica accepts reads but rejects writes; Orion checks the session and server mode before starting a harvest and exits with a safe diagnostic if it is read-only. In production (`ORION_ENV=production`), schema creation on application connections is disabled by default. Keep schema changes in reviewed migrations; set `ORION_AUTO_CREATE_SCHEMA=true` only for an intentional first-time bootstrap with a role allowed to create schema objects. GitHub writer workflows set it to `false` because the production tables are already provisioned.
+
 Never commit, log, paste into reports, or include the value in screenshots or complete error messages. `.env.example` contains only an empty placeholder. Orion is provider-agnostic; any standards-compatible managed PostgreSQL service can be used.
 
 Without `DATABASE_URL`, Orion continues to use `pio_dashboard.db` through SQLite.

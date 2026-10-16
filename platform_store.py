@@ -13,6 +13,7 @@ from database.connection import (
     ensure_postgres_schema,
     first_value,
     insert_returning_id,
+    schema_bootstrap_enabled,
 )
 
 DEFAULT_DB = Path(os.getenv("ORION_DB_PATH", "pio_dashboard.db"))
@@ -35,8 +36,9 @@ def connect(path=None):
         sqlite_foreign_keys=True,
     )
     if con.engine == "postgres":
-        ensure_postgres_schema(con)
-        con.commit()
+        if schema_bootstrap_enabled():
+            ensure_postgres_schema(con)
+            con.commit()
     else:
         con.execute("PRAGMA journal_mode=WAL")
         init_schema(con)

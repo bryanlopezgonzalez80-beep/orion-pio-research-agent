@@ -35,9 +35,16 @@ jobs:
       - name: Install runtime dependencies
         run: pip install -r requirements.txt
 
+      - name: Verify writable primary database before provider checks
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ORION_AUTO_CREATE_SCHEMA: "false"
+        run: PYTHONPATH=. python scripts/scheduled_harvest.py --job verify
+
       - name: Recover OpenAlex and Semantic Scholar health
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ORION_AUTO_CREATE_SCHEMA: "false"
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
           SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
         run: |
@@ -94,6 +101,7 @@ jobs:
         if: always()
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ORION_AUTO_CREATE_SCHEMA: "false"
         run: PYTHONPATH=. python scripts/orion_health_check.py --output artifacts/orion-provider-recovery-health.json
 
       - name: Upload recovery health report
