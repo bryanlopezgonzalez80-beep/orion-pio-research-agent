@@ -2,10 +2,6 @@ name: Orion Daily Radar
 
 on:
   workflow_dispatch:
-  schedule:
-    # 06:00 Puerto Rico / AST (UTC-4) year-round.
-    # GitHub Actions schedules use UTC; Puerto Rico remains UTC-4 year-round.
-    - cron: "0 10 * * *"
 
 permissions:
   contents: read
