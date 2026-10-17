@@ -2,9 +2,6 @@ name: Orion PIO Weekly Radar
 
 on:
   workflow_dispatch:
-  schedule:
-    # 08:00 Puerto Rico / AST (UTC-4) every Friday, year-round.
-    - cron: "0 12 * * 5"
 
 permissions:
   contents: read
