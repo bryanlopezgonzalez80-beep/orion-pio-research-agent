@@ -478,12 +478,12 @@ def test_main_writes_valid_json_and_returns_failure_for_critical(tmp_path, monke
     assert "Overall............... CRITICAL" in stdout
 
 
-def test_monitor_workflow_is_hourly_read_only_and_archives_json():
+def test_paused_monitor_remains_manual_read_only_and_archives_json():
     workflow = Path(".github/workflows/orion-health-monitor.yml").read_text(
         encoding="utf-8"
     )
 
-    assert 'cron: "17 * * * *"' in workflow
+    assert not any(line.strip().startswith("schedule:") for line in workflow.splitlines())
     assert "workflow_dispatch:" in workflow
     assert "contents: read" in workflow
     assert "DATABASE_URL: ${{ secrets.DATABASE_URL }}" in workflow

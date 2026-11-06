@@ -198,15 +198,11 @@ def test_workflows_use_minimum_permissions_and_nonpersistent_checkout():
         )
         assert "git push" not in contents
 
-    assert 'cron: "0 10 * * *"' in Path(
-        ".github/workflows/daily-radar.yml"
-    ).read_text(encoding="utf-8")
-    assert 'cron: "0 12 * * 5"' in Path(
-        ".github/workflows/weekly-radar.yml"
-    ).read_text(encoding="utf-8")
-    assert 'cron: "17 * * * *"' in Path(
-        ".github/workflows/orion-health-monitor.yml"
-    ).read_text(encoding="utf-8")
+    # Operational jobs are intentionally paused until durable writes recover.
+    for name in ("daily-radar.yml", "weekly-radar.yml", "orion-health-monitor.yml", "cloud-harvest.yml"):
+        contents = Path(".github/workflows", name).read_text(encoding="utf-8")
+        assert "workflow_dispatch:" in contents
+        assert not any(line.strip().startswith("schedule:") for line in contents.splitlines())
 
 
 def test_dependabot_covers_supported_ecosystems_weekly():
@@ -223,7 +219,8 @@ def test_docker_baseline_runs_non_root_and_excludes_sensitive_files():
     dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
     dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
 
-    assert "FROM python:3.14-slim" in dockerfile
+    assert "FROM python:3.12-slim" in dockerfile
+    assert "ORION_ENV=production" in dockerfile
     assert "COPY --chown=orion:orion . ." in dockerfile
     assert "USER orion" in dockerfile
     for excluded in (".env", ".streamlit/secrets.toml", "*.db", "tests", ".git"):
