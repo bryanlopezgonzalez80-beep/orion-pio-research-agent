@@ -23,3 +23,8 @@ pio_private.db
 # Local health-monitor outputs
 /artifacts/
 /orion-health.json
+
+# Research/runtime databases must never be newly added to source control.
+*.db
+*.sqlite
+*.sqlite3
