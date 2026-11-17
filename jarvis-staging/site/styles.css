@@ -84,3 +84,6 @@ a{color:var(--cyan)}.sr-only{position:absolute;width:1px;height:1px;overflow:hid
   .search-row{grid-template-columns:minmax(0,1fr) minmax(111px,38%)}
   .search-row input,.search-row select{font-size:13px;padding:11px 10px}
 }
+
+/* v0.9.2 voice capability transparency */
+#voice-compat{margin:11px 0 0;padding:10px 12px;border-left:2px solid #76d5dd;background:#091925;color:#bcd9e1;font-size:11px}
