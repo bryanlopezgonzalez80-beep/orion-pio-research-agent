@@ -1,4 +1,14 @@
-import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm';
+let createClient;
+try {
+  ({createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm'));
+} catch (firstError) {
+  try {({createClient}=await import('https://esm.sh/@supabase/supabase-js@2.57.0?bundle'))}
+  catch (secondError) {
+    const el=document.getElementById('login-message');
+    if(el)el.textContent='No pude iniciar el módulo de acceso. Recarga la página e inténtalo nuevamente.';
+    throw secondError;
+  }
+}
 
 const SUPABASE_URL='https://fdmfyguhpyiiyvjfimio.supabase.co';
 const PUBLISHABLE_KEY='sb_publishable_nfx_KpRm43JGbluEAk7YmA_MFDmxMVI';
@@ -208,5 +218,13 @@ $('login-form').addEventListener('submit',async e=>{e.preventDefault();const ema
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stopVoice()});
 supabase.auth.onAuthStateChange((_event,session)=>{queueMicrotask(()=>updateIdentity(session))});
-const {data:{session}}=await supabase.auth.getSession();
-updateIdentity(session);
+window.jarvisInitialized=true;
+window.dispatchEvent(new Event('jarvis:initialized'));
+try {
+  const {data:{session}}=await supabase.auth.getSession();
+  updateIdentity(session);
+} catch (error) {
+  visible('login',true);visible('workspace',false);
+  setStatus('ERROR DE ACCESO',false);
+  $('login-message').textContent='No pude comprobar tu sesión. Recarga la página y vuelve a entrar.';
+}
