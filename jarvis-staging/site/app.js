@@ -15,7 +15,7 @@ const PUBLISHABLE_KEY='sb_publishable_nfx_KpRm43JGbluEAk7YmA_MFDmxMVI';
 const API='https://orion-jarvis-api.onrender.com';
 const supabase=createClient(SUPABASE_URL,PUBLISHABLE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id);
-const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null,syncSerial:0,tasksLoaded:false,memoriesLoaded:false,historyLoaded:false,historySerial:0,historyDetailSerial:0,conversations:[],editingTaskId:null};
+const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null,syncSerial:0,tasksLoaded:false,memoriesLoaded:false,historyLoaded:false,historySerial:0,historyDetailSerial:0,conversations:[],editingTaskId:null,editingMemoryId:null};
 let noticeTimer;
 function sayNotice(text){$('notice').textContent=text;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('notice').textContent='',5500)}
 function text(el,text){el.textContent=text??'';return el}
@@ -222,9 +222,9 @@ function startDialogue(){
   updateVoiceControl();
 }
 function clearIdentity(){
-  state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];state.editingTaskId=null;
+  state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];state.editingTaskId=null;state.editingMemoryId=null;
   for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();state.voiceEnabled=false;updateVoiceControl();
-  $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();$('history-list').replaceChildren();$('history-messages').replaceChildren();visible('history-detail',false);visible('action-box',false);resetTaskEditor();$('task-search').value='';$('memory-search').value='';$('memory-filter').value='all';syncStatus('Sesión cerrada','idle');
+  $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();$('history-list').replaceChildren();$('history-messages').replaceChildren();visible('history-detail',false);visible('action-box',false);resetTaskEditor();resetMemoryEditor();$('task-search').value='';$('memory-search').value='';$('memory-filter').value='all';syncStatus('Sesión cerrada','idle');
 }
 function updateIdentity(session){
   const userId=session?.user?.id??null;
@@ -434,14 +434,23 @@ async function removeTask(task){
   try{await request('/v1/tasks/'+encodeURIComponent(task.id),'DELETE');await loadWorkspace();sayNotice('Tarea eliminada.')}
   catch(e){sayNotice('No se pudo eliminar: '+e.message)}
 }
-async function editMemory(memory){
-  const content=window.prompt('Editar tu recuerdo:',memory.content);
-  if(content===null)return;
-  const clean=content.trim();
-  if(!clean||clean.length>2000){sayNotice('El recuerdo debe tener de 1 a 2000 caracteres.');return}
-  if(clean===memory.content)return;
-  try{await request('/v1/memories/'+encodeURIComponent(memory.id),'PATCH',{content:clean,category:memory.category||'general'});await loadWorkspace();sayNotice('Recuerdo actualizado.')}
-  catch(e){sayNotice('No se pudo editar: '+e.message)}
+function resetMemoryEditor(){
+  state.editingMemoryId=null;
+  $('memory-content').value='';
+  $('memory-category').value='general';
+  $('memory-submit').textContent='Guardar recuerdo';
+  visible('memory-cancel-edit',false);
+}
+function editMemory(memory){
+  state.editingMemoryId=memory.id;
+  $('memory-content').value=memory.content||'';
+  const selector=$('memory-category');
+  selector.value=[...selector.options].some(o=>o.value===memory.category)?memory.category:'general';
+  $('memory-submit').textContent='Guardar cambios';
+  visible('memory-cancel-edit',true);
+  setTab('memories');
+  $('memory-content').focus();
+  sayNotice('Puedes corregir el texto y la categoría del recuerdo.');
 }
 async function removeMemory(id){
   try{await request('/v1/memories/'+encodeURIComponent(id),'DELETE');await loadWorkspace();sayNotice('Recuerdo eliminado.')}
@@ -720,13 +729,32 @@ $('task-form').addEventListener('submit',async e=>{
   }catch(err){sayNotice('No se pudo guardar: '+err.message)}
   finally{button.disabled=false}
 });
-$('memory-form').addEventListener('submit',async e=>{e.preventDefault();const content=$('memory-content').value.trim();if(!content)return;
-  try{await request('/v1/memories','POST',{content,category:$('memory-category').value});$('memory-content').value='';await loadWorkspace();sayNotice('Recuerdo guardado.')}catch(err){sayNotice('No se pudo guardar: '+err.message)}});
+$('memory-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const content=$('memory-content').value.trim();
+  if(!content)return;
+  const payload={content,category:$('memory-category').value};
+  const editingId=state.editingMemoryId;
+  $('memory-submit').disabled=true;
+  try{
+    if(editingId){
+      if(!state.memories.some(m=>m.id===editingId))throw Error('El recuerdo ya no aparece en los datos cargados.');
+      await request('/v1/memories/'+encodeURIComponent(editingId),'PATCH',payload);
+    }else{
+      await request('/v1/memories','POST',payload);
+    }
+    resetMemoryEditor();
+    await loadWorkspace();
+    sayNotice(editingId?'Recuerdo corregido.':'Recuerdo guardado.');
+  }catch(err){sayNotice('No se pudo guardar: '+err.message)}
+  finally{$('memory-submit').disabled=false}
+});
 $('task-search').addEventListener('input',drawTasks);
 $('task-filter').addEventListener('change',drawTasks);
 $('memory-search').addEventListener('input',drawMemories);
 $('memory-filter').addEventListener('change',drawMemories);
 $('task-cancel-edit').addEventListener('click',()=>{resetTaskEditor();sayNotice('Edición cancelada.')});
+$('memory-cancel-edit').addEventListener('click',()=>{resetMemoryEditor();sayNotice('Edición cancelada.')});
 $('history-refresh').addEventListener('click',()=>void loadHistory());
 $('history-close').addEventListener('click',closeHistory);
 $('sync-button').addEventListener('click',()=>void loadWorkspace());
