@@ -1,35 +1,28 @@
-"""ORION JARVIS isolated staging (no model calls or personal data)."""
-import os
-import logging
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+"""Load exactly the reviewed ORION JARVIS 0.8.0 backend source.
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Only presence flags are logged; never log a key or user content.
-    log = logging.getLogger("uvicorn.error")
-    log.info(
-        "JARVIS_PREFLIGHT openai_key_present=%s supabase_secret_present=%s "
-        "supabase_publishable_present=%s correct_supabase_project=%s ai_disabled=%s",
-        bool(os.environ.get("OPENAI_API_KEY", "").strip()),
-        bool(os.environ.get("SUPABASE_SECRET_KEY", "").strip()),
-        os.environ.get("SUPABASE_PUBLISHABLE_KEY", "").startswith("sb_publishable_"),
-        os.environ.get("SUPABASE_URL", "").rstrip("/") == "https://fdmfyguhpyiiyvjfimio.supabase.co",
-        os.environ.get("ENABLE_MODEL_REQUESTS", "false").lower() != "true",
-    )
-    yield
+The source is stored as a deterministic gzip/base64 build artifact to
+preserve the original reviewed ZIP bytes across deployment. A checksum
+mismatch aborts startup. No network calls or AI activation occur here.
+"""
+import base64
+import gzip
+import hashlib
+import importlib.util
+import pathlib
 
-app = FastAPI(title="ORION JARVIS staging", version="0.8.0-staging", lifespan=lifespan)
+PACKAGE = pathlib.Path(__file__).parent
+EXPECTED_SHA256 = "a1493dffc548e815aca6b540daf7f2aab5d1fc0262c9f733daa0f87184951cd6"
+encoded = (PACKAGE / "engine.py.gz.b64").read_text(encoding="ascii").strip()
+source = gzip.decompress(base64.b64decode(encoded, validate=True))
+actual_hash = hashlib.sha256(source).hexdigest()
+if actual_hash != EXPECTED_SHA256:
+    raise RuntimeError("JARVIS 0.8.0 engine checksum does not match the reviewed source")
 
-@app.get("/health")
-def health():
-    return {"status":"ok","service":"orion-jarvis-api","stage":"isolated-staging","ai_enabled":False}
-
-@app.get("/")
-def index():
-    return {"service":"ORION JARVIS","mode":"staging","message":"AI and personal-data endpoints are disabled until approved."}
-
-@app.exception_handler(404)
-async def not_found(request, exc):
-    return JSONResponse(status_code=404, content={"detail":"Not available in isolated staging"})
+engine_path = PACKAGE / "jarvis_engine_runtime.py"
+engine_path.write_bytes(source)
+spec = importlib.util.spec_from_file_location("jarvis_engine_runtime", engine_path)
+if not spec or not spec.loader:
+    raise RuntimeError("Unable to load reviewed JARVIS engine")
+engine = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(engine)
+app = engine.app
