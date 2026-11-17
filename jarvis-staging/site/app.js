@@ -15,7 +15,7 @@ const PUBLISHABLE_KEY='sb_publishable_nfx_KpRm43JGbluEAk7YmA_MFDmxMVI';
 const API='https://orion-jarvis-api.onrender.com';
 const supabase=createClient(SUPABASE_URL,PUBLISHABLE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id);
-const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null};
+const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0};
 let noticeTimer;
 function sayNotice(text){$('notice').textContent=text;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('notice').textContent='',5500)}
 function text(el,text){el.textContent=text??'';return el}
@@ -23,23 +23,55 @@ function element(tag,cls,str){const el=document.createElement(tag);if(cls)el.cla
 function ready(){return !!state.user&&!!state.session}
 function setStatus(label,ok){$('status-label').textContent=label;$('status-led').classList.toggle('ok',ok)}
 function visible(id,on){$(id).hidden=!on}
+
 function voiceStatus(label,status='idle'){
   const el=$('voice-state');if(!el)return;
   el.textContent=label;el.dataset.state=status;
 }
+function transcript(label){
+  const el=$('live-transcript');if(el)el.textContent=label;
+}
+function clearRearm(){
+  if(state.rearmTimer!==null){clearTimeout(state.rearmTimer);state.rearmTimer=null}
+}
 function updateVoiceControl(){
   $('audio-toggle').setAttribute('aria-pressed',String(state.voiceEnabled));
   $('audio-toggle').textContent=state.voiceEnabled?'Desactivar respuestas en voz alta':'Activar respuestas en voz alta';
-  if(!state.recognition&&!(window.speechSynthesis?.speaking))voiceStatus(state.voiceEnabled?'Voz automática activa':'Voz desactivada');
+  $('session-button').setAttribute('aria-pressed',String(state.dialogEnabled));
+  $('session-button').textContent=state.dialogEnabled?'Terminar diálogo':'Iniciar diálogo';
+  const voiceBusy=!!state.recognition || !!state.activeUtterance;
+  if(!voiceBusy)voiceStatus(state.dialogEnabled?'Diálogo activo':state.voiceEnabled?'Voz automática activa':'Voz desactivada');
+}
+function cancelRecognition(){
+  state.listenSequence+=1;
+  const rec=state.recognition;
+  state.recognition=null;
+  if(rec){rec.onresult=rec.onerror=rec.onend=null;try{rec.abort()}catch{}}
+  $('listen-button').classList.remove('active');
+  $('listen-button').setAttribute('aria-pressed','false');
+}
+function cancelSpeech(){
+  state.speechSequence+=1;
+  state.activeUtterance=null;
+  if('speechSynthesis' in window)window.speechSynthesis.cancel();
 }
 function stopVoice(){
+  clearRearm();
   state.voicePending=false;
-  const recognition=state.recognition;state.recognition=null;
-  if(recognition){recognition.onresult=recognition.onerror=recognition.onend=null;try{recognition.abort()}catch{}}
-  if('speechSynthesis' in window)window.speechSynthesis.cancel();
-  state.activeUtterance=null;
-  $('listen-button').classList.remove('active');$('listen-button').setAttribute('aria-pressed','false');
+  state.dialogEnabled=false;
+  cancelRecognition();
+  cancelSpeech();
+  transcript('Sesión de voz detenida.');
   updateVoiceControl();
+}
+function pauseDialogue(reason){
+  clearRearm();
+  state.dialogEnabled=false;
+  cancelRecognition();
+  $('session-button').setAttribute('aria-pressed','false');
+  $('session-button').textContent='Reanudar diálogo';
+  voiceStatus(reason||'Toca Hablar para continuar','paused');
+  sayNotice(reason||'La escucha automática se detuvo. Toca Hablar para continuar.');
 }
 function setVoiceEnabled(enabled){
   if(enabled&&!('speechSynthesis' in window)){
@@ -47,8 +79,113 @@ function setVoiceEnabled(enabled){
   }
   if(!enabled){stopVoice();state.voiceEnabled=false;updateVoiceControl();return}
   state.voiceEnabled=true;updateVoiceControl();
-  // Safari necesita que el primer audio comience por un toque real.
+  // Debe empezar dentro de una acción del usuario para cumplir las reglas de Safari.
   speak('Voz activada. Ahora puedes hablar conmigo.',{force:true});
+}
+function scheduleRearm(){
+  if(!state.dialogEnabled||!state.voiceEnabled||!ready()||document.hidden)return;
+  clearRearm();
+  state.rearmTimer=setTimeout(()=>{
+    state.rearmTimer=null;
+    if(!state.dialogEnabled||state.busy||document.hidden||!ready())return;
+    beginListening(true);
+  },450);
+}
+function beginListening(automatic=false){
+  if(!ready()||state.busy||document.hidden)return;
+  const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Speech){
+    pauseDialogue('Safari no ofrece dictado web aquí. Usa el micrófono del teclado.');
+    return;
+  }
+  clearRearm();
+  cancelSpeech();
+  cancelRecognition();
+  const sequence=state.listenSequence;
+  let recognition;
+  try{
+    recognition=new Speech();
+    state.recognition=recognition;
+    recognition.lang='es-PR';
+    recognition.continuous=false;
+    recognition.interimResults=true;
+    recognition.maxAlternatives=1;
+    let gotFinal=false;
+    let failed=false;
+    recognition.onstart=()=>{
+      if(sequence!==state.listenSequence)return;
+      voiceStatus('Escuchando...','listening');
+      transcript('Puedes hablar ahora. Escuchando...');
+    };
+    recognition.onresult=event=>{
+      if(sequence!==state.listenSequence||!ready())return;
+      const all=Array.from(event.results||[]);
+      const words=all.map(x=>x[0]?.transcript||'').join(' ').trim();
+      if(words)transcript(words);
+      const final=all.filter(x=>x.isFinal).map(x=>x[0]?.transcript||'').join(' ').trim();
+      if(final&&!gotFinal){
+        gotFinal=true;
+        voiceStatus('Preparando respuesta...','thinking');
+        // Termina el reconocimiento para que no grabe la respuesta de JARVIS.
+        recognition.onend=null;
+        recognition.onresult=null;
+        recognition.onerror=null;
+        try{recognition.stop()}catch{}
+        state.recognition=null;
+        $('listen-button').classList.remove('active');
+        $('listen-button').setAttribute('aria-pressed','false');
+        void processMessage(final);
+      }
+    };
+    recognition.onerror=event=>{
+      if(sequence!==state.listenSequence)return;
+      failed=true;
+      const code=String(event?.error||'desconocido');
+      const reason=code==='not-allowed'||code==='service-not-allowed'
+        ?'Safari no tiene permiso para usar el micrófono.'
+        :code==='no-speech'?'No detecté voz; toca Hablar para reintentar.'
+        :'Safari interrumpió el reconocimiento ('+code+'). Toca Hablar.';
+      if(state.dialogEnabled)pauseDialogue(reason);
+      else {cancelRecognition();voiceStatus(reason,'paused');sayNotice(reason)}
+    };
+    recognition.onend=()=>{
+      if(sequence!==state.listenSequence)return;
+      state.recognition=null;
+      $('listen-button').classList.remove('active');
+      $('listen-button').setAttribute('aria-pressed','false');
+      if(!gotFinal&&!failed){
+        const reason='No escuché una instrucción. Toca Hablar para continuar.';
+        if(state.dialogEnabled)pauseDialogue(reason);
+        else voiceStatus(reason,'paused');
+      }
+    };
+    $('listen-button').classList.add('active');
+    $('listen-button').setAttribute('aria-pressed','true');
+    voiceStatus(automatic?'Reanudando escucha...':'Activando micrófono...','listening');
+    recognition.start();
+  }catch(error){
+    cancelRecognition();
+    const msg=automatic?'Safari requiere tocar Hablar para continuar.':'No se pudo abrir el micrófono. Inténtalo en Safari.';
+    if(state.dialogEnabled)pauseDialogue(msg);
+    else {voiceStatus(msg,'paused');sayNotice(msg)}
+  }
+}
+function startDialogue(){
+  if(!ready())return;
+  if(state.dialogEnabled){stopVoice();sayNotice('Diálogo finalizado.');return}
+  if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){
+    sayNotice('El micrófono web no está disponible. Puedes dictar con el teclado.');return;
+  }
+  state.dialogEnabled=true;
+  transcript('Diálogo activo. Pronuncia una instrucción cuando el indicador diga Escuchando.');
+  if(!state.voiceEnabled){
+    // Al activar la voz se obtiene el gesto de usuario requerido para TTS.
+    setVoiceEnabled(true);
+    // La escucha comienza al terminar el saludo, cuando Safari lo permita.
+  }else{
+    beginListening(false);
+  }
+  updateVoiceControl();
 }
 function clearIdentity(){
   state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';
@@ -189,69 +326,61 @@ async function processMessage(input){
   if(!ready()||state.busy)return;
   const clean=String(input||'').trim().slice(0,4000);if(!clean)return;
   state.busy=true;$('send-button').disabled=true;state.voicePending=state.voiceEnabled;
+  const command=clean.replace(/^(?:oye[ ,]+)?jarvis[\s,.:;!?-]*/i,'').trim();
   append('user',clean);$('message').value='';
   try{
-    if(state.pending&&/^(confirmar accion|confirmar|aceptar)$/.test(normalize(clean))){await confirmAction();return}
-    if(state.pending&&/^(cancelar accion|cancelar)$/.test(normalize(clean))){discard();append('assistant','Propuesta cancelada. No guardé cambios.');return}
-    const answer=localCommand(clean);
+    if(state.pending&&/^(confirmar accion|confirmar|aceptar)$/.test(normalize(command))){await confirmAction();return}
+    if(state.pending&&/^(cancelar accion|cancelar)$/.test(normalize(command))){discard();append('assistant','Propuesta cancelada. No guardé cambios.');return}
+    const answer=command?localCommand(command):'Te escucho. Dime qué necesitas.';
     if(answer!==null){append('assistant',answer);return}
     if(!state.model){append('assistant','Todavía no tengo habilitada la conversación libre con OpenAI. Puedo ayudarte con tus tareas y recuerdos sin generar gastos de IA. Di «Qué puedes hacer» para ver las órdenes.');return}
-    const data=await request('/v1/chat','POST',{message:clean,conversation_id:state.conversation,request_id:crypto.randomUUID()});
+    const data=await request('/v1/chat','POST',{message:command||clean,conversation_id:state.conversation,request_id:crypto.randomUUID()});
     if(data?.conversation_id)state.conversation=data.conversation_id;
     append('assistant',data?.reply||'La respuesta no está disponible; consulta el estado de la solicitud.');
   }catch(e){append('assistant','No pude completar la solicitud: '+e.message)}
   finally{state.busy=false;$('send-button').disabled=false}
 }
+
 function speak(content,{force=false}={}){
-  if(!('speechSynthesis' in window)){sayNotice('Este navegador no permite reproducir audio.');return}
+  if(!('speechSynthesis' in window)){sayNotice('No se puede reproducir audio en este navegador.');return}
   if(!state.voiceEnabled&&!force)return;
   const words=String(content||'').trim().slice(0,3500);
   if(!words)return;
+  cancelSpeech();
   const synth=window.speechSynthesis;
-  synth.cancel();
+  const sequence=state.speechSequence;
   const voices=synth.getVoices();
   const preferred=['es-PR','es-US','es-MX','es-ES'];
   const spanish=preferred.map(lang=>voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())).find(Boolean) || voices.find(v=>v.lang.toLowerCase().startsWith('es'));
   const utterance=new SpeechSynthesisUtterance(words);
   if(spanish){utterance.voice=spanish;utterance.lang=spanish.lang}
   else utterance.lang='es-ES';
-  utterance.rate=1.01;utterance.pitch=.94;utterance.volume=1;
+  utterance.rate=1;utterance.pitch=.94;utterance.volume=1;
   state.activeUtterance=utterance;
-  utterance.onstart=()=>{if(state.activeUtterance===utterance)voiceStatus('JARVIS hablando','speaking')};
-  utterance.onend=()=>{if(state.activeUtterance===utterance){state.activeUtterance=null;updateVoiceControl()}};
-  utterance.onerror=()=>{if(state.activeUtterance===utterance){state.activeUtterance=null;updateVoiceControl();sayNotice('Audio no disponible. Comprueba el volumen y que la voz esté activada en Safari.')}};
+  utterance.onstart=()=>{
+    if(sequence===state.speechSequence)voiceStatus('JARVIS hablando','speaking');
+  };
+  utterance.onend=()=>{
+    if(sequence!==state.speechSequence||state.activeUtterance!==utterance)return;
+    state.activeUtterance=null;
+    updateVoiceControl();
+    scheduleRearm();
+  };
+  utterance.onerror=event=>{
+    if(sequence!==state.speechSequence)return;
+    state.activeUtterance=null;
+    if(state.dialogEnabled)pauseDialogue('Safari no pudo reproducir el audio; toca Hablar para continuar.');
+    else sayNotice('No se pudo reproducir la voz. Comprueba el volumen y Safari.');
+    updateVoiceControl();
+  };
   synth.speak(utterance);
 }
 function listen(){
   if(!ready())return;
-  if(state.busy){sayNotice('JARVIS está preparando tu respuesta.');return}
-  if(!state.voiceEnabled){setVoiceEnabled(true);sayNotice('Voz activada. Toca Hablar una vez más.');return}
-  const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!Speech){sayNotice('El dictado web no está disponible aquí. Abre JARVIS en Safari o usa el micrófono del teclado.');return}
-  stopVoice();
-  try{
-    const recognition=new Speech();state.recognition=recognition;
-    recognition.lang='es-PR';recognition.continuous=false;recognition.interimResults=false;recognition.maxAlternatives=1;
-    $('listen-button').classList.add('active');$('listen-button').setAttribute('aria-pressed','true');
-    voiceStatus('Escuchando...', 'listening');
-    recognition.onresult=event=>{
-      const transcript=Array.from(event.results).filter(x=>x.isFinal).map(x=>x[0]?.transcript||'').join(' ').trim();
-      if(transcript&&ready()){
-        voiceStatus('Respondiendo...', 'thinking');
-        void processMessage(transcript);
-      }
-    };
-    recognition.onerror=event=>{
-      voiceStatus('Micrófono no disponible', 'idle');
-      sayNotice('Dictado no disponible ('+(event.error||'error')+'). Abre en Safari o usa el micrófono del teclado.');
-    };
-    recognition.onend=()=>{
-      state.recognition=null;
-      $('listen-button').classList.remove('active');$('listen-button').setAttribute('aria-pressed','false');
-      if(!state.busy)updateVoiceControl();
-    };
-    recognition.start();
-  }catch(e){stopVoice();sayNotice('No se pudo abrir el micrófono. Usa Safari e inténtalo otra vez.')}
+  if(state.busy){sayNotice('JARVIS está terminando la respuesta.');return}
+  if(!state.voiceEnabled){setVoiceEnabled(true);sayNotice('Voz activada; toca Hablar nuevamente.');return}
+  // Pulsar Hablar mientras JARVIS habla interrumpe su voz.
+  beginListening(false);
 }
 document.querySelectorAll('.tab').forEach(x=>x.addEventListener('click',()=>setTab(x.dataset.tab)));
 document.querySelectorAll('[data-phrase]').forEach(x=>x.addEventListener('click',()=>void processMessage(x.dataset.phrase)));
@@ -262,6 +391,7 @@ $('memory-form').addEventListener('submit',async e=>{e.preventDefault();const co
   try{await request('/v1/memories','POST',{content,category:'general'});$('memory-content').value='';await loadWorkspace();sayNotice('Recuerdo guardado.')}catch(err){sayNotice(err.message)}});
 $('action-accept').addEventListener('click',()=>void confirmAction());$('action-reject').addEventListener('click',()=>{discard();append('assistant','Propuesta cancelada.')});
 $('audio-toggle').addEventListener('click',()=>setVoiceEnabled(!state.voiceEnabled));
+$('session-button').addEventListener('click',startDialogue);
 $('listen-button').addEventListener('click',listen);$('stop-button').addEventListener('click',()=>{stopVoice();sayNotice('Voz detenida.')});
 $('read-button').addEventListener('click',()=>state.lastReply?speak(state.lastReply,{force:true}):sayNotice('No tengo una respuesta para leer.'));
 $('signout-button').addEventListener('click',async()=>{clearIdentity();visible('workspace',false);visible('login',true);await supabase.auth.signOut();});
@@ -272,7 +402,7 @@ $('login-form').addEventListener('submit',async e=>{e.preventDefault();const ema
   catch(err){$('login-message').textContent='No pude enviar el enlace: '+err.message}
   finally{$('login-button').disabled=false}
 });
-document.addEventListener('visibilitychange',()=>{if(document.hidden)stopVoice()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){stopVoice();voiceStatus('Modo detenido: la página no está visible.','paused')}});
 supabase.auth.onAuthStateChange((_event,session)=>{queueMicrotask(()=>updateIdentity(session))});
 updateVoiceControl();
 window.jarvisInitialized=true;
