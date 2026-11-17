@@ -23,8 +23,18 @@ Estado: desarrollo activo (rama `orion-jarvis-staging`). Este documento no certi
 - [x] Plan diario a partir de tareas sincronizadas (sin calendario ficticio).
 - [x] Edición de título, prioridad y fecha de tareas, con cancelar.
 - [x] Clasificación y edición de recuerdos.
-- [ ] Pruebas de regresión y despliegue público.
+- [x] Pruebas de regresión y despliegue público de 0.9.3.
 - [ ] Prueba de persistencia tras recarga con sesión real.
+
+### 0.9.4 — Trust-first briefing bilingüe (código integrado; despliegue por verificar)
+- [x] Interpretación local segura de «Qué tengo hoy», «What I got to do today?», preguntas de reuniones y hora de salida.
+- [x] Cómputo de tareas pendientes, vencidas y próximas sin confundir tareas con eventos del calendario.
+- [x] Procedencia visual Supabase para tareas y recuerdos, hora de última verificación y caducidad tras 15 minutos.
+- [x] Si falla la red o expira la frescura de los datos, no presentar conteos antiguos como confirmados.
+- [x] Selector de reconocimiento de voz español de Puerto Rico / inglés de EE. UU. y selección de síntesis acorde a la respuesta.
+- [x] Prueba local de 35 verificaciones estáticas y de comportamiento, sin gastos de API.
+- [ ] Validar estado autenticado en iPhone real y guardado/recarga de datos; las pruebas locales no sustituyen la verificación real.
+- [ ] Conectar de forma autorizada calendario y proveedor de tráfico antes de informar reuniones o horas de salida reales.
 
 ### 1.0 — conversación inteligente
 - [ ] Motor IA conversacional con consentimiento explícito de presupuesto.
