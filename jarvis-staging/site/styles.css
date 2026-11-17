@@ -87,3 +87,12 @@ a{color:var(--cyan)}.sr-only{position:absolute;width:1px;height:1px;overflow:hid
 
 /* v0.9.2 voice capability transparency */
 #voice-compat{margin:11px 0 0;padding:10px 12px;border-left:2px solid #76d5dd;background:#091925;color:#bcd9e1;font-size:11px}
+
+/* 0.9.3 — accessible task editor, categorized memories and executive briefing */
+#task-cancel-edit{margin-top:-4px;padding:9px 14px;min-height:42px;align-self:start}
+#task-submit{min-height:48px}
+#memory-category{margin-bottom:3px}
+#memory-search{margin:0}
+#pane-conversation .suggestions{gap:8px}
+#pane-conversation .chip:first-child{border-color:#4e9faf;color:#dbfbfd;background:#0e2d3b}
+@media(max-width:540px){#pane-conversation .suggestions .chip{flex:1 1 42%;font-size:11px;min-height:42px}}
