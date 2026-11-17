@@ -54,11 +54,22 @@
           <button id="export-button" class="mini" type="button">Exportar copia</button>
         </div>
       </div>
+      <section class="trust-sources" aria-label="Verificación de fuentes">
+        <div class="trust-sources-head"><strong>FUENTES VERIFICABLES</strong><span>JARVIS TRUST</span></div>
+        <div class="trust-sources-grid">
+          <span id="source-tasks">Tareas: sin verificar</span>
+          <span id="source-memory">Memoria: sin verificar</span>
+          <span id="source-calendar">Calendario: no conectado</span>
+          <span id="source-traffic">Tráfico: no conectado</span>
+        </div>
+        <p>Solo puedo confirmar datos sincronizados. Las recomendaciones no equivalen a reuniones verificadas.</p>
+      </section>
       <section class="pane active panel" id="pane-conversation" aria-label="Consola">
         <header class="pane-head"><div><p class="eyebrow">CANAL / CONVERSACIÓN</p><h2>Habla con JARVIS</h2></div><span class="tiny">ES-PR</span></header>
         <div id="thread" class="thread" role="log" aria-label="Conversación" aria-live="polite"></div>
         <div class="suggestions">
-          <button type="button" class="chip" data-phrase="Planifica mi día">Planifica mi día</button>
+          <button type="button" class="chip" data-phrase="Planifica mi día">Mi día</button>
+          <button type="button" class="chip" data-phrase="Do I have any meetings?">Mis reuniones</button>
           <button type="button" class="chip" data-phrase="Resumen de hoy">Resumen de hoy</button>
           <button type="button" class="chip" data-phrase="Qué tengo pendiente">Mis pendientes</button>
           <button type="button" class="chip" data-phrase="Qué recuerdas de mí">Qué recuerdas</button>
@@ -70,6 +81,11 @@
           <button class="send" id="send-button" aria-label="Enviar mensaje" type="submit">ENVIAR</button>
         </form>
         <div class="voice-config">
+          <label for="recognition-lang" class="voice-lang-label">Idioma de escucha</label>
+          <select id="recognition-lang" aria-label="Idioma del reconocimiento de voz">
+            <option value="es-PR">Español (Puerto Rico)</option>
+            <option value="en-US">English (United States)</option>
+          </select>
           <button id="audio-toggle" class="secondary voice-switch" type="button" aria-pressed="false">Activar respuestas en voz alta</button>
           <button id="session-button" class="secondary voice-switch" type="button" aria-pressed="false">Iniciar diálogo</button>
           <span id="voice-state" role="status" aria-live="polite">Voz desactivada</span>
@@ -135,7 +151,7 @@
       </section>
       <div class="lower"><span id="user-label" class="tiny"></span><button id="signout-button" class="text-button" type="button">Cerrar sesión</button></div>
     </main>
-    <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.9.3 · EXECUTIVE</span></footer>
+    <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.9.4 · TRUST</span></footer>
     <p class="toast" id="notice" role="status" aria-live="polite"></p>
   </div>
   <script src="./boot.js" defer></script>
