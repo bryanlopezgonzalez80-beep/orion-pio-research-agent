@@ -42,6 +42,7 @@
         <button class="tab active" data-tab="conversation" aria-current="page">Consola</button>
         <button class="tab" data-tab="tasks">Tareas</button>
         <button class="tab" data-tab="memories">Memoria</button>
+        <button class="tab" data-tab="history">Historial</button>
       </nav>
       <div class="sync-panel" role="status" aria-live="polite">
         <div class="sync-info"><span id="sync-indicator" class="sync-dot"></span><span id="sync-status">Comprobando conexión segura...</span></div>
@@ -83,6 +84,11 @@
       </section>
       <section class="pane panel" id="pane-tasks" aria-label="Tareas" hidden>
         <header class="pane-head"><div><p class="eyebrow">TU AGENDA</p><h2>Lo que sigue.</h2></div><span class="tiny" id="task-count">0</span></header>
+        <div class="mini-dashboard" role="group" aria-label="Resumen de tareas">
+          <div><strong id="dash-pending">—</strong><span>Pendientes</span></div>
+          <div><strong id="dash-high">—</strong><span>Prioridad alta</span></div>
+          <div><strong id="dash-done">—</strong><span>Completadas</span></div>
+        </div>
         <form id="task-form" class="stack">
           <label for="task-title">Nueva tarea</label>
           <input id="task-title" maxlength="240" placeholder="Ej. Repasar la reválida" required>
@@ -90,16 +96,40 @@
           <input id="task-due" type="datetime-local" aria-label="Fecha y hora para la tarea">
           <div class="form-two"><select id="task-priority" aria-label="Prioridad"><option value="normal">Prioridad normal</option><option value="high">Prioridad alta</option><option value="low">Prioridad baja</option></select><button class="primary" type="submit">Añadir tarea</button></div>
         </form>
+        <div class="search-row">
+          <label for="task-search" class="sr-only">Buscar tareas</label>
+          <input id="task-search" type="search" maxlength="100" placeholder="Buscar tareas..." autocomplete="off">
+          <label for="task-filter" class="sr-only">Filtrar tareas</label>
+          <select id="task-filter" aria-label="Mostrar tareas">
+            <option value="pending">Pendientes</option><option value="all">Todas</option><option value="done">Completadas</option>
+          </select>
+        </div>
         <ul class="item-list" id="task-list"></ul>
       </section>
       <section class="pane panel" id="pane-memories" aria-label="Memoria" hidden>
         <header class="pane-head"><div><p class="eyebrow">CONTEXTO ELEGIDO POR TI</p><h2>Lo que recuerdo.</h2></div><span class="tiny" id="memory-count">0</span></header>
         <form id="memory-form" class="stack"><label for="memory-content">Guardar un recuerdo</label><textarea id="memory-content" maxlength="2000" rows="3" placeholder="Escribe algo útil que quieras conservar" required></textarea><button class="primary" type="submit">Guardar recuerdo</button></form>
+        <label for="memory-search" class="sr-only">Buscar recuerdos</label>
+        <input id="memory-search" type="search" maxlength="100" placeholder="Buscar en tus recuerdos..." autocomplete="off">
         <ul class="item-list" id="memory-list"></ul>
+      </section>
+      <section class="pane panel" id="pane-history" aria-label="Historial" hidden>
+        <header class="pane-head"><div><p class="eyebrow">REGISTROS / SUPABASE</p><h2>Historial privado.</h2></div><span class="tiny">SOLO LECTURA</span></header>
+        <p class="history-explain">Aquí aparecen las conversaciones que el servidor haya guardado en tu cuenta. Las órdenes locales de esta consola no se almacenan en el historial del servidor. La IA generativa continúa desactivada.</p>
+        <button id="history-refresh" class="secondary history-refresh" type="button">Consultar historial</button>
+        <p id="history-status" class="tiny" role="status" aria-live="polite">Abre Historial para comprobar tus conversaciones guardadas.</p>
+        <ul class="item-list" id="history-list"></ul>
+        <section id="history-detail" class="history-detail" hidden>
+          <div class="history-detail-head">
+            <h3 id="history-title">Conversación</h3>
+            <button id="history-close" type="button" class="mini">Cerrar</button>
+          </div>
+          <div id="history-messages" class="thread" role="log" aria-label="Mensajes históricos"></div>
+        </section>
       </section>
       <div class="lower"><span id="user-label" class="tiny"></span><button id="signout-button" class="text-button" type="button">Cerrar sesión</button></div>
     </main>
-    <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.9.1 · ESTABILIDAD</span></footer>
+    <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.9.2 · HISTORIAL</span></footer>
     <p class="toast" id="notice" role="status" aria-live="polite"></p>
   </div>
   <script src="./boot.js" defer></script>
