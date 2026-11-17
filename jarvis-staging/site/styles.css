@@ -16,3 +16,14 @@ a{color:var(--cyan)}.sr-only{position:absolute;width:1px;height:1px;overflow:hid
 [hidden]{display:none!important}
 @keyframes spin{to{transform:rotate(384deg)}}@media(max-width:700px){.app{padding-left:14px;padding-right:14px}.hero{padding:25px 21px;min-height:205px}.arc-container{width:130px;height:130px;margin-right:-19px}.arc-two{inset:12px}.arc-three{inset:24px;border-width:4px}.arc-core{inset:42px;font-size:26px}.hero h1{font-size:39px}.hero-content{max-width:67%}.hero-content>p:not(.eyebrow){font-size:12px}.pane{padding:18px 14px}.brand small{font-size:8px}.top-right{font-size:9px}.status-led{width:6px;height:6px}.tabs{gap:5px}.tab{flex:1;font-size:12px;padding:10px}.thread{height:46vh;min-height:220px}.voice-tools button{font-size:11px}.send{font-size:10px;padding:0 10px}.form-two{grid-template-columns:1fr}}@media(max-width:380px){.brand strong{font-size:17px}.top-right{font-size:8px}.arc-container{width:112px;height:112px}.arc-core{inset:38px}.hero h1{font-size:34px}.hero-content{max-width:72%}.status-led{display:none}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* Voice: a single deliberate audio activation unlocks Safari speech playback. */
+.voice-config{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;padding:14px 14px;margin-top:14px;border:1px solid #345767;border-radius:13px;background:#0a1b2b}
+.voice-config .voice-switch{font-size:12px;min-width:190px;flex:1}
+.voice-config .voice-switch[aria-pressed="true"]{background:#173d4e;border-color:#7ce5eb;color:#d1ffff}
+.voice-config #voice-state{font-size:12px;letter-spacing:.04em;color:#b8d5df}
+.voice-config #voice-state[data-state="speaking"]{color:var(--cyan)}
+.voice-config #voice-state[data-state="listening"]{color:var(--warn)}
+.voice-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.voice-tools button{min-width:0}
+@media(max-width:520px){.voice-config{gap:8px;justify-content:center}.voice-config .voice-switch{width:100%;flex:auto}.voice-config #voice-state{width:100%;text-align:center}.voice-tools button{font-size:11px;letter-spacing:0}}
