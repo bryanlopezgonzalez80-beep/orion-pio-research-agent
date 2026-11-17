@@ -15,7 +15,7 @@ const PUBLISHABLE_KEY='sb_publishable_nfx_KpRm43JGbluEAk7YmA_MFDmxMVI';
 const API='https://orion-jarvis-api.onrender.com';
 const supabase=createClient(SUPABASE_URL,PUBLISHABLE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id);
-const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0};
+const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null};
 let noticeTimer;
 function sayNotice(text){$('notice').textContent=text;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('notice').textContent='',5500)}
 function text(el,text){el.textContent=text??'';return el}
@@ -42,7 +42,22 @@ function updateVoiceControl(){
   const voiceBusy=!!state.recognition || !!state.activeUtterance;
   if(!voiceBusy)voiceStatus(state.dialogEnabled?'Diálogo activo':state.voiceEnabled?'Voz automática activa':'Voz desactivada');
 }
+function clearRecognitionWatchdog(){
+  if(state.recognitionWatchdog!==null){clearTimeout(state.recognitionWatchdog);state.recognitionWatchdog=null}
+}
+function armRecognitionWatchdog(current,sequence){
+  clearRecognitionWatchdog();
+  state.recognitionWatchdog=setTimeout(()=>{
+    state.recognitionWatchdog=null;
+    if(state.recognition===current&&sequence===state.listenSequence){
+      const msg='Safari dejó de responder al micrófono. Toca Hablar para continuar.';
+      if(state.dialogEnabled)pauseDialogue(msg);
+      else {cancelRecognition();voiceStatus(msg,'paused');sayNotice(msg)}
+    }
+  },20000);
+}
 function cancelRecognition(){
+  clearRecognitionWatchdog();
   state.listenSequence+=1;
   const rec=state.recognition;
   state.recognition=null;
@@ -116,15 +131,17 @@ function beginListening(automatic=false){
       if(sequence!==state.listenSequence)return;
       voiceStatus('Escuchando...','listening');
       transcript('Puedes hablar ahora. Escuchando...');
+      armRecognitionWatchdog(recognition,sequence);
     };
     recognition.onresult=event=>{
       if(sequence!==state.listenSequence||!ready())return;
       const all=Array.from(event.results||[]);
       const words=all.map(x=>x[0]?.transcript||'').join(' ').trim();
-      if(words)transcript(words);
+      if(words){transcript(words);armRecognitionWatchdog(recognition,sequence)}
       const final=all.filter(x=>x.isFinal).map(x=>x[0]?.transcript||'').join(' ').trim();
       if(final&&!gotFinal){
         gotFinal=true;
+        clearRecognitionWatchdog();
         voiceStatus('Preparando respuesta...','thinking');
         // Termina el reconocimiento para que no grabe la respuesta de JARVIS.
         recognition.onend=null;
@@ -140,6 +157,7 @@ function beginListening(automatic=false){
     recognition.onerror=event=>{
       if(sequence!==state.listenSequence)return;
       failed=true;
+      clearRecognitionWatchdog();
       const code=String(event?.error||'desconocido');
       const reason=code==='not-allowed'||code==='service-not-allowed'
         ?'Safari no tiene permiso para usar el micrófono.'
@@ -150,6 +168,7 @@ function beginListening(automatic=false){
     };
     recognition.onend=()=>{
       if(sequence!==state.listenSequence)return;
+      clearRecognitionWatchdog();
       state.recognition=null;
       $('listen-button').classList.remove('active');
       $('listen-button').setAttribute('aria-pressed','false');
@@ -162,6 +181,7 @@ function beginListening(automatic=false){
     $('listen-button').classList.add('active');
     $('listen-button').setAttribute('aria-pressed','true');
     voiceStatus(automatic?'Reanudando escucha...':'Activando micrófono...','listening');
+    armRecognitionWatchdog(recognition,sequence);
     recognition.start();
   }catch(error){
     cancelRecognition();
