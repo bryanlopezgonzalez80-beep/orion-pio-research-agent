@@ -287,7 +287,7 @@ async function loadWorkspace(){
   $('sync-button').disabled=true;
   state.tasksLoaded=false;state.memoriesLoaded=false;
   state.tasksVerifiedAt=null;state.memoriesVerifiedAt=null;
-  renderTrust();
+  renderTrust();drawTasks();drawMemories();
   syncStatus('Sincronizando tareas y memoria...','idle');
   try{
     const results=await Promise.allSettled([
@@ -306,14 +306,14 @@ async function loadWorkspace(){
     }else{
       state.tasksLoaded=false;
       issues.push('tareas');
-      if(!state.tasks.length)text($('task-list'),'No se pudieron cargar las tareas.');
+      drawTasks();
     }
     if(memories.status==='fulfilled'&&Array.isArray(memories.value)){
       state.memories=memories.value;state.memoriesLoaded=true;state.memoriesVerifiedAt=Date.now();drawMemories();
     }else{
       state.memoriesLoaded=false;
       issues.push('memoria');
-      if(!state.memories.length)text($('memory-list'),'No se pudo cargar la memoria.');
+      drawMemories();
     }
     if(health.status==='fulfilled'){
       const h=health.value;
@@ -367,7 +367,7 @@ function actionButton(label,description,handler){
 function drawTasks(){
   const root=$('task-list');root.replaceChildren();
   const pending=state.tasks.filter(x=>x.status!=='done');
-  $('task-count').textContent=String(pending.length)+' pendientes';
+  $('task-count').textContent=state.tasksLoaded?String(pending.length)+' pendientes':'Sin verificar';
   $('dash-pending').textContent=state.tasksLoaded?String(pending.length):'—';
   $('dash-high').textContent=state.tasksLoaded?String(pending.filter(x=>x.priority==='high').length):'—';
   $('dash-done').textContent=state.tasksLoaded?String(state.tasks.length-pending.length):'—';
@@ -396,7 +396,7 @@ function drawTasks(){
 }
 function drawMemories(){
   const root=$('memory-list');root.replaceChildren();
-  $('memory-count').textContent=String(state.memories.length);
+  $('memory-count').textContent=state.memoriesLoaded?String(state.memories.length):'—';
   if(!state.memoriesLoaded){root.append(element('li','empty','Memoria sin verificar. Pulsa Actualizar.'));return}
   if(!state.memories.length){root.append(element('li','empty','Aún no has guardado recuerdos.'));return}
   const search=normalize($('memory-search').value);
@@ -790,7 +790,7 @@ $('export-button').addEventListener('click',()=>void exportUserData());
 window.addEventListener('offline',()=>{
   state.tasksLoaded=false;state.memoriesLoaded=false;
   state.tasksVerifiedAt=null;state.memoriesVerifiedAt=null;
-  renderTrust();
+  renderTrust();drawTasks();drawMemories();
   syncStatus('Sin Internet. Los datos conservados en pantalla no están verificados.','error');
 });
 window.addEventListener('online',()=>{if(ready())void loadWorkspace()});
