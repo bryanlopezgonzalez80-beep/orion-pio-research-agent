@@ -15,7 +15,7 @@ const PUBLISHABLE_KEY='sb_publishable_nfx_KpRm43JGbluEAk7YmA_MFDmxMVI';
 const API='https://orion-jarvis-api.onrender.com';
 const supabase=createClient(SUPABASE_URL,PUBLISHABLE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id);
-const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null};
+const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null,syncSerial:0,tasksLoaded:false,memoriesLoaded:false};
 let noticeTimer;
 function sayNotice(text){$('notice').textContent=text;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('notice').textContent='',5500)}
 function text(el,text){el.textContent=text??'';return el}
@@ -208,9 +208,9 @@ function startDialogue(){
   updateVoiceControl();
 }
 function clearIdentity(){
-  state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';
+  state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;
   for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();state.voiceEnabled=false;updateVoiceControl();
-  $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();visible('action-box',false);
+  $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();visible('action-box',false);syncStatus('Sesión cerrada','idle');
 }
 function updateIdentity(session){
   const userId=session?.user?.id??null;
@@ -234,16 +234,63 @@ async function request(path,method='GET',body){
     return result;
   }finally{clearTimeout(timeout);state.aborters.delete(controller)}
 }
+function syncStatus(message,status='idle'){
+  const label=$('sync-status');
+  const dot=$('sync-indicator');
+  if(label)label.textContent=message;
+  if(dot){dot.classList.toggle('ok',status==='ok');dot.classList.toggle('error',status==='error')}
+}
 async function loadWorkspace(){
   if(!ready())return;
   const revision=state.rev;
+  const serial=++state.syncSerial;
+  $('sync-button').disabled=true;
+  syncStatus('Sincronizando tareas y memoria...','idle');
   try{
-    const [tasks,memories]=await Promise.all([request('/v1/tasks'),request('/v1/memories')]);
-    if(revision!==state.rev)return;
-    state.tasks=Array.isArray(tasks)?tasks:[];state.memories=Array.isArray(memories)?memories:[];
-    drawTasks();drawMemories();
-    try{const r=await fetch(API+'/health',{cache:'no-store'});if(r.ok){const j=await r.json();state.model=j.model_requests_enabled===true;$('model-label').textContent=state.model?'IA DISPONIBLE':'IA EN ESPERA';}}catch{}
-  }catch(e){if(revision===state.rev)sayNotice('No se pudo sincronizar: '+e.message)}
+    const results=await Promise.allSettled([
+      request('/v1/tasks'),
+      request('/v1/memories'),
+      fetch(API+'/health',{cache:'no-store'}).then(async r=>{
+        if(!r.ok)throw Error('Servidor indisponible');
+        return r.json();
+      })
+    ]);
+    if(revision!==state.rev||serial!==state.syncSerial)return;
+    const issues=[];
+    const tasks=results[0],memories=results[1],health=results[2];
+    if(tasks.status==='fulfilled'&&Array.isArray(tasks.value)){
+      state.tasks=tasks.value;state.tasksLoaded=true;drawTasks();
+    }else{
+      state.tasksLoaded=false;
+      issues.push('tareas');
+      if(!state.tasks.length)text($('task-list'),'No se pudieron cargar las tareas.');
+    }
+    if(memories.status==='fulfilled'&&Array.isArray(memories.value)){
+      state.memories=memories.value;state.memoriesLoaded=true;drawMemories();
+    }else{
+      state.memoriesLoaded=false;
+      issues.push('memoria');
+      if(!state.memories.length)text($('memory-list'),'No se pudo cargar la memoria.');
+    }
+    if(health.status==='fulfilled'){
+      const h=health.value;
+      state.model=h?.model_requests_enabled===true;
+      $('model-label').textContent=state.model?'IA DISPONIBLE':'IA EN ESPERA';
+    }else{state.model=false;$('model-label').textContent='SERVIDOR POR VERIFICAR';issues.push('servidor')}
+    if(issues.length){
+      syncStatus('No se pudo verificar: '+issues.join(', ')+'. Pulsa Actualizar.','error');
+      sayNotice('Conexión parcial. Tus datos existentes no se han borrado.');
+    }else{
+      const stamp=new Date().toLocaleTimeString('es-PR',{hour:'numeric',minute:'2-digit'});
+      syncStatus('Datos sincronizados · '+stamp,'ok');
+    }
+  }catch(e){
+    if(revision!==state.rev||serial!==state.syncSerial)return;
+    syncStatus('No se pudo sincronizar. Pulsa Actualizar.','error');
+    sayNotice(e.message||'Error de conexión');
+  }finally{
+    if(revision===state.rev&&serial===state.syncSerial)$('sync-button').disabled=false;
+  }
 }
 function append(role,content){
   const item=element('article','message '+(role==='user'?'user':'assistant'));
@@ -252,36 +299,108 @@ function append(role,content){
   if(role==='assistant'){state.lastReply=content;if(state.voicePending){state.voicePending=false;if(state.voiceEnabled)speak(content)}}
   return item;
 }
+function taskLabel(task){
+  const due=task.due_at?new Date(task.due_at):null;
+  const overdue=due&&Number.isFinite(due.getTime())&&due.getTime()<Date.now()&&task.status!=='done';
+  const date=due&&Number.isFinite(due.getTime())?due.toLocaleString('es-PR',{dateStyle:'medium',timeStyle:'short'}):'Sin fecha';
+  const priority={high:'ALTA',normal:'NORMAL',low:'BAJA'}[task.priority]||'NORMAL';
+  return priority+' / '+(overdue?'ATRASADA · ':'')+date;
+}
+function taskSort(a,b){
+  if(a.status!==b.status)return a.status==='done'?1:-1;
+  const ad=a.due_at?Date.parse(a.due_at):Infinity,bd=b.due_at?Date.parse(b.due_at):Infinity;
+  if(ad!==bd)return ad-bd;
+  const p={high:0,normal:1,low:2};
+  return (p[a.priority]??1)-(p[b.priority]??1);
+}
+function actionButton(label,description,handler){
+  const button=element('button','mini',label);
+  button.type='button';button.setAttribute('aria-label',description);
+  button.addEventListener('click',()=>void handler());
+  return button;
+}
 function drawTasks(){
-  const root=$('task-list');root.replaceChildren();$('task-count').textContent=String(state.tasks.length);
+  const root=$('task-list');root.replaceChildren();
+  $('task-count').textContent=String(state.tasks.filter(x=>x.status!=='done').length)+' pendientes';
+  if(!state.tasksLoaded){root.append(element('li','empty','Tareas sin verificar. Pulsa Actualizar.'));return}
   if(!state.tasks.length){root.append(element('li','empty','No hay tareas guardadas.'));return}
-  for(const task of state.tasks){
+  for(const task of [...state.tasks].sort(taskSort)){
     const row=element('li',task.status==='done'?'item-done':'');
     const main=element('div','item-main');
-    main.append(element('div','item-title',task.title));
-    const due=task.due_at?new Date(task.due_at).toLocaleString('es-PR',{dateStyle:'medium',timeStyle:'short'}):'Sin fecha';
-    main.append(element('div','item-sub',(task.priority==='high'?'ALTA':task.priority==='low'?'BAJA':'NORMAL')+' / '+due));
-    row.append(main);
-    if(task.status!=='done'){const b=element('button','mini','Completar');b.type='button';b.setAttribute('aria-label','Completar tarea '+task.title);b.addEventListener('click',()=>void completeTask(task));row.append(b)}
-    root.append(row);
+    main.append(element('div','item-title',task.title),element('div','item-sub',taskLabel(task)));
+    const actions=element('div','item-actions');
+    actions.append(
+      actionButton(task.status==='done'?'Reabrir':'Completar',(task.status==='done'?'Reabrir':'Completar')+' tarea '+task.title,()=>updateTask(task,{status:task.status==='done'?'pending':'done'})),
+      actionButton('Editar','Editar tarea '+task.title,()=>editTask(task)),
+      actionButton('Borrar','Borrar tarea '+task.title,()=>removeTask(task))
+    );
+    row.append(main,actions);root.append(row);
   }
 }
 function drawMemories(){
-  const root=$('memory-list');root.replaceChildren();$('memory-count').textContent=String(state.memories.length);
+  const root=$('memory-list');root.replaceChildren();
+  $('memory-count').textContent=String(state.memories.length);
+  if(!state.memoriesLoaded){root.append(element('li','empty','Memoria sin verificar. Pulsa Actualizar.'));return}
   if(!state.memories.length){root.append(element('li','empty','Aún no has guardado recuerdos.'));return}
   for(const memory of state.memories){
-    const row=element('li');const main=element('div','item-main');
+    const row=element('li');
+    const main=element('div','item-main');
     main.append(element('div','item-title',memory.content),element('div','item-sub',(memory.category||'general').toUpperCase()));
-    const b=element('button','mini','Borrar');b.type='button';b.setAttribute('aria-label','Borrar recuerdo');
-    b.addEventListener('click',()=>{if(window.confirm('¿Borrar este recuerdo de manera permanente?'))void removeMemory(memory.id)});
-    row.append(main,b);root.append(row);
+    const actions=element('div','item-actions');
+    actions.append(
+      actionButton('Editar','Editar recuerdo',()=>editMemory(memory)),
+      actionButton('Borrar','Borrar recuerdo',async()=>{
+        if(window.confirm('¿Borrar este recuerdo permanentemente?'))await removeMemory(memory.id);
+      })
+    );
+    row.append(main,actions);root.append(row);
   }
 }
-async function completeTask(task){
-  try{await request('/v1/tasks/'+encodeURIComponent(task.id),'PATCH',{status:'done'});await loadWorkspace();sayNotice('Tarea completada.')}catch(e){sayNotice(e.message)}
+async function updateTask(task,patch){
+  try{await request('/v1/tasks/'+encodeURIComponent(task.id),'PATCH',patch);await loadWorkspace();sayNotice('Tarea actualizada.')}
+  catch(e){sayNotice('No se pudo actualizar: '+e.message)}
+}
+async function editTask(task){
+  const title=window.prompt('Editar título de la tarea:',task.title);
+  if(title===null)return;
+  const clean=title.trim();
+  if(!clean||clean.length>240){sayNotice('El título debe tener de 1 a 240 caracteres.');return}
+  if(clean===task.title)return;
+  await updateTask(task,{title:clean});
+}
+async function removeTask(task){
+  if(!window.confirm('¿Eliminar permanentemente la tarea «'+task.title+'»?'))return;
+  try{await request('/v1/tasks/'+encodeURIComponent(task.id),'DELETE');await loadWorkspace();sayNotice('Tarea eliminada.')}
+  catch(e){sayNotice('No se pudo eliminar: '+e.message)}
+}
+async function editMemory(memory){
+  const content=window.prompt('Editar tu recuerdo:',memory.content);
+  if(content===null)return;
+  const clean=content.trim();
+  if(!clean||clean.length>2000){sayNotice('El recuerdo debe tener de 1 a 2000 caracteres.');return}
+  if(clean===memory.content)return;
+  try{await request('/v1/memories/'+encodeURIComponent(memory.id),'PATCH',{content:clean,category:memory.category||'general'});await loadWorkspace();sayNotice('Recuerdo actualizado.')}
+  catch(e){sayNotice('No se pudo editar: '+e.message)}
 }
 async function removeMemory(id){
-  try{await request('/v1/memories/'+encodeURIComponent(id),'DELETE');await loadWorkspace();sayNotice('Recuerdo eliminado.')}catch(e){sayNotice(e.message)}
+  try{await request('/v1/memories/'+encodeURIComponent(id),'DELETE');await loadWorkspace();sayNotice('Recuerdo eliminado.')}
+  catch(e){sayNotice('No se pudo eliminar: '+e.message)}
+}
+async function exportUserData(){
+  if(!ready())return;
+  $('export-button').disabled=true;
+  try{
+    const backup=await request('/v1/data/export');
+    if(!backup||typeof backup!=='object'||typeof backup.data!=='object')throw Error('Respuesta incompleta');
+    const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+    const href=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=href;a.download='JARVIS-copia-'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(href),30000);
+    sayNotice('Copia preparada. Revisa las descargas de Safari; contiene datos personales.');
+  }catch(e){sayNotice('No fue posible exportar: '+e.message)}
+  finally{$('export-button').disabled=false}
 }
 function setTab(next){
   for(const tab of document.querySelectorAll('.tab')){const active=tab.dataset.tab===next;tab.classList.toggle('active',active);if(active)tab.setAttribute('aria-current','page');else tab.removeAttribute('aria-current')}
@@ -310,15 +429,18 @@ async function confirmAction(){
 function localCommand(input){
   const normalized=normalize(input);
   if(/^(resumen( de hoy)?|como va mi dia|mi resumen)/.test(normalized)){
+    if(!state.tasksLoaded||!state.memoriesLoaded)return 'Todavía no puedo confirmar tus datos. Pulsa Actualizar datos e inténtalo de nuevo.';
     const pending=state.tasks.filter(x=>x.status!=='done');
     const high=pending.filter(x=>x.priority==='high');
     return 'Tu resumen: '+pending.length+' tarea(s) pendiente(s), '+high.length+' de prioridad alta y '+state.memories.length+' recuerdo(s). '+(pending.length?'Las próximas tareas son: '+pending.slice(0,3).map(x=>x.title).join('; ')+'.':'No tienes pendientes registrados.');
   }
   if(/(que tengo pendiente|mis pendientes|tareas pendientes|que debo hacer)/.test(normalized)){
+    if(!state.tasksLoaded)return 'No he podido verificar tus tareas. Pulsa Actualizar datos.';
     const rows=state.tasks.filter(x=>x.status!=='done').slice(0,8);
     return rows.length?'Tus tareas pendientes: '+rows.map((x,i)=>(i+1)+'. '+x.title).join('; ')+'.':'Tu lista de pendientes está vacía.';
   }
   if(/(que recuerdas|mis recuerdos|mi memoria)/.test(normalized)){
+    if(!state.memoriesLoaded)return 'No he podido verificar tu memoria. Pulsa Actualizar datos.';
     return state.memories.length?'Recuerdo lo siguiente: '+state.memories.slice(0,8).map(x=>x.content).join('; ')+'.':'Aún no has guardado recuerdos.';
   }
   const taskMatch=input.match(/^(?:a[nñ]ade|agrega|crea|crear)\s+(?:una?\s+)?tarea\s+(.+)$/i);
@@ -405,10 +527,22 @@ function listen(){
 document.querySelectorAll('.tab').forEach(x=>x.addEventListener('click',()=>setTab(x.dataset.tab)));
 document.querySelectorAll('[data-phrase]').forEach(x=>x.addEventListener('click',()=>void processMessage(x.dataset.phrase)));
 $('message-form').addEventListener('submit',e=>{e.preventDefault();void processMessage($('message').value)});
-$('task-form').addEventListener('submit',async e=>{e.preventDefault();const title=$('task-title').value.trim();if(!title)return;
-  try{await request('/v1/tasks','POST',{title,priority:$('task-priority').value});$('task-title').value='';await loadWorkspace();sayNotice('Tarea guardada.')}catch(err){sayNotice(err.message)}});
+$('task-form').addEventListener('submit',async e=>{
+  e.preventDefault();const title=$('task-title').value.trim();if(!title)return;
+  const local=$('task-due').value;const due=new Date(local);
+  if(local&&(!Number.isFinite(due.getTime()))){sayNotice('La fecha seleccionada no es válida.');return}
+  const payload={title,priority:$('task-priority').value,due_at:local?due.toISOString():null};
+  const button=$('task-form').querySelector('button[type=submit]');button.disabled=true;
+  try{await request('/v1/tasks','POST',payload);$('task-title').value='';$('task-due').value='';await loadWorkspace();sayNotice('Tarea guardada.')}
+  catch(err){sayNotice('No se pudo guardar: '+err.message)}
+  finally{button.disabled=false}
+});
 $('memory-form').addEventListener('submit',async e=>{e.preventDefault();const content=$('memory-content').value.trim();if(!content)return;
-  try{await request('/v1/memories','POST',{content,category:'general'});$('memory-content').value='';await loadWorkspace();sayNotice('Recuerdo guardado.')}catch(err){sayNotice(err.message)}});
+  try{await request('/v1/memories','POST',{content,category:'general'});$('memory-content').value='';await loadWorkspace();sayNotice('Recuerdo guardado.')}catch(err){sayNotice('No se pudo guardar: '+err.message)}});
+$('sync-button').addEventListener('click',()=>void loadWorkspace());
+$('export-button').addEventListener('click',()=>void exportUserData());
+window.addEventListener('offline',()=>syncStatus('Sin conexión a Internet. Tus datos locales no se han borrado.','error'));
+window.addEventListener('online',()=>{if(ready())void loadWorkspace()});
 $('action-accept').addEventListener('click',()=>void confirmAction());$('action-reject').addEventListener('click',()=>{discard();append('assistant','Propuesta cancelada.')});
 $('audio-toggle').addEventListener('click',()=>setVoiceEnabled(!state.voiceEnabled));
 $('session-button').addEventListener('click',startDialogue);
