@@ -27,3 +27,14 @@ a{color:var(--cyan)}.sr-only{position:absolute;width:1px;height:1px;overflow:hid
 .voice-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
 .voice-tools button{min-width:0}
 @media(max-width:520px){.voice-config{gap:8px;justify-content:center}.voice-config .voice-switch{width:100%;flex:auto}.voice-config #voice-state{width:100%;text-align:center}.voice-tools button{font-size:11px;letter-spacing:0}}
+
+/* v0.9.0 — conversational turn taking and accessible live captions */
+.voice-config .voice-switch{min-width:0;flex:1 1 180px}
+.voice-config #voice-state{flex:1 0 100%;text-align:center}
+#session-button[aria-pressed="true"]{background:#183f50;border-color:#7ce5eb;color:#defbff;box-shadow:inset 0 0 0 1px #509bab}
+.transcript-panel{display:flex;flex-direction:column;gap:5px;padding:12px 14px;margin-top:10px;border:1px solid #2b4e60;border-radius:12px;background:#071523;min-height:62px}
+.transcript-label{font-size:9px;letter-spacing:.2em;color:#7ce5eb;font-weight:700}
+#live-transcript{font-size:13px;color:#c8d7e0;overflow-wrap:anywhere}
+#voice-state[data-state="thinking"]{color:#a9c9ef}
+#voice-state[data-state="paused"]{color:#ebc793}
+@media(max-width:520px){.voice-config .voice-switch{flex:1 1 100%}}
