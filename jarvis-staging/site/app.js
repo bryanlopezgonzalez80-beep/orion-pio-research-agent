@@ -1,3 +1,4 @@
+import {trustedCommand,recentVerification} from './briefing.js';
 let createClient;
 try {
   ({createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm'));
@@ -15,7 +16,7 @@ const PUBLISHABLE_KEY='sb_publishable_nfx_KpRm43JGbluEAk7YmA_MFDmxMVI';
 const API='https://orion-jarvis-api.onrender.com';
 const supabase=createClient(SUPABASE_URL,PUBLISHABLE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id);
-const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null,syncSerial:0,tasksLoaded:false,memoriesLoaded:false,historyLoaded:false,historySerial:0,historyDetailSerial:0,conversations:[],editingTaskId:null,editingMemoryId:null};
+const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null,syncSerial:0,tasksLoaded:false,memoriesLoaded:false,historyLoaded:false,historySerial:0,historyDetailSerial:0,conversations:[],editingTaskId:null,editingMemoryId:null,tasksVerifiedAt:null,memoriesVerifiedAt:null,replyLanguage:'es'};
 let noticeTimer;
 function sayNotice(text){$('notice').textContent=text;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('notice').textContent='',5500)}
 function text(el,text){el.textContent=text??'';return el}
@@ -109,7 +110,7 @@ function setVoiceEnabled(enabled){
   if(!enabled){stopVoice();state.voiceEnabled=false;updateVoiceControl();return}
   state.voiceEnabled=true;updateVoiceControl();
   // Debe empezar dentro de una acción del usuario para cumplir las reglas de Safari.
-  speak('Voz activada. Ahora puedes hablar conmigo.',{force:true});
+  speak('Voz activada. Ahora puedes hablar conmigo.',{force:true,language:'es'});
 }
 function scheduleRearm(){
   if(!state.dialogEnabled||!state.voiceEnabled||!ready()||document.hidden)return;
@@ -135,7 +136,7 @@ function beginListening(automatic=false){
   try{
     recognition=new Speech();
     state.recognition=recognition;
-    recognition.lang='es-PR';
+    recognition.lang=$('recognition-lang').value==='en-US'?'en-US':'es-PR';
     recognition.continuous=false;
     recognition.interimResults=true;
     recognition.maxAlternatives=1;
@@ -222,9 +223,9 @@ function startDialogue(){
   updateVoiceControl();
 }
 function clearIdentity(){
-  state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];state.editingTaskId=null;state.editingMemoryId=null;
+  state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];state.editingTaskId=null;state.editingMemoryId=null;state.tasksVerifiedAt=null;state.memoriesVerifiedAt=null;state.replyLanguage='es';
   for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();state.voiceEnabled=false;updateVoiceControl();
-  $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();$('history-list').replaceChildren();$('history-messages').replaceChildren();visible('history-detail',false);visible('action-box',false);resetTaskEditor();resetMemoryEditor();$('task-search').value='';$('memory-search').value='';$('memory-filter').value='all';syncStatus('Sesión cerrada','idle');
+  $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();$('history-list').replaceChildren();$('history-messages').replaceChildren();visible('history-detail',false);visible('action-box',false);resetTaskEditor();resetMemoryEditor();$('task-search').value='';$('memory-search').value='';$('memory-filter').value='all';syncStatus('Sesión cerrada','idle');renderTrust();
 }
 function updateIdentity(session){
   const userId=session?.user?.id??null;
@@ -261,6 +262,18 @@ async function request(path,method='GET',body){
     return result;
   }finally{clearTimeout(timeout);state.aborters.delete(controller)}
 }
+function sourceIsRecent(kind){
+ return kind==='tasks'?state.tasksLoaded&&recentVerification(state.tasksVerifiedAt):state.memoriesLoaded&&recentVerification(state.memoriesVerifiedAt);
+}
+function renderTrust(){
+ const display=(kind,label)=>{
+  const stamp=kind==='tasks'?state.tasksVerifiedAt:state.memoriesVerifiedAt;
+  if(!sourceIsRecent(kind))return label+': sin verificación reciente';
+  return label+': verificado · '+new Date(stamp).toLocaleString('es-PR',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+ };
+ $('source-tasks').textContent=display('tasks','Tareas (Supabase)');
+ $('source-memory').textContent=display('memories','Memoria (Supabase)');
+}
 function syncStatus(message,status='idle'){
   const label=$('sync-status');
   const dot=$('sync-indicator');
@@ -272,6 +285,9 @@ async function loadWorkspace(){
   const revision=state.rev;
   const serial=++state.syncSerial;
   $('sync-button').disabled=true;
+  state.tasksLoaded=false;state.memoriesLoaded=false;
+  state.tasksVerifiedAt=null;state.memoriesVerifiedAt=null;
+  renderTrust();
   syncStatus('Sincronizando tareas y memoria...','idle');
   try{
     const results=await Promise.allSettled([
@@ -286,14 +302,14 @@ async function loadWorkspace(){
     const issues=[];
     const tasks=results[0],memories=results[1],health=results[2];
     if(tasks.status==='fulfilled'&&Array.isArray(tasks.value)){
-      state.tasks=tasks.value;state.tasksLoaded=true;drawTasks();
+      state.tasks=tasks.value;state.tasksLoaded=true;state.tasksVerifiedAt=Date.now();drawTasks();
     }else{
       state.tasksLoaded=false;
       issues.push('tareas');
       if(!state.tasks.length)text($('task-list'),'No se pudieron cargar las tareas.');
     }
     if(memories.status==='fulfilled'&&Array.isArray(memories.value)){
-      state.memories=memories.value;state.memoriesLoaded=true;drawMemories();
+      state.memories=memories.value;state.memoriesLoaded=true;state.memoriesVerifiedAt=Date.now();drawMemories();
     }else{
       state.memoriesLoaded=false;
       issues.push('memoria');
@@ -304,6 +320,7 @@ async function loadWorkspace(){
       state.model=h?.model_requests_enabled===true;
       $('model-label').textContent=state.model?'IA DISPONIBLE':'IA EN ESPERA';
     }else{state.model=false;$('model-label').textContent='SERVIDOR POR VERIFICAR';issues.push('servidor')}
+    renderTrust();
     if(issues.length){
       syncStatus('No se pudo verificar: '+issues.join(', ')+'. Pulsa Actualizar.','error');
       sayNotice('Conexión parcial. Tus datos existentes no se han borrado.');
@@ -313,6 +330,7 @@ async function loadWorkspace(){
     }
   }catch(e){
     if(revision!==state.rev||serial!==state.syncSerial)return;
+    renderTrust();
     syncStatus('No se pudo sincronizar. Pulsa Actualizar.','error');
     sayNotice(e.message||'Error de conexión');
   }finally{
@@ -612,21 +630,24 @@ function localDayPlan(){
   return 'Tu plan sugerido de hoy se basa únicamente en tus tareas guardadas. Tienes '+countLabel(pending.length,'tarea pendiente','tareas pendientes')+': '+countLabel(overdue.length,'atrasada','atrasadas')+', '+countLabel(todayPending.length,'por vencer hoy','por vencer hoy')+', '+countLabel(nextSeven.length,'en los próximos seis días','en los próximos seis días')+', '+countLabel(future.length,'con fecha posterior','con fecha posterior')+' y '+countLabel(undated.length,'sin fecha','sin fecha')+'. Te sugiero empezar por: '+starters+'. Este orden es una propuesta; no he cambiado tu calendario.';
 }
 function localCommand(input){
+  const verified=trustedCommand(input,{tasks:state.tasks,loaded:state.tasksLoaded,verifiedAt:state.tasksVerifiedAt});
+  if(verified){state.replyLanguage=verified.language;return verified.text;}
+  state.replyLanguage='es';
   const normalized=normalize(input);
   if(/^(planifica (mi |el )?(dia|jornada)|planea (mi |el )?dia|organiza (mi |el )?dia|plan de hoy|mis prioridades de hoy)/.test(normalized))return localDayPlan();
   if(/^(resumen( de hoy)?|como va mi dia|mi resumen)/.test(normalized)){
-    if(!state.tasksLoaded||!state.memoriesLoaded)return 'Todavía no puedo confirmar tus datos. Pulsa Actualizar datos e inténtalo de nuevo.';
+    if(!sourceIsRecent('tasks')||!sourceIsRecent('memories'))return 'Todavía no puedo confirmar tus datos. Pulsa Actualizar datos e inténtalo de nuevo.';
     const pending=state.tasks.filter(x=>x.status!=='done');
     const high=pending.filter(x=>x.priority==='high');
     return 'Tu resumen: '+pending.length+' tarea(s) pendiente(s), '+high.length+' de prioridad alta y '+state.memories.length+' recuerdo(s). '+(pending.length?'Las próximas tareas son: '+pending.slice(0,3).map(x=>x.title).join('; ')+'.':'No tienes pendientes registrados.');
   }
   if(/(que tengo pendiente|mis pendientes|tareas pendientes|que debo hacer)/.test(normalized)){
-    if(!state.tasksLoaded)return 'No he podido verificar tus tareas. Pulsa Actualizar datos.';
+    if(!sourceIsRecent('tasks'))return 'No he podido verificar tus tareas. Pulsa Actualizar datos.';
     const rows=state.tasks.filter(x=>x.status!=='done').slice(0,8);
     return rows.length?'Tus tareas pendientes: '+rows.map((x,i)=>(i+1)+'. '+x.title).join('; ')+'.':'Tu lista de pendientes está vacía.';
   }
   if(/(que recuerdas|mis recuerdos|mi memoria)/.test(normalized)){
-    if(!state.memoriesLoaded)return 'No he podido verificar tu memoria. Pulsa Actualizar datos.';
+    if(!sourceIsRecent('memories'))return 'No he podido verificar tu memoria. Pulsa Actualizar datos.';
     return state.memories.length?'Recuerdo lo siguiente: '+state.memories.slice(0,8).map(x=>x.content).join('; ')+'.':'Aún no has guardado recuerdos.';
   }
   const taskMatch=input.match(/^(?:a[nñ]ade|agrega|crea|crear)\s+(?:una?\s+)?tarea\s+(.+)$/i);
@@ -669,7 +690,7 @@ async function processMessage(input){
   finally{state.busy=false;$('send-button').disabled=false}
 }
 
-function speak(content,{force=false}={}){
+function speak(content,{force=false,language=null}={}){
   if(!('speechSynthesis' in window)){sayNotice('No se puede reproducir audio en este navegador.');return}
   if(!state.voiceEnabled&&!force)return;
   const words=String(content||'').trim().slice(0,3500);
@@ -678,11 +699,11 @@ function speak(content,{force=false}={}){
   const synth=window.speechSynthesis;
   const sequence=state.speechSequence;
   const voices=synth.getVoices();
-  const preferred=['es-PR','es-US','es-MX','es-ES'];
-  const spanish=preferred.map(lang=>voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())).find(Boolean) || voices.find(v=>v.lang.toLowerCase().startsWith('es'));
+  const preferred=(language||state.replyLanguage)==='en'?['en-US','en-GB','en']:['es-PR','es-US','es-MX','es-ES'];
+  const selected=preferred.map(lang=>voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())).find(Boolean)||voices.find(v=>v.lang.toLowerCase().startsWith((language||state.replyLanguage)==='en'?'en':'es'));
   const utterance=new SpeechSynthesisUtterance(words);
-  if(spanish){utterance.voice=spanish;utterance.lang=spanish.lang}
-  else utterance.lang='es-ES';
+  if(selected){utterance.voice=selected;utterance.lang=selected.lang}
+  else utterance.lang=(language||state.replyLanguage)==='en'?'en-US':'es-PR';
   utterance.rate=1;utterance.pitch=.94;utterance.volume=1;
   state.activeUtterance=utterance;
   utterance.onstart=()=>{
@@ -766,7 +787,12 @@ $('history-refresh').addEventListener('click',()=>void loadHistory());
 $('history-close').addEventListener('click',closeHistory);
 $('sync-button').addEventListener('click',()=>void loadWorkspace());
 $('export-button').addEventListener('click',()=>void exportUserData());
-window.addEventListener('offline',()=>syncStatus('Sin conexión a Internet. Tus datos locales no se han borrado.','error'));
+window.addEventListener('offline',()=>{
+  state.tasksLoaded=false;state.memoriesLoaded=false;
+  state.tasksVerifiedAt=null;state.memoriesVerifiedAt=null;
+  renderTrust();
+  syncStatus('Sin Internet. Los datos conservados en pantalla no están verificados.','error');
+});
 window.addEventListener('online',()=>{if(ready())void loadWorkspace()});
 $('action-accept').addEventListener('click',()=>void confirmAction());$('action-reject').addEventListener('click',()=>{discard();append('assistant','Propuesta cancelada.')});
 $('audio-toggle').addEventListener('click',()=>setVoiceEnabled(!state.voiceEnabled));
@@ -785,6 +811,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){stopVoice(
 supabase.auth.onAuthStateChange((_event,session)=>{queueMicrotask(()=>updateIdentity(session))});
 updateVoiceControl();
 updateVoiceCompatibility();
+renderTrust();
 window.jarvisInitialized=true;
 window.dispatchEvent(new Event('jarvis:initialized'));
 try {
