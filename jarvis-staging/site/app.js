@@ -15,7 +15,7 @@ const PUBLISHABLE_KEY='sb_publishable_nfx_KpRm43JGbluEAk7YmA_MFDmxMVI';
 const API='https://orion-jarvis-api.onrender.com';
 const supabase=createClient(SUPABASE_URL,PUBLISHABLE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id);
-const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null,syncSerial:0,tasksLoaded:false,memoriesLoaded:false,historyLoaded:false,historySerial:0,historyDetailSerial:0,conversations:[]};
+const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null,syncSerial:0,tasksLoaded:false,memoriesLoaded:false,historyLoaded:false,historySerial:0,historyDetailSerial:0,conversations:[],editingTaskId:null};
 let noticeTimer;
 function sayNotice(text){$('notice').textContent=text;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('notice').textContent='',5500)}
 function text(el,text){el.textContent=text??'';return el}
@@ -222,9 +222,9 @@ function startDialogue(){
   updateVoiceControl();
 }
 function clearIdentity(){
-  state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];
+  state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];state.editingTaskId=null;
   for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();state.voiceEnabled=false;updateVoiceControl();
-  $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();$('history-list').replaceChildren();$('history-messages').replaceChildren();visible('history-detail',false);visible('action-box',false);$('task-search').value='';$('memory-search').value='';syncStatus('Sesión cerrada','idle');
+  $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();$('history-list').replaceChildren();$('history-messages').replaceChildren();visible('history-detail',false);visible('action-box',false);resetTaskEditor();$('task-search').value='';$('memory-search').value='';$('memory-filter').value='all';syncStatus('Sesión cerrada','idle');
 }
 function updateIdentity(session){
   const userId=session?.user?.id??null;
@@ -382,7 +382,8 @@ function drawMemories(){
   if(!state.memoriesLoaded){root.append(element('li','empty','Memoria sin verificar. Pulsa Actualizar.'));return}
   if(!state.memories.length){root.append(element('li','empty','Aún no has guardado recuerdos.'));return}
   const search=normalize($('memory-search').value);
-  const filtered=state.memories.filter(memory=>!search||normalize(memory.content).includes(search)||normalize(memory.category||'').includes(search));
+  const category=$('memory-filter').value;
+  const filtered=state.memories.filter(memory=>(category==='all'||memory.category===category)&&(!search||normalize(memory.content).includes(search)||normalize(memory.category||'').includes(search)));
   if(!filtered.length){root.append(element('li','empty','No hay recuerdos que coincidan con la búsqueda.'));return}
   for(const memory of filtered){
     const row=element('li');
@@ -402,13 +403,31 @@ async function updateTask(task,patch){
   try{await request('/v1/tasks/'+encodeURIComponent(task.id),'PATCH',patch);await loadWorkspace();sayNotice('Tarea actualizada.')}
   catch(e){sayNotice('No se pudo actualizar: '+e.message)}
 }
-async function editTask(task){
-  const title=window.prompt('Editar título de la tarea:',task.title);
-  if(title===null)return;
-  const clean=title.trim();
-  if(!clean||clean.length>240){sayNotice('El título debe tener de 1 a 240 caracteres.');return}
-  if(clean===task.title)return;
-  await updateTask(task,{title:clean});
+function localDateTimeValue(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  if(!Number.isFinite(d.getTime()))return '';
+  const local=new Date(d.getTime()-d.getTimezoneOffset()*60000);
+  return local.toISOString().slice(0,16);
+}
+function resetTaskEditor(){
+  state.editingTaskId=null;
+  $('task-title').value='';
+  $('task-due').value='';
+  $('task-priority').value='normal';
+  $('task-submit').textContent='Añadir tarea';
+  visible('task-cancel-edit',false);
+}
+function editTask(task){
+  state.editingTaskId=task.id;
+  $('task-title').value=task.title;
+  $('task-due').value=localDateTimeValue(task.due_at);
+  $('task-priority').value=task.priority||'normal';
+  $('task-submit').textContent='Guardar cambios';
+  visible('task-cancel-edit',true);
+  setTab('tasks');
+  $('task-title').focus();
+  sayNotice('Editando tarea. Puedes cambiar título, prioridad y fecha.');
 }
 async function removeTask(task){
   if(!window.confirm('¿Eliminar permanentemente la tarea «'+task.title+'»?'))return;
@@ -549,8 +568,36 @@ async function confirmAction(){
   discard();
   try{await pending.action();await loadWorkspace();append('assistant','He guardado el cambio y actualizado tu espacio.')}catch(e){append('assistant','No pude guardarlo: '+e.message)}
 }
+function dateKey(date){
+  return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+}
+function localDayPlan(){
+  if(!state.tasksLoaded)return 'No puedo preparar un plan fiable sin comprobar primero tus tareas. Pulsa Actualizar datos.';
+  const now=new Date();
+  const today=dateKey(now);
+  const tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+  const sevenDays=new Date(now.getFullYear(),now.getMonth(),now.getDate()+7);
+  const pending=state.tasks.filter(t=>t.status!=='done');
+  if(!pending.length)return 'No tienes tareas pendientes registradas. Puedes añadir una tarea en la sección Tareas para preparar tu siguiente plan.';
+  const dueDate=t=>{if(!t.due_at)return null;const d=new Date(t.due_at);return Number.isFinite(d.getTime())?d:null};
+  const overdue=pending.filter(t=>{const d=dueDate(t);return d&&d.getTime()<now.getTime()});
+  const todayPending=pending.filter(t=>{const d=dueDate(t);return d&&dateKey(d)===today&&d.getTime()>=now.getTime()});
+  const nextSeven=pending.filter(t=>{const d=dueDate(t);return d&&d>=tomorrow&&d<sevenDays});
+  const undated=pending.filter(t=>!dueDate(t));
+  const priority={high:0,normal:1,low:2};
+  const ordered=[...pending].sort((a,b)=>{
+    const as=priority[a.priority]??1,bs=priority[b.priority]??1;
+    const ad=dueDate(a),bd=dueDate(b);
+    const aUrgency=ad?ad.getTime()<now.getTime()?-2:ad.getTime()<sevenDays.getTime()?-1:0:1;
+    const bUrgency=bd?bd.getTime()<now.getTime()?-2:bd.getTime()<sevenDays.getTime()?-1:0:1;
+    return aUrgency-bUrgency||as-bs||(ad?.getTime()??Infinity)-(bd?.getTime()??Infinity);
+  });
+  const starters=ordered.slice(0,3).map((t,i)=>(i+1)+'. '+t.title+(t.priority==='high'?' (prioridad alta)':'')).join('; ');
+  return 'Tu plan sugerido de hoy se basa únicamente en tus tareas guardadas. Tienes '+pending.length+' pendientes: '+overdue.length+' atrasadas, '+todayPending.length+' por vencer hoy, '+nextSeven.length+' dentro de los próximos siete días y '+undated.length+' sin fecha. Te sugiero empezar por: '+starters+'. Este orden es una propuesta; no he cambiado tu calendario.';
+}
 function localCommand(input){
   const normalized=normalize(input);
+  if(/^(planifica (mi |el )?(dia|jornada)|planea (mi |el )?dia|organiza (mi |el )?dia|plan de hoy|mis prioridades de hoy)/.test(normalized))return localDayPlan();
   if(/^(resumen( de hoy)?|como va mi dia|mi resumen)/.test(normalized)){
     if(!state.tasksLoaded||!state.memoriesLoaded)return 'Todavía no puedo confirmar tus datos. Pulsa Actualizar datos e inténtalo de nuevo.';
     const pending=state.tasks.filter(x=>x.status!=='done');
@@ -651,20 +698,35 @@ document.querySelectorAll('.tab').forEach(x=>x.addEventListener('click',()=>setT
 document.querySelectorAll('[data-phrase]').forEach(x=>x.addEventListener('click',()=>void processMessage(x.dataset.phrase)));
 $('message-form').addEventListener('submit',e=>{e.preventDefault();void processMessage($('message').value)});
 $('task-form').addEventListener('submit',async e=>{
-  e.preventDefault();const title=$('task-title').value.trim();if(!title)return;
-  const local=$('task-due').value;const due=new Date(local);
-  if(local&&(!Number.isFinite(due.getTime()))){sayNotice('La fecha seleccionada no es válida.');return}
+  e.preventDefault();
+  const title=$('task-title').value.trim();
+  if(!title)return;
+  const local=$('task-due').value;
+  const due=new Date(local);
+  if(local&&!Number.isFinite(due.getTime())){sayNotice('La fecha seleccionada no es válida.');return}
   const payload={title,priority:$('task-priority').value,due_at:local?due.toISOString():null};
-  const button=$('task-form').querySelector('button[type=submit]');button.disabled=true;
-  try{await request('/v1/tasks','POST',payload);$('task-title').value='';$('task-due').value='';await loadWorkspace();sayNotice('Tarea guardada.')}
-  catch(err){sayNotice('No se pudo guardar: '+err.message)}
+  const button=$('task-submit');button.disabled=true;
+  const editingId=state.editingTaskId;
+  try{
+    if(editingId){
+      if(!state.tasks.some(t=>t.id===editingId))throw Error('La tarea ya no existe en los datos cargados.');
+      await request('/v1/tasks/'+encodeURIComponent(editingId),'PATCH',payload);
+    }else{
+      await request('/v1/tasks','POST',payload);
+    }
+    resetTaskEditor();
+    await loadWorkspace();
+    sayNotice(editingId?'Tarea actualizada.':'Tarea guardada.');
+  }catch(err){sayNotice('No se pudo guardar: '+err.message)}
   finally{button.disabled=false}
 });
 $('memory-form').addEventListener('submit',async e=>{e.preventDefault();const content=$('memory-content').value.trim();if(!content)return;
-  try{await request('/v1/memories','POST',{content,category:'general'});$('memory-content').value='';await loadWorkspace();sayNotice('Recuerdo guardado.')}catch(err){sayNotice('No se pudo guardar: '+err.message)}});
+  try{await request('/v1/memories','POST',{content,category:$('memory-category').value});$('memory-content').value='';await loadWorkspace();sayNotice('Recuerdo guardado.')}catch(err){sayNotice('No se pudo guardar: '+err.message)}});
 $('task-search').addEventListener('input',drawTasks);
 $('task-filter').addEventListener('change',drawTasks);
 $('memory-search').addEventListener('input',drawMemories);
+$('memory-filter').addEventListener('change',drawMemories);
+$('task-cancel-edit').addEventListener('click',()=>{resetTaskEditor();sayNotice('Edición cancelada.')});
 $('history-refresh').addEventListener('click',()=>void loadHistory());
 $('history-close').addEventListener('click',closeHistory);
 $('sync-button').addEventListener('click',()=>void loadWorkspace());
