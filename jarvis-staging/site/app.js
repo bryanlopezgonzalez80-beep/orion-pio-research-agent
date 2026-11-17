@@ -13,7 +13,7 @@ function element(tag,cls,str){const el=document.createElement(tag);if(cls)el.cla
 function ready(){return !!state.user&&!!state.session}
 function setStatus(label,ok){$('status-label').textContent=label;$('status-led').classList.toggle('ok',ok)}
 function visible(id,on){$(id).hidden=!on}
-function stopVoice(){const recognition=state.recognition;state.recognition=null;if(recognition){recognition.onresult=recognition.onerror=recognition.onend=null;try{recognition.abort()}catch{}}if('speechSynthesis' in window)window.speechSynthesis.cancel();$('listen-button').classList.remove('active');$('listen-button').setAttribute('aria-pressed','false')}
+function stopVoice(){state.voicePending=false;const recognition=state.recognition;state.recognition=null;if(recognition){recognition.onresult=recognition.onerror=recognition.onend=null;try{recognition.abort()}catch{}}if('speechSynthesis' in window)window.speechSynthesis.cancel();$('listen-button').classList.remove('active');$('listen-button').setAttribute('aria-pressed','false')}
 function clearIdentity(){
   state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';
   for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();
@@ -56,7 +56,7 @@ function append(role,content){
   const item=element('article','message '+(role==='user'?'user':'assistant'));
   item.append(element('div','message-label',role==='user'?'TÚ':'JARVIS'),element('div','message-body',content));
   $('thread').append(item);$('thread').scrollTop=$('thread').scrollHeight;
-  if(role==='assistant')state.lastReply=content;
+  if(role==='assistant'){state.lastReply=content;if(state.voicePending){state.voicePending=false;speak(content)}}
   return item;
 }
 function drawTasks(){
@@ -182,7 +182,7 @@ function listen(){
     recognition.lang='es-PR';recognition.continuous=false;recognition.interimResults=false;recognition.maxAlternatives=1;
     $('listen-button').classList.add('active');$('listen-button').setAttribute('aria-pressed','true');
     recognition.onresult=event=>{const transcript=[...event.results].filter(x=>x.isFinal).map(x=>x[0]?.transcript||'').join(' ').trim();
-      if(transcript&&ready())void processMessage(transcript);};
+      if(transcript&&ready()){state.voicePending=true;void processMessage(transcript);}};
     recognition.onerror=event=>sayNotice('Dictado no disponible ('+(event.error||'error')+'). Prueba el micrófono del teclado.');
     recognition.onend=()=>{state.recognition=null;$('listen-button').classList.remove('active');$('listen-button').setAttribute('aria-pressed','false')};
     recognition.start();sayNotice('Escuchando. Habla con naturalidad.');
