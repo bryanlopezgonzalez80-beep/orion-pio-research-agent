@@ -57,12 +57,16 @@
           <input id="message" name="message" maxlength="4000" placeholder="Dime qué necesitas..." autocomplete="off" required>
           <button class="send" id="send-button" aria-label="Enviar mensaje" type="submit">ENVIAR</button>
         </form>
+        <div class="voice-config">
+          <button id="audio-toggle" class="secondary voice-switch" type="button" aria-pressed="false">Activar respuestas en voz alta</button>
+          <span id="voice-state" role="status" aria-live="polite">Voz desactivada</span>
+        </div>
         <div class="voice-tools">
           <button id="listen-button" class="primary mic-button" type="button" aria-pressed="false">Hablar</button>
-          <button id="read-button" class="secondary" type="button">Escuchar última</button>
+          <button id="read-button" class="secondary" type="button">Repetir audio</button>
           <button id="stop-button" class="secondary" type="button">Detener</button>
         </div>
-        <p class="tiny" id="voice-help">Si el dictado no está disponible, utiliza el micrófono del teclado de tu iPhone.</p>
+        <p class="tiny" id="voice-help">Activa la voz una vez y toca Hablar. JARVIS mostrará y pronunciará cada respuesta. Usa Safari; si el micrófono web falla, dicta con el teclado del iPhone.</p>
       </section>
       <section class="pane panel" id="pane-tasks" aria-label="Tareas" hidden>
         <header class="pane-head"><div><p class="eyebrow">TU AGENDA</p><h2>Lo que sigue.</h2></div><span class="tiny" id="task-count">0</span></header>
@@ -76,7 +80,7 @@
       </section>
       <div class="lower"><span id="user-label" class="tiny"></span><button id="signout-button" class="text-button" type="button">Cerrar sesión</button></div>
     </main>
-    <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.8.0 · PRUEBAS</span></footer>
+    <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.8.1 · VOZ</span></footer>
     <p class="toast" id="notice" role="status" aria-live="polite"></p>
   </div>
   <script src="./boot.js" defer></script>
