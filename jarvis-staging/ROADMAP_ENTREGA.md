@@ -52,9 +52,42 @@ Estado: desarrollo activo (rama `orion-jarvis-staging`). Este documento no certi
 - [ ] Auditoría de seguridad y privacidad de terceros, pruebas de abuso y recuperación.
 - [ ] Pruebas en múltiples dispositivos y red intermitente.
 
+
+## Prioridad transversal: JARVIS Trust & Time Intelligence
+Principio de producto: un asistente fiable no inventa agenda, disponibilidad, tiempos de viaje ni acciones ejecutadas. Separa hechos verificables, estimaciones e ideas. Muestra la fuente y vigencia de cada dato crítico y explicita cuándo no está conectado.
+
+### Trust Layer — seguridad, objetividad y fiabilidad
+- [ ] Cada compromiso, tarea o reunión mencionado procede de un calendario autorizado o de tareas realmente guardadas; identificar su origen y última sincronización.
+- [ ] No presentar una invitación pendiente, un evento cancelado o una hora sin zona horaria como reunión confirmada.
+- [ ] Ante conflicto de calendarios, duplicados, dirección ambigua o datos desactualizados, pedir confirmación antes de aconsejar.
+- [ ] Separar claramente datos comprobados, recomendaciones basadas en reglas y estimaciones; usar lenguaje calibrado sobre incertidumbre.
+- [ ] Comportamiento seguro cuando falla la red, expira la sesión o un proveedor no responde; nunca sustituir el error por una agenda vacía ficticia.
+- [ ] Trazabilidad de acciones; registro de qué fue propuesto, confirmado, enviado, guardado o falló, sin registrar secretos en los logs.
+- [ ] Indicadores de exactitud, latencia, estabilidad del audio, permisos y tasas de fallo; pruebas de regresión reproducibles.
+
+### Voice-first Executive Briefing (español/English)
+- [ ] Entender «JARVIS, ¿qué tengo hoy?», «What I got to do today?», «Do I have any appointments or meetings?» y seguimientos bilingües.
+- [ ] Interpretar «hoy», «mañana» y «a las cuatro de la mañana» en la zona horaria local efectiva (America/Puerto_Rico cuando aplique).
+- [ ] Responder con eventos confirmados, hora, lugar y fuente; distinguir tareas sin hora de reuniones del calendario.
+- [ ] Priorizar mediante urgencia, hora, vencimiento y preferencias proporcionadas explícitamente, sin inventar prioridades.
+- [ ] Detectar horarios superpuestos, tiempos insuficientes entre actividades y reuniones sin dirección.
+- [ ] Consultar rutas/tráfico en una fuente de mapas autorizada solo cuando sea necesario; distinguir tiempo estimado en vivo de estimación sin tráfico.
+- [ ] Calcular hora aconsejable para salir = hora del compromiso − duración estimada de viaje − margen acordado; usar el punto de partida autorizado, no inferir ubicación precisa.
+- [ ] Volver a calcular al cambiar el tráfico o la hora del evento; comunicar cambios importantes sin saturar de avisos.
+- [ ] Preparar un briefing hablado conciso y permitir interrupciones, aclaraciones y lectura de detalles bajo demanda.
+- [ ] Recordatorios y alertas mediante canales y permisos aprobados, con fiabilidad comprobada en iPhone y modo de pantalla bloqueada solo si una implementación compatible lo permite.
+
+### Pruebas de aceptación para el briefing
+1. A las 04:00, usuario sin reuniones: JARVIS no inventa citas; declara cuándo se sincronizó el calendario.
+2. Reunión a las 09:00 en otro municipio: confirma ubicación/origen, consulta ETA real si hay integración y recomienda salida con margen; nunca inventa minutos ni tráfico.
+3. Evento cancelado o modificado: no ofrece información obsoleta y marca la sincronización como pendiente si falla.
+4. Consulta en inglés seguida de respuesta en español o viceversa: mantiene datos y contexto correctos.
+5. Sin permiso de ubicación/calendario: pide la información mínima o indica claramente lo que no puede verificar.
+6. Usuario interrumpe el audio, corrige un dato o pide cambiar una prioridad: se recupera sin duplicar recordatorios ni ejecutar acciones no confirmadas.
+
 ## Criterios para declarar «completo»
 1. Todas las funciones anteriores implementadas o aceptadas explícitamente como fuera de alcance por el usuario.
-2. Pruebas automáticas y manuales con evidencia de backend, frontend y RLS.
+2. Pruebas automáticas y manuales con evidencia de backend, frontend, RLS y escenarios de Trust & Time Intelligence.
 3. Prueba autenticada y de voz en iPhone validada por usuario (una emulación no sustituye el dispositivo).
 4. Costos transparentes y aprobados antes de cualquier función facturable.
 5. Manual de uso, privacidad, copias y recuperación disponibles.
