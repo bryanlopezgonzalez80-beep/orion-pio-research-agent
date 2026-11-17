@@ -57,3 +57,30 @@ a{color:var(--cyan)}.sr-only{position:absolute;width:1px;height:1px;overflow:hid
 .help-details p{font-size:12px;color:#c1d8e3}
 #task-due{color-scheme:dark}
 @media(max-width:520px){.sync-panel{align-items:stretch}.sync-info{flex:1 1 100%}.sync-actions{width:100%}.sync-actions button{flex:1 1 auto}.item-list .item-main{flex-basis:100%}.item-list .item-actions{justify-content:flex-start}.item-actions button{flex:1}}
+
+/* 0.9.2 — server history, accessible search and compact mobile dashboard */
+.mini-dashboard{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0 8px}
+.mini-dashboard>div{background:#0b2131;border:1px solid #2d5263;border-radius:13px;padding:13px 10px;display:flex;flex-direction:column;gap:4px}
+.mini-dashboard strong{font-size:25px;color:#bdf5f9;line-height:1.1;font-variant-numeric:tabular-nums}
+.mini-dashboard span{font-size:11px;color:#b4c8d3}
+.search-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,35%);gap:8px;margin:10px 0 16px}
+#memory-search{margin:8px 0 17px}
+.history-explain{font-size:13px;color:#c0d5e0;line-height:1.65}
+.history-refresh{min-height:42px;margin:9px 0 10px;padding:9px 16px}
+#history-status{margin:6px 0 17px;color:#abc9d7}
+.history-detail{margin-top:23px;padding:15px 12px;background:#081724;border:1px solid #315568;border-radius:14px}
+.history-detail-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.history-detail h3{font-size:16px;font-weight:650;margin:0;overflow-wrap:anywhere}
+.history-detail .thread{min-height:130px;height:min(410px,49vh)}
+.history-detail .message{max-width:96%}
+#pane-history .item-list{margin-top:14px}
+#pane-history .item-list li{align-items:center}
+@media(max-width:520px){
+  .tabs{gap:4px}
+  .tabs .tab{font-size:11px;padding:10px 6px;white-space:nowrap}
+  .mini-dashboard>div{padding:12px 7px}
+  .mini-dashboard strong{font-size:21px}
+  .mini-dashboard span{font-size:10px}
+  .search-row{grid-template-columns:minmax(0,1fr) minmax(111px,38%)}
+  .search-row input,.search-row select{font-size:13px;padding:11px 10px}
+}
