@@ -1,0 +1,68 @@
+// ORIÓN JARVIS — Trust-first local briefing. No external calls, credentials or inferred calendar events.
+export const MAX_TASK_AGE_MS=15*60*1000;
+export function recentVerification(timestamp,now=Date.now()){
+  return Number.isFinite(timestamp)&&timestamp>0&&timestamp<=now&&now-timestamp<MAX_TASK_AGE_MS;
+}
+export function normalizedPhrase(value){
+  return String(value||'').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[¡!¿?.,;:]+/g,' ').replace(/\s+/g,' ').trim();
+}
+export function englishIntent(phrase){
+  return /^(what\b|do i have\b|when should i\b|what time should i\b|how long\b|are there any\b|show my\b|my schedule\b|my meetings\b|my appointments\b)/.test(normalizedPhrase(phrase));
+}
+export function classifyCommand(phrase){
+  const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
+  if(/^(?:a que hora (?:debo|deberia|tengo que) salir|cuando (?:debo|deberia) salir|cuanto (?:tardare|se tarda) en llegar|when should i leave|what time should i leave|how long (?:will it take|to get there))\b/.test(n))return 'travel';
+  if(/^(?:tengo (?:citas|reuniones)|hay (?:citas|reuniones)|(?:cuales|que) (?:son )?(?:mis )?(?:citas|reuniones)|(?:que|cuales) (?:reuniones|citas) tengo|do i have any (?:appointments|meetings)|are there any (?:appointments|meetings)|my appointments|my meetings)\b/.test(n))return 'calendar';
+  if(/^(?:planifica (?:mi |el )?(?:dia|jornada)|planea (?:mi |el )?dia|organiza (?:mi |el )?dia|plan de hoy|mis prioridades de hoy|que (?:tengo|hay|debo hacer) hoy|what (?:i (?:got|have) to do|do i have|should i do|have i got) today|what is on my schedule today|what am i doing today|my schedule today)\b/.test(n))return 'brief';
+  return null;
+}
+function dueValue(task){
+  if(!task||!task.due_at)return null;
+  const date=new Date(task.due_at);
+  return Number.isFinite(date.getTime())?date:null;
+}
+export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Date(),english=false}={}){
+  const current=now instanceof Date?now:new Date(now);
+  if(!Number.isFinite(current.getTime()))throw Error('Invalid briefing timestamp');
+  if(!loaded||!Array.isArray(tasks)||!recentVerification(verifiedAt,current.getTime())){
+    return english
+      ? 'I cannot verify your tasks with recent data. Tap Update data first. Your calendar is not connected to JARVIS.'
+      : 'No puedo verificar tus tareas con datos recientes. Pulsa Actualizar datos primero. Tu calendario aún no está conectado a JARVIS.';
+  }
+  const dayKey=date=>date.getFullYear()+'-'+date.getMonth()+'-'+date.getDate();
+  const today=dayKey(current);
+  const sixDays=new Date(current.getFullYear(),current.getMonth(),current.getDate()+7);
+  const pending=tasks.filter(x=>x&&x.status!=='done');
+  const overdue=pending.filter(x=>{const d=dueValue(x);return d&&d<current});
+  const upcoming=pending.filter(x=>{const d=dueValue(x);return d&&dayKey(d)===today&&d>=current});
+  const rank={high:0,normal:1,low:2};
+  const urgency=d=>d?d<current?-2:d<sixDays?-1:0:1;
+  const ordered=[...pending].sort((a,b)=>{
+    const da=dueValue(a),db=dueValue(b);
+    return urgency(da)-urgency(db)||(rank[a.priority]??1)-(rank[b.priority]??1)||(da?.getTime()??Infinity)-(db?.getTime()??Infinity);
+  });
+  const taskText=(task,index)=>{
+    const d=dueValue(task);
+    const date=d?d.toLocaleString(english?'en-US':'es-PR',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+    const high=task.priority==='high'?(english?', high priority':', prioridad alta'):'';
+    return (index+1)+'. '+String(task.title||'Sin título').slice(0,120)+high+(date?(english?', due '+date:', vence '+date):'');
+  };
+  const suggestions=ordered.slice(0,3).map(taskText).join('; ');
+  const verified=new Date(verifiedAt).toLocaleTimeString(english?'en-US':'es-PR',{hour:'numeric',minute:'2-digit'});
+  if(english){
+    return 'Based on your JARVIS tasks verified at '+verified+': '+pending.length+' pending, '+overdue.length+' overdue and '+upcoming.length+' due later today. '+(suggestions?'Suggested priorities: '+suggestions+'. ':'No pending tasks were recorded. ')+'Your calendar and live traffic are not connected, so I cannot confirm meetings or departure times. These are task suggestions, not appointments.';
+  }
+  return 'Según tus tareas de JARVIS verificadas a las '+verified+': '+pending.length+' pendientes, '+overdue.length+' atrasadas y '+upcoming.length+' con vencimiento más tarde hoy. '+(suggestions?'Prioridades sugeridas: '+suggestions+'. ':'No hay tareas pendientes registradas. ')+'Tu calendario y el tráfico en vivo no están conectados; no puedo confirmar reuniones ni horas de salida. Estas son propuestas de tareas, no citas.';
+}
+export function trustedCommand(input,context={}){
+  const kind=classifyCommand(input);
+  if(!kind)return null;
+  const english=englishIntent(input);
+  if(kind==='calendar')return {language:english?'en':'es',text:english
+    ?'I cannot verify meetings or appointments. Your calendar is not connected to JARVIS. A task title does not confirm a meeting; no calendar events have been checked.'
+    :'No puedo confirmar citas ni reuniones. Tu calendario aún no está conectado a JARVIS. Una tarea no confirma una reunión; no he consultado eventos de calendario.'};
+  if(kind==='travel')return {language:english?'en':'es',text:english
+    ?'I cannot calculate a reliable departure time. I do not have a verified appointment, an authorized starting point or live traffic data. I will not invent a route or travel duration.'
+    :'No puedo calcular una hora fiable para salir. Me falta la cita verificada, un punto de partida autorizado y datos reales de tráfico. No inventaré rutas ni minutos.'};
+  return {language:english?'en':'es',text:dailyBriefing({...context,english})};
+}
