@@ -15,7 +15,7 @@ const PUBLISHABLE_KEY='sb_publishable_nfx_KpRm43JGbluEAk7YmA_MFDmxMVI';
 const API='https://orion-jarvis-api.onrender.com';
 const supabase=createClient(SUPABASE_URL,PUBLISHABLE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id);
-const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set()};
+const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null};
 let noticeTimer;
 function sayNotice(text){$('notice').textContent=text;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('notice').textContent='',5500)}
 function text(el,text){el.textContent=text??'';return el}
@@ -23,10 +23,36 @@ function element(tag,cls,str){const el=document.createElement(tag);if(cls)el.cla
 function ready(){return !!state.user&&!!state.session}
 function setStatus(label,ok){$('status-label').textContent=label;$('status-led').classList.toggle('ok',ok)}
 function visible(id,on){$(id).hidden=!on}
-function stopVoice(){state.voicePending=false;const recognition=state.recognition;state.recognition=null;if(recognition){recognition.onresult=recognition.onerror=recognition.onend=null;try{recognition.abort()}catch{}}if('speechSynthesis' in window)window.speechSynthesis.cancel();$('listen-button').classList.remove('active');$('listen-button').setAttribute('aria-pressed','false')}
+function voiceStatus(label,status='idle'){
+  const el=$('voice-state');if(!el)return;
+  el.textContent=label;el.dataset.state=status;
+}
+function updateVoiceControl(){
+  $('audio-toggle').setAttribute('aria-pressed',String(state.voiceEnabled));
+  $('audio-toggle').textContent=state.voiceEnabled?'Desactivar respuestas en voz alta':'Activar respuestas en voz alta';
+  if(!state.recognition&&!(window.speechSynthesis?.speaking))voiceStatus(state.voiceEnabled?'Voz automática activa':'Voz desactivada');
+}
+function stopVoice(){
+  state.voicePending=false;
+  const recognition=state.recognition;state.recognition=null;
+  if(recognition){recognition.onresult=recognition.onerror=recognition.onend=null;try{recognition.abort()}catch{}}
+  if('speechSynthesis' in window)window.speechSynthesis.cancel();
+  state.activeUtterance=null;
+  $('listen-button').classList.remove('active');$('listen-button').setAttribute('aria-pressed','false');
+  updateVoiceControl();
+}
+function setVoiceEnabled(enabled){
+  if(enabled&&!('speechSynthesis' in window)){
+    sayNotice('Este navegador no permite reproducir respuestas por voz.');return;
+  }
+  if(!enabled){stopVoice();state.voiceEnabled=false;updateVoiceControl();return}
+  state.voiceEnabled=true;updateVoiceControl();
+  // Safari necesita que el primer audio comience por un toque real.
+  speak('Voz activada. Ahora puedes hablar conmigo.',{force:true});
+}
 function clearIdentity(){
   state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';
-  for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();
+  for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();state.voiceEnabled=false;updateVoiceControl();
   $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();visible('action-box',false);
 }
 function updateIdentity(session){
@@ -66,7 +92,7 @@ function append(role,content){
   const item=element('article','message '+(role==='user'?'user':'assistant'));
   item.append(element('div','message-label',role==='user'?'TÚ':'JARVIS'),element('div','message-body',content));
   $('thread').append(item);$('thread').scrollTop=$('thread').scrollHeight;
-  if(role==='assistant'){state.lastReply=content;if(state.voicePending){state.voicePending=false;speak(content)}}
+  if(role==='assistant'){state.lastReply=content;if(state.voicePending){state.voicePending=false;if(state.voiceEnabled)speak(content)}}
   return item;
 }
 function drawTasks(){
@@ -162,7 +188,7 @@ function localCommand(input){
 async function processMessage(input){
   if(!ready()||state.busy)return;
   const clean=String(input||'').trim().slice(0,4000);if(!clean)return;
-  state.busy=true;$('send-button').disabled=true;
+  state.busy=true;$('send-button').disabled=true;state.voicePending=state.voiceEnabled;
   append('user',clean);$('message').value='';
   try{
     if(state.pending&&/^(confirmar accion|confirmar|aceptar)$/.test(normalize(clean))){await confirmAction();return}
@@ -176,27 +202,56 @@ async function processMessage(input){
   }catch(e){append('assistant','No pude completar la solicitud: '+e.message)}
   finally{state.busy=false;$('send-button').disabled=false}
 }
-function speak(text){
-  if(!('speechSynthesis' in window)){sayNotice('Este navegador no permite leer respuestas en voz alta.');return}
-  window.speechSynthesis.cancel();
-  const utterance=new SpeechSynthesisUtterance(text.slice(0,3500));utterance.lang='es-PR';utterance.rate=.95;utterance.pitch=.92;
-  window.speechSynthesis.speak(utterance);
+function speak(content,{force=false}={}){
+  if(!('speechSynthesis' in window)){sayNotice('Este navegador no permite reproducir audio.');return}
+  if(!state.voiceEnabled&&!force)return;
+  const words=String(content||'').trim().slice(0,3500);
+  if(!words)return;
+  const synth=window.speechSynthesis;
+  synth.cancel();
+  const voices=synth.getVoices();
+  const preferred=['es-PR','es-US','es-MX','es-ES'];
+  const spanish=preferred.map(lang=>voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())).find(Boolean) || voices.find(v=>v.lang.toLowerCase().startsWith('es'));
+  const utterance=new SpeechSynthesisUtterance(words);
+  if(spanish){utterance.voice=spanish;utterance.lang=spanish.lang}
+  else utterance.lang='es-ES';
+  utterance.rate=1.01;utterance.pitch=.94;utterance.volume=1;
+  state.activeUtterance=utterance;
+  utterance.onstart=()=>{if(state.activeUtterance===utterance)voiceStatus('JARVIS hablando','speaking')};
+  utterance.onend=()=>{if(state.activeUtterance===utterance){state.activeUtterance=null;updateVoiceControl()}};
+  utterance.onerror=()=>{if(state.activeUtterance===utterance){state.activeUtterance=null;updateVoiceControl();sayNotice('Audio no disponible. Comprueba el volumen y que la voz esté activada en Safari.')}};
+  synth.speak(utterance);
 }
 function listen(){
   if(!ready())return;
+  if(state.busy){sayNotice('JARVIS está preparando tu respuesta.');return}
+  if(!state.voiceEnabled){setVoiceEnabled(true);sayNotice('Voz activada. Toca Hablar una vez más.');return}
   const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!Speech){sayNotice('El dictado web no está disponible. Utiliza el micrófono del teclado.');return}
+  if(!Speech){sayNotice('El dictado web no está disponible aquí. Abre JARVIS en Safari o usa el micrófono del teclado.');return}
   stopVoice();
   try{
     const recognition=new Speech();state.recognition=recognition;
     recognition.lang='es-PR';recognition.continuous=false;recognition.interimResults=false;recognition.maxAlternatives=1;
     $('listen-button').classList.add('active');$('listen-button').setAttribute('aria-pressed','true');
-    recognition.onresult=event=>{const transcript=[...event.results].filter(x=>x.isFinal).map(x=>x[0]?.transcript||'').join(' ').trim();
-      if(transcript&&ready()){state.voicePending=true;void processMessage(transcript);}};
-    recognition.onerror=event=>sayNotice('Dictado no disponible ('+(event.error||'error')+'). Prueba el micrófono del teclado.');
-    recognition.onend=()=>{state.recognition=null;$('listen-button').classList.remove('active');$('listen-button').setAttribute('aria-pressed','false')};
-    recognition.start();sayNotice('Escuchando. Habla con naturalidad.');
-  }catch(e){stopVoice();sayNotice('No se pudo abrir el micrófono.')}
+    voiceStatus('Escuchando...', 'listening');
+    recognition.onresult=event=>{
+      const transcript=Array.from(event.results).filter(x=>x.isFinal).map(x=>x[0]?.transcript||'').join(' ').trim();
+      if(transcript&&ready()){
+        voiceStatus('Respondiendo...', 'thinking');
+        void processMessage(transcript);
+      }
+    };
+    recognition.onerror=event=>{
+      voiceStatus('Micrófono no disponible', 'idle');
+      sayNotice('Dictado no disponible ('+(event.error||'error')+'). Abre en Safari o usa el micrófono del teclado.');
+    };
+    recognition.onend=()=>{
+      state.recognition=null;
+      $('listen-button').classList.remove('active');$('listen-button').setAttribute('aria-pressed','false');
+      if(!state.busy)updateVoiceControl();
+    };
+    recognition.start();
+  }catch(e){stopVoice();sayNotice('No se pudo abrir el micrófono. Usa Safari e inténtalo otra vez.')}
 }
 document.querySelectorAll('.tab').forEach(x=>x.addEventListener('click',()=>setTab(x.dataset.tab)));
 document.querySelectorAll('[data-phrase]').forEach(x=>x.addEventListener('click',()=>void processMessage(x.dataset.phrase)));
@@ -206,8 +261,9 @@ $('task-form').addEventListener('submit',async e=>{e.preventDefault();const titl
 $('memory-form').addEventListener('submit',async e=>{e.preventDefault();const content=$('memory-content').value.trim();if(!content)return;
   try{await request('/v1/memories','POST',{content,category:'general'});$('memory-content').value='';await loadWorkspace();sayNotice('Recuerdo guardado.')}catch(err){sayNotice(err.message)}});
 $('action-accept').addEventListener('click',()=>void confirmAction());$('action-reject').addEventListener('click',()=>{discard();append('assistant','Propuesta cancelada.')});
+$('audio-toggle').addEventListener('click',()=>setVoiceEnabled(!state.voiceEnabled));
 $('listen-button').addEventListener('click',listen);$('stop-button').addEventListener('click',()=>{stopVoice();sayNotice('Voz detenida.')});
-$('read-button').addEventListener('click',()=>state.lastReply?speak(state.lastReply):sayNotice('No tengo una respuesta para leer.'));
+$('read-button').addEventListener('click',()=>state.lastReply?speak(state.lastReply,{force:true}):sayNotice('No tengo una respuesta para leer.'));
 $('signout-button').addEventListener('click',async()=>{clearIdentity();visible('workspace',false);visible('login',true);await supabase.auth.signOut();});
 $('login-form').addEventListener('submit',async e=>{e.preventDefault();const email=$('email').value.trim();if(!email)return;
   $('login-button').disabled=true;$('login-message').textContent='Preparando el enlace de acceso...';
@@ -218,6 +274,7 @@ $('login-form').addEventListener('submit',async e=>{e.preventDefault();const ema
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stopVoice()});
 supabase.auth.onAuthStateChange((_event,session)=>{queueMicrotask(()=>updateIdentity(session))});
+updateVoiceControl();
 window.jarvisInitialized=true;
 window.dispatchEvent(new Event('jarvis:initialized'));
 try {
