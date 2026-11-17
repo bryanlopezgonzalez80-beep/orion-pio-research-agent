@@ -214,7 +214,20 @@ function clearIdentity(){
 }
 function updateIdentity(session){
   const userId=session?.user?.id??null;
-  if(userId===state.user){state.session=session;return}
+  if(userId===state.user){
+    state.session=session;
+    if(!session){
+      visible('login',true);
+      visible('workspace',false);
+      setStatus('SIN SESIÓN',false);
+      syncStatus('Inicia sesión para conectar tus datos.','idle');
+    }else{
+      visible('login',false);
+      visible('workspace',true);
+      setStatus('SESIÓN ACTIVA',true);
+    }
+    return;
+  }
   clearIdentity();state.user=userId;state.session=session;
   visible('login',!session);visible('workspace',!!session);
   if(session){$('user-label').textContent=session.user.email||'Sesión privada';setStatus('SESIÓN ACTIVA',true);append('assistant','Conexión privada establecida. Puedes consultarme tus tareas y recuerdos, y utilizar las órdenes de voz. La IA generativa permanece bloqueada hasta que se autorice.');void loadWorkspace();}
