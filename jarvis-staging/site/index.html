@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#060b13">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://fdmfyguhpyiiyvjfimio.supabase.co https://orion-jarvis-api.onrender.com; img-src 'self' data:; manifest-src 'self'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="apple-touch-icon" href="./icon.svg">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <title>JARVIS | ORIÓN Intelligence</title>
+</head>
+<body>
+  <div class="ambient glow-1" aria-hidden="true"></div><div class="ambient glow-2" aria-hidden="true"></div>
+  <div class="app">
+    <header class="top">
+      <div class="brand"><div class="brand-mark" aria-hidden="true">J</div><div><strong>JARVIS<span class="accent">.</span></strong><small>ORIÓN / PERSONAL INTELLIGENCE</small></div></div>
+      <div class="top-right"><span class="status-led" id="status-led"></span><span id="status-label">INICIANDO</span></div>
+    </header>
+
+    <main id="login" class="auth-panel panel" hidden>
+      <p class="eyebrow">IDENTIFICACIÓN SEGURA</p>
+      <h1>Una presencia.<br><span>Tu contexto.</span></h1>
+      <p>Inicia sesión para consultar tus tareas y recuerdos. Tus datos permanecen en tu cuenta de Supabase.</p>
+      <form id="login-form">
+        <label for="email">Correo electrónico</label>
+        <input id="email" name="email" type="email" placeholder="tu@correo.com" autocomplete="email" required>
+        <button type="submit" class="primary" id="login-button">Enviar enlace de acceso</button>
+      </form>
+      <p id="login-message" class="note" role="status"></p>
+      <p class="microcopy">Utiliza el correo autorizado para ORIÓN JARVIS. No compartas códigos de inicio de sesión.</p>
+    </main>
+
+    <main id="workspace" hidden>
+      <section class="hero panel" aria-labelledby="hero-title">
+        <div class="hero-content"><p class="eyebrow">CENTRO DE COMANDO / SISTEMA PERSONAL</p><h1 id="hero-title">Estoy aquí.</h1><p id="hero-subtitle">Tareas, recuerdos y voz bajo tu control.</p><div class="hero-meta"><span>PRIVADO</span><span id="model-label">IA EN ESPERA</span></div></div>
+        <div class="arc-container" aria-hidden="true"><div class="arc arc-one"></div><div class="arc arc-two"></div><div class="arc arc-three"></div><div class="arc-core">J</div></div>
+      </section>
+      <nav class="tabs" aria-label="Secciones de JARVIS">
+        <button class="tab active" data-tab="conversation" aria-current="page">Consola</button>
+        <button class="tab" data-tab="tasks">Tareas</button>
+        <button class="tab" data-tab="memories">Memoria</button>
+      </nav>
+      <section class="pane active panel" id="pane-conversation" aria-label="Consola">
+        <header class="pane-head"><div><p class="eyebrow">CANAL / CONVERSACIÓN</p><h2>Habla con JARVIS</h2></div><span class="tiny">ES-PR</span></header>
+        <div id="thread" class="thread" role="log" aria-label="Conversación" aria-live="polite"></div>
+        <div class="suggestions">
+          <button type="button" class="chip" data-phrase="Resumen de hoy">Resumen de hoy</button>
+          <button type="button" class="chip" data-phrase="Qué tengo pendiente">Mis pendientes</button>
+          <button type="button" class="chip" data-phrase="Qué recuerdas de mí">Qué recuerdas</button>
+        </div>
+        <div id="action-box" class="action-box" hidden><p id="action-description"></p><div class="action-buttons"><button id="action-accept" class="primary" type="button">Confirmar</button><button id="action-reject" class="secondary" type="button">Cancelar</button></div></div>
+        <form id="message-form" class="composer">
+          <label for="message" class="sr-only">Mensaje para JARVIS</label>
+          <input id="message" name="message" maxlength="4000" placeholder="Dime qué necesitas..." autocomplete="off" required>
+          <button class="send" id="send-button" aria-label="Enviar mensaje" type="submit">ENVIAR</button>
+        </form>
+        <div class="voice-tools">
+          <button id="listen-button" class="primary mic-button" type="button" aria-pressed="false">Hablar</button>
+          <button id="read-button" class="secondary" type="button">Escuchar última</button>
+          <button id="stop-button" class="secondary" type="button">Detener</button>
+        </div>
+        <p class="tiny" id="voice-help">Si el dictado no está disponible, utiliza el micrófono del teclado de tu iPhone.</p>
+      </section>
+      <section class="pane panel" id="pane-tasks" aria-label="Tareas" hidden>
+        <header class="pane-head"><div><p class="eyebrow">TU AGENDA</p><h2>Lo que sigue.</h2></div><span class="tiny" id="task-count">0</span></header>
+        <form id="task-form" class="stack"><label for="task-title">Nueva tarea</label><input id="task-title" maxlength="240" placeholder="Ej. Repasar la reválida" required><div class="form-two"><select id="task-priority" aria-label="Prioridad"><option value="normal">Prioridad normal</option><option value="high">Prioridad alta</option><option value="low">Prioridad baja</option></select><button class="primary" type="submit">Añadir tarea</button></div></form>
+        <ul class="item-list" id="task-list"></ul>
+      </section>
+      <section class="pane panel" id="pane-memories" aria-label="Memoria" hidden>
+        <header class="pane-head"><div><p class="eyebrow">CONTEXTO ELEGIDO POR TI</p><h2>Lo que recuerdo.</h2></div><span class="tiny" id="memory-count">0</span></header>
+        <form id="memory-form" class="stack"><label for="memory-content">Guardar un recuerdo</label><textarea id="memory-content" maxlength="2000" rows="3" placeholder="Escribe algo útil que quieras conservar" required></textarea><button class="primary" type="submit">Guardar recuerdo</button></form>
+        <ul class="item-list" id="memory-list"></ul>
+      </section>
+      <div class="lower"><span id="user-label" class="tiny"></span><button id="signout-button" class="text-button" type="button">Cerrar sesión</button></div>
+    </main>
+    <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.8.0 · PRUEBAS</span></footer>
+    <p class="toast" id="notice" role="status" aria-live="polite"></p>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
