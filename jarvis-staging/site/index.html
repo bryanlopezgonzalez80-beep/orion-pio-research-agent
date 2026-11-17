@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#060b13">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="JARVIS">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://esm.sh; style-src 'self'; connect-src 'self' https://esm.sh https://fdmfyguhpyiiyvjfimio.supabase.co https://orion-jarvis-api.onrender.com; img-src 'self' data:; manifest-src 'self'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests">
   <link rel="stylesheet" href="./styles.css">
@@ -79,6 +82,7 @@
           <button id="read-button" class="secondary" type="button">Repetir audio</button>
           <button id="stop-button" class="secondary" type="button">Detener</button>
         </div>
+        <p class="tiny" id="voice-compat" role="status">Comprobando capacidades de voz...</p>
         <p class="tiny" id="voice-help">Para conversar, activa la voz y pulsa Iniciar diálogo. El modo continuo es experimental en iPhone: Safari puede pedirte tocar Hablar nuevamente. La página debe estar abierta; no escucha con el teléfono bloqueado. También puedes dictar con el teclado.</p>
         <details class="help-details"><summary>Cómo usar JARVIS en tu iPhone</summary><p>En Safari, toca Compartir y luego Añadir a pantalla de inicio para abrirlo como aplicación. Debes permitir el micrófono y mantener JARVIS visible durante una conversación. Puedes usar el teclado de iOS para dictar si Safari bloquea la escucha automática.</p></details>
       </section>
