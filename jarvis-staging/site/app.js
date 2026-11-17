@@ -23,6 +23,20 @@ function element(tag,cls,str){const el=document.createElement(tag);if(cls)el.cla
 function ready(){return !!state.user&&!!state.session}
 function setStatus(label,ok){$('status-label').textContent=label;$('status-led').classList.toggle('ok',ok)}
 function visible(id,on){$(id).hidden=!on}
+function updateVoiceCompatibility(){
+  const el=$('voice-compat');if(!el)return;
+  const recognition=Boolean(window.SpeechRecognition||window.webkitSpeechRecognition);
+  const synthesis='speechSynthesis' in window;
+  if(!recognition&&!synthesis){
+    el.textContent='Este navegador no ofrece reconocimiento ni lectura de voz web. Usa el dictado del teclado.';
+  }else if(!recognition){
+    el.textContent='Lectura de voz disponible. El micrófono web no está disponible; usa el dictado del teclado.';
+  }else if(!synthesis){
+    el.textContent='Reconocimiento de voz detectado. La lectura en voz alta no está disponible.';
+  }else{
+    el.textContent='Micrófono web y lectura de voz detectados. Safari puede limitar las conversaciones continuas.';
+  }
+}
 
 function voiceStatus(label,status='idle'){
   const el=$('voice-state');if(!el)return;
@@ -673,6 +687,7 @@ $('login-form').addEventListener('submit',async e=>{e.preventDefault();const ema
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopVoice();voiceStatus('Modo detenido: la página no está visible.','paused')}});
 supabase.auth.onAuthStateChange((_event,session)=>{queueMicrotask(()=>updateIdentity(session))});
 updateVoiceControl();
+updateVoiceCompatibility();
 window.jarvisInitialized=true;
 window.dispatchEvent(new Event('jarvis:initialized'));
 try {
