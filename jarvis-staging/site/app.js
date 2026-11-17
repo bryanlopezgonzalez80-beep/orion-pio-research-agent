@@ -15,7 +15,7 @@ const PUBLISHABLE_KEY='sb_publishable_nfx_KpRm43JGbluEAk7YmA_MFDmxMVI';
 const API='https://orion-jarvis-api.onrender.com';
 const supabase=createClient(SUPABASE_URL,PUBLISHABLE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id);
-const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null,syncSerial:0,tasksLoaded:false,memoriesLoaded:false};
+const state={user:null,session:null,rev:0,tasks:[],memories:[],busy:false,pending:null,model:false,conversation:null,lastReply:'',recognition:null,aborters:new Set(),voiceEnabled:false,voicePending:false,activeUtterance:null,dialogEnabled:false,listenSequence:0,rearmTimer:null,speechSequence:0,recognitionWatchdog:null,syncSerial:0,tasksLoaded:false,memoriesLoaded:false,historyLoaded:false,historySerial:0,historyDetailSerial:0,conversations:[]};
 let noticeTimer;
 function sayNotice(text){$('notice').textContent=text;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('notice').textContent='',5500)}
 function text(el,text){el.textContent=text??'';return el}
@@ -208,9 +208,9 @@ function startDialogue(){
   updateVoiceControl();
 }
 function clearIdentity(){
-  state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;
+  state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];
   for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();state.voiceEnabled=false;updateVoiceControl();
-  $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();visible('action-box',false);syncStatus('Sesión cerrada','idle');
+  $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();$('history-list').replaceChildren();$('history-messages').replaceChildren();visible('history-detail',false);visible('action-box',false);$('task-search').value='';$('memory-search').value='';syncStatus('Sesión cerrada','idle');
 }
 function updateIdentity(session){
   const userId=session?.user?.id??null;
@@ -334,10 +334,22 @@ function actionButton(label,description,handler){
 }
 function drawTasks(){
   const root=$('task-list');root.replaceChildren();
-  $('task-count').textContent=String(state.tasks.filter(x=>x.status!=='done').length)+' pendientes';
+  const pending=state.tasks.filter(x=>x.status!=='done');
+  $('task-count').textContent=String(pending.length)+' pendientes';
+  $('dash-pending').textContent=state.tasksLoaded?String(pending.length):'—';
+  $('dash-high').textContent=state.tasksLoaded?String(pending.filter(x=>x.priority==='high').length):'—';
+  $('dash-done').textContent=state.tasksLoaded?String(state.tasks.length-pending.length):'—';
   if(!state.tasksLoaded){root.append(element('li','empty','Tareas sin verificar. Pulsa Actualizar.'));return}
   if(!state.tasks.length){root.append(element('li','empty','No hay tareas guardadas.'));return}
-  for(const task of [...state.tasks].sort(taskSort)){
+  const search=normalize($('task-search').value);
+  const filter=$('task-filter').value;
+  const filtered=[...state.tasks].filter(task=>{
+    if(filter==='pending'&&task.status==='done')return false;
+    if(filter==='done'&&task.status!=='done')return false;
+    return !search||normalize(task.title).includes(search);
+  }).sort(taskSort);
+  if(!filtered.length){root.append(element('li','empty','No hay tareas que coincidan con el filtro.'));return}
+  for(const task of filtered){
     const row=element('li',task.status==='done'?'item-done':'');
     const main=element('div','item-main');
     main.append(element('div','item-title',task.title),element('div','item-sub',taskLabel(task)));
@@ -355,7 +367,10 @@ function drawMemories(){
   $('memory-count').textContent=String(state.memories.length);
   if(!state.memoriesLoaded){root.append(element('li','empty','Memoria sin verificar. Pulsa Actualizar.'));return}
   if(!state.memories.length){root.append(element('li','empty','Aún no has guardado recuerdos.'));return}
-  for(const memory of state.memories){
+  const search=normalize($('memory-search').value);
+  const filtered=state.memories.filter(memory=>!search||normalize(memory.content).includes(search)||normalize(memory.category||'').includes(search));
+  if(!filtered.length){root.append(element('li','empty','No hay recuerdos que coincidan con la búsqueda.'));return}
+  for(const memory of filtered){
     const row=element('li');
     const main=element('div','item-main');
     main.append(element('div','item-title',memory.content),element('div','item-sub',(memory.category||'general').toUpperCase()));
@@ -415,7 +430,88 @@ async function exportUserData(){
   }catch(e){sayNotice('No fue posible exportar: '+e.message)}
   finally{$('export-button').disabled=false}
 }
+
+async function loadHistory(){
+  if(!ready())return;
+  const revision=state.rev;
+  const serial=++state.historySerial;
+  $('history-refresh').disabled=true;
+  $('history-status').textContent='Consultando el historial privado...';
+  try{
+    const conversations=await request('/v1/conversations');
+    if(revision!==state.rev||serial!==state.historySerial)return;
+    if(!Array.isArray(conversations))throw Error('Respuesta del servidor no válida');
+    state.conversations=conversations;
+    state.historyLoaded=true;
+    drawHistory();
+    const count=conversations.length;
+    $('history-status').textContent=count?count+' conversación(es) guardada(s) en el servidor.':'Todavía no hay conversaciones guardadas. Los comandos locales no se almacenan aquí.';
+  }catch(e){
+    if(revision!==state.rev||serial!==state.historySerial)return;
+    state.historyLoaded=false;
+    $('history-status').textContent='No se pudo consultar el historial: '+e.message;
+  }finally{
+    if(revision===state.rev&&serial===state.historySerial)$('history-refresh').disabled=false;
+  }
+}
+function drawHistory(){
+  const root=$('history-list');root.replaceChildren();
+  if(!state.historyLoaded){
+    root.append(element('li','empty','Historial no verificado. Consulta el servidor.'));return;
+  }
+  if(!state.conversations.length){
+    root.append(element('li','empty','Sin conversaciones de IA guardadas.'));return;
+  }
+  for(const conversation of state.conversations){
+    if(!conversation||!conversation.id)continue;
+    const row=element('li');
+    const main=element('div','item-main');
+    const created=new Date(conversation.created_at);
+    const date=Number.isFinite(created.getTime())?created.toLocaleString('es-PR',{dateStyle:'medium',timeStyle:'short'}):'Sin fecha';
+    main.append(element('div','item-title',conversation.title||'Conversación'),element('div','item-sub',date));
+    const button=element('button','mini','Abrir');
+    button.type='button';button.setAttribute('aria-label','Abrir '+(conversation.title||'conversación'));
+    button.addEventListener('click',()=>void openHistory(conversation.id));
+    row.append(main,button);root.append(row);
+  }
+}
+async function openHistory(id){
+  if(!ready()||!state.conversations.some(x=>x.id===id))return;
+  const revision=state.rev;
+  const serial=++state.historyDetailSerial;
+  const conversation=state.conversations.find(x=>x.id===id);
+  $('history-title').textContent=conversation?.title||'Conversación';
+  $('history-messages').replaceChildren();
+  $('history-messages').append(element('div','empty','Cargando mensajes...'));
+  visible('history-detail',true);
+  try{
+    const messages=await request('/v1/conversations/'+encodeURIComponent(id)+'/messages');
+    if(revision!==state.rev||serial!==state.historyDetailSerial)return;
+    if(!Array.isArray(messages))throw Error('Formato de mensajes no válido');
+    const root=$('history-messages');root.replaceChildren();
+    if(!messages.length){root.append(element('div','empty','Esta conversación aún no tiene mensajes.'));return}
+    for(const message of messages){
+      const role=message.role==='user'?'user':'assistant';
+      const item=element('article','message '+role);
+      item.append(
+        element('div','message-label',role==='user'?'TÚ':'JARVIS'),
+        element('div','message-body',String(message.content||''))
+      );
+      root.append(item);
+    }
+  }catch(e){
+    if(revision===state.rev&&serial===state.historyDetailSerial){
+      $('history-messages').replaceChildren(element('div','empty','No se pudieron cargar los mensajes: '+e.message));
+    }
+  }
+}
+function closeHistory(){
+  state.historyDetailSerial+=1;
+  visible('history-detail',false);
+  $('history-messages').replaceChildren();
+}
 function setTab(next){
+  if(next==='history'&&!state.historyLoaded&&ready())void loadHistory();
   for(const tab of document.querySelectorAll('.tab')){const active=tab.dataset.tab===next;tab.classList.toggle('active',active);if(active)tab.setAttribute('aria-current','page');else tab.removeAttribute('aria-current')}
   for(const pane of document.querySelectorAll('.pane')){const active=pane.id==='pane-'+next;pane.classList.toggle('active',active);pane.hidden=!active}
 }
@@ -552,6 +648,11 @@ $('task-form').addEventListener('submit',async e=>{
 });
 $('memory-form').addEventListener('submit',async e=>{e.preventDefault();const content=$('memory-content').value.trim();if(!content)return;
   try{await request('/v1/memories','POST',{content,category:'general'});$('memory-content').value='';await loadWorkspace();sayNotice('Recuerdo guardado.')}catch(err){sayNotice('No se pudo guardar: '+err.message)}});
+$('task-search').addEventListener('input',drawTasks);
+$('task-filter').addEventListener('change',drawTasks);
+$('memory-search').addEventListener('input',drawMemories);
+$('history-refresh').addEventListener('click',()=>void loadHistory());
+$('history-close').addEventListener('click',closeHistory);
 $('sync-button').addEventListener('click',()=>void loadWorkspace());
 $('export-button').addEventListener('click',()=>void exportUserData());
 window.addEventListener('offline',()=>syncStatus('Sin conexión a Internet. Tus datos locales no se han borrado.','error'));
