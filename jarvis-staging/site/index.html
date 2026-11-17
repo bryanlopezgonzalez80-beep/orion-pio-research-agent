@@ -58,6 +58,7 @@
         <header class="pane-head"><div><p class="eyebrow">CANAL / CONVERSACIÓN</p><h2>Habla con JARVIS</h2></div><span class="tiny">ES-PR</span></header>
         <div id="thread" class="thread" role="log" aria-label="Conversación" aria-live="polite"></div>
         <div class="suggestions">
+          <button type="button" class="chip" data-phrase="Planifica mi día">Planifica mi día</button>
           <button type="button" class="chip" data-phrase="Resumen de hoy">Resumen de hoy</button>
           <button type="button" class="chip" data-phrase="Qué tengo pendiente">Mis pendientes</button>
           <button type="button" class="chip" data-phrase="Qué recuerdas de mí">Qué recuerdas</button>
@@ -98,7 +99,8 @@
           <input id="task-title" maxlength="240" placeholder="Ej. Repasar la reválida" required>
           <label for="task-due">Fecha y hora (opcional)</label>
           <input id="task-due" type="datetime-local" aria-label="Fecha y hora para la tarea">
-          <div class="form-two"><select id="task-priority" aria-label="Prioridad"><option value="normal">Prioridad normal</option><option value="high">Prioridad alta</option><option value="low">Prioridad baja</option></select><button class="primary" type="submit">Añadir tarea</button></div>
+          <div class="form-two"><select id="task-priority" aria-label="Prioridad"><option value="normal">Prioridad normal</option><option value="high">Prioridad alta</option><option value="low">Prioridad baja</option></select><button id="task-submit" class="primary" type="submit">Añadir tarea</button></div>
+          <button id="task-cancel-edit" class="secondary" type="button" hidden>Cancelar edición</button>
         </form>
         <div class="search-row">
           <label for="task-search" class="sr-only">Buscar tareas</label>
@@ -112,9 +114,9 @@
       </section>
       <section class="pane panel" id="pane-memories" aria-label="Memoria" hidden>
         <header class="pane-head"><div><p class="eyebrow">CONTEXTO ELEGIDO POR TI</p><h2>Lo que recuerdo.</h2></div><span class="tiny" id="memory-count">0</span></header>
-        <form id="memory-form" class="stack"><label for="memory-content">Guardar un recuerdo</label><textarea id="memory-content" maxlength="2000" rows="3" placeholder="Escribe algo útil que quieras conservar" required></textarea><button class="primary" type="submit">Guardar recuerdo</button></form>
+        <form id="memory-form" class="stack"><label for="memory-content">Guardar un recuerdo</label><textarea id="memory-content" maxlength="2000" rows="3" placeholder="Escribe algo útil que quieras conservar" required></textarea><label for="memory-category">Categoría</label><select id="memory-category" aria-label="Categoría del recuerdo"><option value="general">General</option><option value="study">Estudios</option><option value="work">Trabajo y proyectos</option><option value="fitness">Deporte</option><option value="personal">Personal</option></select><button class="primary" type="submit">Guardar recuerdo</button></form>
         <label for="memory-search" class="sr-only">Buscar recuerdos</label>
-        <input id="memory-search" type="search" maxlength="100" placeholder="Buscar en tus recuerdos..." autocomplete="off">
+        <div class="search-row"><input id="memory-search" type="search" maxlength="100" placeholder="Buscar recuerdos..." autocomplete="off"><select id="memory-filter" aria-label="Filtrar recuerdos por categoría"><option value="all">Todas</option><option value="general">General</option><option value="study">Estudios</option><option value="work">Trabajo</option><option value="fitness">Deporte</option><option value="personal">Personal</option></select></div>
         <ul class="item-list" id="memory-list"></ul>
       </section>
       <section class="pane panel" id="pane-history" aria-label="Historial" hidden>
@@ -133,7 +135,7 @@
       </section>
       <div class="lower"><span id="user-label" class="tiny"></span><button id="signout-button" class="text-button" type="button">Cerrar sesión</button></div>
     </main>
-    <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.9.2 · HISTORIAL</span></footer>
+    <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.9.3 · EXECUTIVE</span></footer>
     <p class="toast" id="notice" role="status" aria-live="polite"></p>
   </div>
   <script src="./boot.js" defer></script>
