@@ -7,7 +7,8 @@ export function normalizedPhrase(value){
   return String(value||'').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[¡!¿?.,;:]+/g,' ').replace(/\s+/g,' ').trim();
 }
 export function englishIntent(phrase){
-  return /^(what\b|do i have\b|when should i\b|what time should i\b|how long\b|are there any\b|show my\b|my schedule\b|my meetings\b|my appointments\b)/.test(normalizedPhrase(phrase));
+  const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
+  return /^(what\b|do i have\b|when should i\b|what time should i\b|how long\b|are there any\b|show my\b|my schedule\b|my meetings\b|my appointments\b)/.test(n);
 }
 export function classifyCommand(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
@@ -29,6 +30,8 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
       ? 'I cannot verify your tasks with recent data. Tap Update data first. Your calendar is not connected to JARVIS.'
       : 'No puedo verificar tus tareas con datos recientes. Pulsa Actualizar datos primero. Tu calendario aún no está conectado a JARVIS.';
   }
+  // Deadlines are compared using the device's local calendar day. Do not
+  // interpret a timestamp without a timezone as a verified appointment.
   const dayKey=date=>date.getFullYear()+'-'+date.getMonth()+'-'+date.getDate();
   const today=dayKey(current);
   const sixDays=new Date(current.getFullYear(),current.getMonth(),current.getDate()+7);
