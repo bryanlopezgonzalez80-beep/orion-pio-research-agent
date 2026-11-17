@@ -38,3 +38,22 @@ a{color:var(--cyan)}.sr-only{position:absolute;width:1px;height:1px;overflow:hid
 #voice-state[data-state="thinking"]{color:#a9c9ef}
 #voice-state[data-state="paused"]{color:#ebc793}
 @media(max-width:520px){.voice-config .voice-switch{flex:1 1 100%}}
+
+/* 0.9.1 — data integrity and iPhone controls */
+.sync-panel{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border:1px solid #2b4655;border-radius:13px;background:#071421}
+.sync-info{display:flex;align-items:center;gap:9px;min-width:0;flex:1}
+.sync-info span:last-child{font-size:12px;color:#bfd5e1;overflow-wrap:anywhere}
+.sync-dot{flex-shrink:0;height:8px;width:8px;border-radius:50%;background:#9eabb1}
+.sync-dot.ok{background:#77e3c1;box-shadow:0 0 10px #77e3c180}
+.sync-dot.error{background:#e5a47f;box-shadow:0 0 10px #e5a47f88}
+.sync-actions{display:flex;flex-wrap:wrap;gap:7px}
+.sync-actions button{white-space:nowrap}
+.item-list li{flex-wrap:wrap;align-items:center}
+.item-list .item-main{flex:1 1 200px}
+.item-list .item-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}
+.item-actions button{font-size:11px;min-height:38px;padding:7px 10px}
+.help-details{margin-top:14px;border-top:1px solid #294455;padding-top:11px}
+.help-details summary{cursor:pointer;font-size:12px;color:#8ce6ea;min-height:34px}
+.help-details p{font-size:12px;color:#c1d8e3}
+#task-due{color-scheme:dark}
+@media(max-width:520px){.sync-panel{align-items:stretch}.sync-info{flex:1 1 100%}.sync-actions{width:100%}.sync-actions button{flex:1 1 auto}.item-list .item-main{flex-basis:100%}.item-list .item-actions{justify-content:flex-start}.item-actions button{flex:1}}
