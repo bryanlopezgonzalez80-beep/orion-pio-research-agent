@@ -458,6 +458,11 @@ async function removeMemory(id){
 }
 async function exportUserData(){
   if(!ready())return;
+  // La exportación contiene datos privados: solicitar consentimiento antes de
+  // consultar el servidor y generar un archivo local en un dispositivo compartido.
+  const confirmed=window.confirm('Esta copia descargará tus tareas, recuerdos e historial privado en un archivo sin cifrar. Evita hacerlo en dispositivos compartidos. ¿Deseas continuar?');
+  if(!confirmed)return;
+  if(!ready())return;
   $('export-button').disabled=true;
   try{
     const backup=await request('/v1/data/export');
