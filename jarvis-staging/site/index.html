@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#060b13">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://fdmfyguhpyiiyvjfimio.supabase.co https://orion-jarvis-api.onrender.com; img-src 'self' data:; manifest-src 'self'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://esm.sh; style-src 'self'; connect-src 'self' https://esm.sh https://fdmfyguhpyiiyvjfimio.supabase.co https://orion-jarvis-api.onrender.com; img-src 'self' data:; manifest-src 'self'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests">
   <link rel="stylesheet" href="./styles.css">
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
   <link rel="apple-touch-icon" href="./icon.svg">
@@ -20,7 +20,7 @@
       <div class="top-right"><span class="status-led" id="status-led"></span><span id="status-label">INICIANDO</span></div>
     </header>
 
-    <main id="login" class="auth-panel panel" hidden>
+    <main id="login" class="auth-panel panel">
       <p class="eyebrow">IDENTIFICACIÓN SEGURA</p>
       <h1>Una presencia.<br><span>Tu contexto.</span></h1>
       <p>Inicia sesión para consultar tus tareas y recuerdos. Tus datos permanecen en tu cuenta de Supabase.</p>
@@ -79,6 +79,7 @@
     <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.8.0 · PRUEBAS</span></footer>
     <p class="toast" id="notice" role="status" aria-live="polite"></p>
   </div>
+  <script src="./boot.js" defer></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
