@@ -14,5 +14,11 @@
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
+  ],
+  "id": "./",
+  "lang": "es-PR",
+  "categories": [
+    "productivity",
+    "utilities"
   ]
 }
