@@ -593,6 +593,8 @@ function localDayPlan(){
   const todayPending=pending.filter(t=>{const d=dueDate(t);return d&&dateKey(d)===today&&d.getTime()>=now.getTime()});
   const nextSeven=pending.filter(t=>{const d=dueDate(t);return d&&d>=tomorrow&&d<sevenDays});
   const undated=pending.filter(t=>!dueDate(t));
+  const future=pending.filter(t=>{const d=dueDate(t);return d&&d>=sevenDays});
+  const countLabel=(n,one,many)=>n+' '+(n===1?one:many);
   const priority={high:0,normal:1,low:2};
   const ordered=[...pending].sort((a,b)=>{
     const as=priority[a.priority]??1,bs=priority[b.priority]??1;
@@ -602,7 +604,7 @@ function localDayPlan(){
     return aUrgency-bUrgency||as-bs||(ad?.getTime()??Infinity)-(bd?.getTime()??Infinity);
   });
   const starters=ordered.slice(0,3).map((t,i)=>(i+1)+'. '+t.title+(t.priority==='high'?' (prioridad alta)':'')).join('; ');
-  return 'Tu plan sugerido de hoy se basa únicamente en tus tareas guardadas. Tienes '+pending.length+' pendientes: '+overdue.length+' atrasadas, '+todayPending.length+' por vencer hoy, '+nextSeven.length+' dentro de los próximos siete días y '+undated.length+' sin fecha. Te sugiero empezar por: '+starters+'. Este orden es una propuesta; no he cambiado tu calendario.';
+  return 'Tu plan sugerido de hoy se basa únicamente en tus tareas guardadas. Tienes '+countLabel(pending.length,'tarea pendiente','tareas pendientes')+': '+countLabel(overdue.length,'atrasada','atrasadas')+', '+countLabel(todayPending.length,'por vencer hoy','por vencer hoy')+', '+countLabel(nextSeven.length,'en los próximos seis días','en los próximos seis días')+', '+countLabel(future.length,'con fecha posterior','con fecha posterior')+' y '+countLabel(undated.length,'sin fecha','sin fecha')+'. Te sugiero empezar por: '+starters+'. Este orden es una propuesta; no he cambiado tu calendario.';
 }
 function localCommand(input){
   const normalized=normalize(input);
