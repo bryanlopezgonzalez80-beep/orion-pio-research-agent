@@ -177,6 +177,8 @@ function beginListening(automatic=false){
     };
     recognition.onaudiostart=()=>{if(sequence===state.listenSequence)transcript('Safari confirmó entrada de audio. Esperando palabras...')};
     recognition.onspeechstart=()=>{if(sequence===state.listenSequence)transcript('El navegador detectó voz. Esperando transcripción...')};
+    recognition.onspeechend=()=>{if(sequence===state.listenSequence&&!gotFinal)transcript('El navegador detectó el final de la voz, pero aún no entregó texto. Esperando resultado...')};
+    recognition.onnomatch=()=>{if(sequence===state.listenSequence&&!gotFinal)transcript('El reconocimiento no encontró palabras coincidentes. Prueba el dictado del teclado del iPhone.')};
     recognition.onerror=event=>{
       if(sequence!==state.listenSequence)return;
       failed=true;
