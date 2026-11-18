@@ -224,3 +224,13 @@ test('Invisible-only task titles cannot become fabricated commitments',()=>{
  assert.doesNotMatch(response,/Sin título/);
  assert.equal(tasks[0].title,'\u200b\u2060\ufeff');
 });
+
+test('Calendar and agenda paraphrases fail closed in Spanish and English',()=>{
+ for(const [phrase,language] of [['What is on my calendar today?','en'],["What's on my agenda tomorrow?",'en'],['Show my calendar','en'],['¿Qué tengo en mi calendario hoy?','es'],['Muéstrame mi agenda','es']]){
+  const result=trustedCommand(phrase,ctx);
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  assert.equal(result?.language,language,phrase);
+  assert.match(result.text,/not connected|no conectado|no está conectado|no está conectad/i,phrase);
+  assert.doesNotMatch(result.text,/confirmed at|confirmada a las/i,phrase);
+ }
+});
