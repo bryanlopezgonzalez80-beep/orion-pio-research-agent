@@ -45,7 +45,7 @@ Estado: desarrollo activo (rama `orion-jarvis-staging`). Este documento no certi
 - [ ] Pruebas end-to-end reales en iPhone y casos de fallos de red/latencia.
 
 ### 1.1 — acciones y calendario
-- [ ] Conectar calendario autorizado por usuario.
+- [ ] Conectar calendarios autorizados por usuario: Apple/iCloud, Google Calendar y Outlook/Microsoft 365, según los criterios de «Calendarios de distintas cuentas y conexión voluntaria».
 - [ ] Confirmación antes de crear, modificar o eliminar eventos.
 - [ ] Registro de acciones, errores, reintentos idempotentes y revocación.
 - [ ] Recordatorios y notificaciones únicamente en plataformas compatibles.
@@ -74,6 +74,46 @@ Principio de producto: un asistente fiable no inventa agenda, disponibilidad, ti
 - [ ] Comportamiento seguro cuando falla la red, expira la sesión o un proveedor no responde; nunca sustituir el error por una agenda vacía ficticia.
 - [ ] Trazabilidad de acciones; registro de qué fue propuesto, confirmado, enviado, guardado o falló, sin registrar secretos en los logs.
 - [ ] Indicadores de exactitud, latencia, estabilidad del audio, permisos y tasas de fallo; pruebas de regresión reproducibles.
+
+### Calendarios de distintas cuentas y conexión voluntaria
+Requisito de Bryan, 18 de noviembre de 2026 (America/Puerto_Rico). **Diseño pendiente de implementación y validación real por proveedor.**
+
+La app Calendario del iPhone puede mostrar cuentas de diferentes proveedores. JARVIS debe conectar la cuenta que aloja los eventos; no asumir que todos los eventos visibles en el iPhone pertenecen a iCloud. Una conexión de calendario disponible en ChatGPT no autoriza ni conecta automáticamente la aplicación JARVIS.
+
+| Fuente elegida | Vía prevista | Límite que debe explicar el producto |
+| --- | --- | --- |
+| Apple / iCloud Calendar | Conector de servidor para iCloud; evaluar CalDAV y la autorización admitida para JARVIS. Apple ofrece autorización de cuenta para apps compatibles y contraseña específica para otras apps. | Verificar compatibilidad antes de ofrecer el flujo. No pedir la contraseña principal de Apple en JARVIS ni en el chat. |
+| Calendarios del dispositivo iPhone | EventKit en una futura app iOS con componente nativo y permiso del sistema. | La PWA de Safari no obtiene acceso a EventKit por instalarse en la pantalla de inicio; los eventos exclusivamente locales no aparecen mediante un conector de iCloud. |
+| Google Calendar | Google Calendar API y autorización OAuth individual. | Registrar la aplicación y cumplir la verificación que corresponda antes de ofrecer acceso público; respetar permisos efectivos de cada calendario. |
+| Outlook.com / Microsoft 365 | Microsoft Graph y autorización delegada individual. | Respetar políticas de la organización; algunas cuentas pueden requerir consentimiento del administrador. |
+| Archivo o suscripción iCalendar (.ics) | Importación puntual o suscripción de lectura, como funciones separadas. | Importar un archivo no equivale a sincronización continua; una suscripción no permite editar la fuente y su actualización puede demorarse. |
+
+- [ ] Flujo móvil y accesible: Ajustes → Calendarios → Conectar cuenta → autorizar en el proveedor → elegir calendarios → mostrar estado y última sincronización. Cada persona elige si conecta una o varias cuentas.
+- [ ] Lectura inicial para briefing; solicitar capacidad de edición cuando la persona quiera usarla. Explicar la diferencia entre los controles de JARVIS y el permiso real concedido por el proveedor o iOS (EventKit requiere acceso completo para leer eventos).
+- [ ] Vista unificada de los calendarios seleccionados, conservando cuenta, calendario, identificador de origen y zona horaria. No copiar eventos entre proveedores por el mero hecho de conectar cuentas.
+- [ ] Elegir calendario de destino predeterminado para nuevas citas, permitiendo cambiarlo antes de confirmar. Crear, editar, borrar o invitar requiere autorización para esa acción, permisos efectivos y resultado verificado del proveedor.
+- [ ] Aislamiento por usuario de JARVIS: conectar la cuenta de una persona no permite consultar calendarios de otros usuarios. Acceso compartido únicamente mediante los permisos y autorizaciones correspondientes.
+- [ ] Credenciales y tokens persistentes solo en servidor y cifrados; secretos fuera de frontend, localStorage, conversación y logs. OAuth con protección de estado, callback validado y PKCE cuando corresponda.
+- [ ] Mostrar conexión pendiente, conectada, sincronizando, con error, caducada o revocada según evidencia real. Desconectar detiene trabajos pendientes y acceso futuro y elimina credenciales; explicar qué datos ya importados se conservan y ofrecer borrarlos.
+- [ ] Sincronización incremental o por consulta según el proveedor, con reautorización y límites de frecuencia. Conservar cancelaciones, cambios de series recurrentes y excepciones; identificar duplicados sin fusionar eventos solo por tener el mismo título.
+- [ ] Una fuente no conectada, una sincronización parcial o un error no permite afirmar «no tienes reuniones». Informar qué cuentas se consultaron, cuándo y cuáles faltan; no prometer actualización instantánea ni avisos con el teléfono bloqueado sin pruebas.
+- [ ] Para personas que usan varios proveedores: combinar disponibilidad solo dentro de los permisos concedidos; mostrar conflictos y proponer opciones, sin mover compromisos automáticamente.
+
+**Aceptación mínima antes de anunciar sincronización disponible:**
+1. Conectar y revocar una cuenta real de cada proveedor anunciado, desde iPhone; conservar el aislamiento entre dos usuarios de prueba.
+2. Leer únicamente los calendarios seleccionados y distinguir cuenta de origen, invitaciones pendientes, eventos cancelados, recurrencias, todo el día y zonas horarias con cambios de horario estacional.
+3. Crear o modificar con confirmación en el calendario elegido, comprobar el resultado en el proveedor y evitar duplicados tras reintento o respuesta de red incierta; usar versiones/ETag cuando el proveedor lo admita para detectar ediciones concurrentes.
+4. Tras denegación de permiso, expiración, desconexión o error de una de varias cuentas, dar un briefing que declare su cobertura y vigencia reales.
+5. Distinguir importación .ics de suscripción y de conexión bidireccional; no publicar calendarios privados para facilitar la conexión.
+6. Probar las órdenes «¿Qué tengo hoy?», «What meetings do I have today?» y «Añade esta cita a mi calendario de trabajo», con aclaración del destino si es ambiguo.
+7. Documentar registro de aplicaciones, permisos y posibles costes antes de activar conectores. Estas casillas describen trabajo pendiente, no conexiones ya realizadas.
+
+Referencias oficiales revisadas el 18 de noviembre de 2026:
+- [Cuentas de calendario en iPhone](https://support.apple.com/en-euro/guide/iphone/iphc37be2016/ios).
+- [Autorización de apps para iCloud Mail, Calendar y Contacts](https://support.apple.com/en-us/121539).
+- [Niveles de acceso de EventKit](https://developer.apple.com/documentation/eventkit/accessing-calendar-using-eventkit-and-eventkitui).
+- [Permisos de Google Calendar API](https://developers.google.com/workspace/calendar/api/auth).
+- [Calendarios y permisos delegados de Microsoft Graph](https://learn.microsoft.com/en-us/graph/api/user-list-calendars?view=graph-rest-1.0).
 
 ### Voice-first Executive Briefing (español/English)
 - [ ] Entender «JARVIS, ¿qué tengo hoy?», «What I got to do today?», «Do I have any appointments or meetings?» y seguimientos bilingües.
