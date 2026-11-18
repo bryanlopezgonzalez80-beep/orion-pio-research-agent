@@ -34,3 +34,11 @@ test('Voice-first changes do not enable billable model requests',()=>{
  assert.doesNotMatch(app,/ENABLE_MODEL_REQUESTS\\s*[:=]\\s*(?:true|1)/);
  assert.doesNotMatch(html,/sk-(?:proj-)?[A-Za-z0-9_-]{16,}/);
 });
+
+test('Microphone accessible name tracks actual listening and speaking states',()=>{
+ const body=app.slice(app.indexOf('function voiceStatus('),app.indexOf('function transcript('));
+ assert.match(body,/mic\.setAttribute\('aria-label'/);
+ for(const status of ['listening','thinking','speaking'])assert.ok(body.includes("status==='"+status+"'"));
+ assert.match(body,/Micrófono activo: JARVIS está escuchando/);
+ assert.match(body,/Activar micrófono para hablar con JARVIS/);
+});
