@@ -58,7 +58,7 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
   const sevenDays=new Date(current.getTime()+7*24*60*60*1000);
   // Completed or explicitly cancelled tasks must never be presented as outstanding commitments.
   const inactiveStatuses=new Set(['done','completed','complete','cancelled','canceled']);
-  const pending=tasks.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.title==='string'&&safeTaskTitle(x.title)!=='Sin título'&&!inactiveStatuses.has(String(x.status??'').trim().toLowerCase()));
+  const pending=tasks.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.title==='string'&&safeTaskTitle(x.title)!=='Sin título'&&!inactiveStatuses.has(String(x.status??'').trim().toLowerCase())&&String(x.status??'pending').trim().toLowerCase()==='pending');
   const overdue=pending.filter(x=>{const d=dueValue(x);return d&&d<current});
   const upcoming=pending.filter(x=>{const d=dueValue(x);return d&&calendarDay(d)===today&&d>=current});
   const rank={high:0,normal:1,low:2};
