@@ -42,3 +42,14 @@ test('Microphone accessible name tracks actual listening and speaking states',()
  assert.match(body,/Micrófono activo: JARVIS está escuchando/);
  assert.match(body,/Activar micrófono para hablar con JARVIS/);
 });
+
+test('A single mic tap starts recognition without requiring TTS or a second tap',()=>{
+ const start=app.indexOf('function listen(){');
+ const end=app.indexOf("document.querySelectorAll('.tab')",start);
+ assert.ok(start>=0&&end>start);
+ const handler=app.slice(start,end);
+ assert.match(handler,/beginListening\(false\)/);
+ assert.doesNotMatch(handler,/setVoiceEnabled\(true\)|toca Hablar nuevamente/);
+ assert.match(app,/voiceStatus\(automatic\?'Intentando reanudar micrófono\.\.\.':'Solicitando micrófono\.\.\.','thinking'\)/);
+ assert.match(app,/recognition\.onstart=\(\)=>\{[\s\S]*?voiceStatus\('Escuchando\.\.\.','listening'\)/);
+});
