@@ -33,7 +33,12 @@ function dueValue(task){
   if(y<1||mo<1||mo>12||d<1||d>31||h>23||mi>59||sec>59)return null;
   const canonical=new Date(Date.UTC(y,mo-1,d,h,mi,sec));
   if(canonical.getUTCFullYear()!==y||canonical.getUTCMonth()!==mo-1||canonical.getUTCDate()!==d)return null;
-  if(zone.toUpperCase()!=='Z'&&(Number(offsetHours)>23||Number(offsetMinutes)>59))return null;
+  // Real-world UTC offsets are bounded by UTC−12:00 and UTC+14:00; never accept fictitious zones.
+  if(zone.toUpperCase()!=='Z'){
+    const oh=Number(offsetHours),om=Number(offsetMinutes);
+    const minutes=oh*60+om;
+    if(om>59||minutes>(sign==='+'?14*60:12*60))return null;
+  }
   const date=new Date(raw);
   return Number.isFinite(date.getTime())?date:null;
 }
