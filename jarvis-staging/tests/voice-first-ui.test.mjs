@@ -90,3 +90,11 @@ test('Speech-end and no-match events report uncertainty without inventing transc
  assert.match(app,/El reconocimiento no encontró palabras coincidentes/);
  assert.match(app,/recognition\.onspeechend=\(\)=>\{if\(sequence===state\.listenSequence&&!gotFinal\)/);
 });
+
+test('Malformed recognition results are handled defensively and errors stay browser-neutral',()=>{
+ assert.match(app,/all\.map\(x=>String\(x\?\.\[0\]\?\.transcript\|\|''\)\)/);
+ assert.match(app,/all\.filter\(x=>x\?\.isFinal\)/);
+ assert.match(app,/El navegador rechazó el reconocimiento de voz/);
+ assert.match(app,/El navegador terminó sin entregar palabras/);
+ assert.doesNotMatch(app,/Safari no tiene permiso para usar el micrófono/);
+});
