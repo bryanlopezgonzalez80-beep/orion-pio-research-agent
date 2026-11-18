@@ -162,3 +162,11 @@ test('Natural calendar questions in Spanish and English are never treated as ver
   assert.ok(!response.text.includes('9:00'),phrase);
  }
 });
+
+test('Briefing task titles cannot inject control characters or multiline speech',()=>{
+ const tasks=[{title:'\u0000\u001bEnviar\n\n informe\r\t urgente\u007f',status:'pending',priority:'normal',due_at:null}];
+ const result=dailyBriefing({...ctx,tasks});
+ assert.match(result,/Enviar informe urgente/);
+ assert.ok(!/[\u0000-\u001f\u007f-\u009f]/.test(result));
+ assert.ok(!result.includes('Enviar\n'));
+});
