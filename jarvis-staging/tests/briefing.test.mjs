@@ -234,3 +234,19 @@ test('Calendar and agenda paraphrases fail closed in Spanish and English',()=>{
   assert.doesNotMatch(result.text,/confirmed at|confirmada a las/i,phrase);
  }
 });
+
+test('Only explicitly pending tasks are announced as current commitments',()=>{
+ const tasks=[
+  {title:'Draft',status:'draft'},
+  {title:'Archived',status:'archived'},
+  {title:'Blocked',status:'blocked'},
+  {title:'Unknown',status:'unexpected'},
+  {title:'Current',status:' PENDING '},
+  {title:'Legacy task without status'}
+ ];
+ const result=dailyBriefing({...ctx,tasks});
+ assert.match(result,/2 pendientes/);
+ assert.match(result,/Current/);
+ assert.match(result,/Legacy task without status/);
+ for(const title of ['Draft','Archived','Blocked','Unknown'])assert.ok(!result.includes(title),title);
+});
