@@ -104,3 +104,16 @@ test('Impossible dates, overflow hours and invalid offsets are not confirmed dea
   assert.match(result,/vence /,due_at);
  }
 });
+
+test('Real-world UTC offsets only: UTC−12 through UTC+14',()=>{
+ const t=new Date('2026-11-18T08:00:00Z');
+ const base={loaded:true,verifiedAt:t.getTime()-1000,now:t};
+ for(const due_at of ['2026-11-18T09:00:00+14:01','2026-11-18T09:00:00-12:01','2026-11-18T09:00:00+15:00','2026-11-18T09:00:00-13:00','2026-11-18T09:00:00+00:60','2026-11-18T09:00:00+23:00']){
+  const result=dailyBriefing({...base,tasks:[{title:'Invalid offset',status:'pending',due_at}]});
+  assert.ok(!result.includes('vence '),due_at);
+ }
+ for(const due_at of ['2026-11-18T09:00:00+14:00','2026-11-18T09:00:00-12:00','2026-11-18T09:00:00+05:30','2026-11-18T09:00:00Z']){
+  const result=dailyBriefing({...base,tasks:[{title:'Valid offset',status:'pending',due_at}]});
+  assert.match(result,/vence /,due_at);
+ }
+});
