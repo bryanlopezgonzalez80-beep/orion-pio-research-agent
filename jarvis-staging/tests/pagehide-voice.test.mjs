@@ -17,3 +17,20 @@ test('pagehide handler does not make requests or alter user data',()=>{
  const body=app.slice(app.indexOf("window.addEventListener('pagehide'"),app.indexOf("window.addEventListener('focus'",app.indexOf("window.addEventListener('pagehide'")));
  assert.doesNotMatch(body,/fetch\(|request\(|supabase\.|localStorage|loadWorkspace\(|saveTask\(/);
 });
+
+test('voice shutdown invalidates delayed recognition callbacks',()=>{
+ const cancel=app.slice(app.indexOf('function cancelRecognition(){'),app.indexOf('function cancelSpeech(){'));
+ assert.match(cancel,/state\.listenSequence\s*\+=\s*1/);
+ assert.match(cancel,/rec\.onresult=rec\.onerror=rec\.onend=null/);
+ assert.match(cancel,/rec\.abort\(\)/);
+});
+test('voice shutdown invalidates delayed speech callbacks',()=>{
+ const cancel=app.slice(app.indexOf('function cancelSpeech(){'),app.indexOf('function stopVoice(){'));
+ assert.match(cancel,/state\.speechSequence\s*\+=\s*1/);
+ assert.match(cancel,/state\.activeUtterance=null/);
+ assert.match(cancel,/speechSynthesis\.cancel\(\)/);
+});
+test('pagehide never triggers automatic rearming of the microphone',()=>{
+ const handler=app.slice(app.indexOf("window.addEventListener('pagehide'"),app.indexOf("window.addEventListener('focus'",app.indexOf("window.addEventListener('pagehide'")));
+ assert.doesNotMatch(handler,/scheduleRearm|beginListening|startDialogue|setVoiceEnabled/);
+});
