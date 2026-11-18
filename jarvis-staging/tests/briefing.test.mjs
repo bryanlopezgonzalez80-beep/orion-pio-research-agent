@@ -153,3 +153,12 @@ test('Priority labels and ordering normalize casing and whitespace',()=>{
  assert.ok(result.indexOf('Normal priority')<result.indexOf('Low priority'));
  assert.match(result,/High priority, prioridad alta/);
 });
+
+test('Natural calendar questions in Spanish and English are never treated as verified meetings',()=>{
+ for(const phrase of ['Do I have meetings today?','Jarvis, do I have appointments tomorrow?','¿Tengo alguna reunión hoy?']){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const response=trustedCommand(phrase,ctx);
+  assert.match(response.text,/calendar|calendario/i,phrase);
+  assert.ok(!response.text.includes('9:00'),phrase);
+ }
+});
