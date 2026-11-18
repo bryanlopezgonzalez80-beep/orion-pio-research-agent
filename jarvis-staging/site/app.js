@@ -200,7 +200,7 @@ function beginListening(automatic=false){
     };
     $('listen-button').classList.add('active');
     $('listen-button').setAttribute('aria-pressed','true');
-    voiceStatus(automatic?'Reanudando escucha...':'Activando micrófono...','listening');
+    voiceStatus(automatic?'Intentando reanudar micrófono...':'Solicitando micrófono...','thinking');
     armRecognitionWatchdog(recognition,sequence);
     recognition.start();
   }catch(error){
@@ -732,8 +732,8 @@ function speak(content,{force=false,language=null}={}){
 function listen(){
   if(!ready())return;
   if(state.busy){sayNotice('JARVIS está terminando la respuesta.');return}
-  if(!state.voiceEnabled){setVoiceEnabled(true);sayNotice('Voz activada; toca Hablar nuevamente.');return}
-  // Pulsar Hablar mientras JARVIS habla interrumpe su voz.
+  // Listening must not depend on speech playback. A single user gesture starts recognition.
+  // Spoken replies remain opt-in via the separate audio control.
   beginListening(false);
 }
 document.querySelectorAll('.tab').forEach(x=>x.addEventListener('click',()=>setTab(x.dataset.tab)));
