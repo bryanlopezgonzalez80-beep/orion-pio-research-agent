@@ -180,3 +180,10 @@ test('Combined appointments and meetings queries remain calendar-only and fail c
   assert.doesNotMatch(answer.text,/9:00|confirmed meeting at/i);
  }
 });
+
+test('Bidi direction controls in untrusted task titles are removed before spoken briefing',()=>{
+ const tasks=[{title:'Enviar\u202e informe\u2066 urgente\u200f',status:'pending',priority:'normal',due_at:null}];
+ const result=dailyBriefing({...ctx,tasks});
+ assert.match(result,/Enviar informe urgente/);
+ assert.doesNotMatch(result,/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/);
+});
