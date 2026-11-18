@@ -8,12 +8,12 @@ export function normalizedPhrase(value){
 }
 export function englishIntent(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
-  return /^(what\b|do i have\b|when should i\b|what time should i\b|how long\b|are there any\b|show my\b|my schedule\b|my meetings\b|my appointments\b)/.test(n);
+  return /^(what\b|what's\b|do i have\b|when should i\b|what time should i\b|how long\b|are there any\b|show my\b|my schedule\b|my meetings\b|my appointments\b|what\b|show my\b)/.test(n);
 }
 export function classifyCommand(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
   if(/^(?:a que hora (?:debo|deberia|tengo que) salir|cuando (?:debo|deberia) salir|cuanto (?:tardare|se tarda) en llegar|when should i leave|what time should i leave|how long (?:will it take|to get there))\b/.test(n))return 'travel';
-  if(/^(?:tengo (?:(?:alguna|una) reunion|(?:algunas|unas) citas|citas|reuniones)|hay (?:citas|reuniones)|(?:cuales|que) (?:son )?(?:mis )?(?:citas|reuniones)|(?:que|cuales) (?:reuniones|citas) tengo|do i have (?:any )?(?:appointments|meetings)(?: (?:or|and) (?:appointments|meetings))?|are there any (?:appointments|meetings)(?: (?:or|and) (?:appointments|meetings))?|my appointments|my meetings)\b/.test(n))return 'calendar';
+  if(/^(?:tengo (?:(?:alguna|una) reunion|(?:algunas|unas) citas|citas|reuniones)|hay (?:citas|reuniones)|(?:cuales|que) (?:son )?(?:mis )?(?:citas|reuniones)|(?:que|cuales) (?:reuniones|citas) tengo|do i have (?:any )?(?:appointments|meetings)(?: (?:or|and) (?:appointments|meetings))?|are there any (?:appointments|meetings)(?: (?:or|and) (?:appointments|meetings))?|my appointments|my meetings|what(?: is| s|'s)? on my calendar|what(?: is| s|'s)? on my agenda|show my calendar|show my meetings|show my appointments|que (?:hay|tengo) en (?:mi |el )?calendario|que (?:hay|tengo) en (?:mi |la )?agenda|muestrame (?:mi |el )?calendario|muestrame (?:mi |la )?agenda)\b/.test(n))return 'calendar';
   if(/^(?:planifica (?:mi |el )?(?:dia|jornada)|planea (?:mi |el )?dia|organiza (?:mi |el )?dia|plan de hoy|mis prioridades de hoy|que (?:tengo|hay|debo hacer) hoy|what (?:i (?:got|have) to do|do i have|should i do|have i got) today|what is on my schedule today|what am i doing today|my schedule today)\b/.test(n))return 'brief';
   return null;
 }
