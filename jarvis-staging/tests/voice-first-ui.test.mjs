@@ -72,3 +72,13 @@ test('Native iPhone dictation fallback focuses existing composer without request
  assert.match(handler,/micrófono del teclado del iPhone/);
  assert.doesNotMatch(handler,/request\(|getUserMedia|processMessage\(|signIn|localStorage|fetch\(/);
 });
+
+test('Speech failures identify browser events without assuming Chrome is Safari',()=>{
+ assert.match(app,/recognition\.onaudiostart=/);
+ assert.match(app,/recognition\.onspeechstart=/);
+ assert.match(app,/Reconocimiento web \('/);
+ assert.match(app,/language-not-supported/);
+ assert.match(app,/code==='network'/);
+ assert.match(app,/El navegador no entregó transcripción en 20 segundos/);
+ assert.doesNotMatch(app,/Diagnóstico Safari:/);
+});
