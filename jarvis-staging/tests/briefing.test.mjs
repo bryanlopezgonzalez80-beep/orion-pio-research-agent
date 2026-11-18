@@ -215,3 +215,12 @@ test('Malformed task records never become fabricated pending commitments',()=>{
  assert.match(response,/Real task/);
  assert.doesNotMatch(response,/Sin título|fake/);
 });
+
+test('Invisible-only task titles cannot become fabricated commitments',()=>{
+ const tasks=[{title:'\u200b\u2060\ufeff',status:'pending'},{title:'\u202e\u2066',status:'pending'},{title:'Real task',status:'pending'}];
+ const response=dailyBriefing({...ctx,tasks});
+ assert.match(response,/1 pendientes/);
+ assert.match(response,/Real task/);
+ assert.doesNotMatch(response,/Sin título/);
+ assert.equal(tasks[0].title,'\u200b\u2060\ufeff');
+});
