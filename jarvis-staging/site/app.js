@@ -835,6 +835,8 @@ try {
   const {data:{session}}=await supabase.auth.getSession();
   updateIdentity(session);
 } catch (error) {
+  // Fail closed: discard any stale identity, private workspace and active voice session.
+  clearIdentity();
   visible('login',true);visible('workspace',false);
   setStatus('ERROR DE ACCESO',false);
   $('login-message').textContent='No pude comprobar tu sesión. Recarga la página y vuelve a entrar.';
