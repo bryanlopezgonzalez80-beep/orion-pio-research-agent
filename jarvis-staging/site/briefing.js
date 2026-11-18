@@ -61,12 +61,12 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
   const urgency=d=>d?d<current?-2:d<sevenDays?-1:0:1;
   const ordered=[...pending].sort((a,b)=>{
     const da=dueValue(a),db=dueValue(b);
-    return urgency(da)-urgency(db)||(rank[a.priority]??1)-(rank[b.priority]??1)||(da?.getTime()??Infinity)-(db?.getTime()??Infinity);
+    return urgency(da)-urgency(db)||(rank[String(a.priority??'').trim().toLowerCase()]??1)-(rank[String(b.priority??'').trim().toLowerCase()]??1)||(da?.getTime()??Infinity)-(db?.getTime()??Infinity);
   });
   const taskText=(task,index)=>{
     const d=dueValue(task);
     const date=d?d.toLocaleString(english?'en-US':'es-PR',{timeZone:BRIEFING_TIME_ZONE,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
-    const high=task.priority==='high'?(english?', high priority':', prioridad alta'):'';
+    const high=String(task.priority??'').trim().toLowerCase()==='high'?(english?', high priority':', prioridad alta'):'';
     return (index+1)+'. '+String(task.title||'Sin título').slice(0,120)+high+(date?(english?', due '+date:', vence '+date):'');
   };
   const suggestions=ordered.slice(0,3).map(taskText).join('; ');
