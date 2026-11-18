@@ -70,7 +70,7 @@ function armRecognitionWatchdog(current,sequence){
   state.recognitionWatchdog=setTimeout(()=>{
     state.recognitionWatchdog=null;
     if(state.recognition===current&&sequence===state.listenSequence){
-      const msg='Safari no entregó palabras en 20 segundos. Prueba otro idioma o dictado del teclado.';
+      const msg='El navegador no entregó transcripción en 20 segundos. Usa Dictar con teclado o prueba Safari.';
       transcript(msg);
       if(state.dialogEnabled)pauseDialogue(msg);
       else {cancelRecognition();voiceStatus(msg,'paused');sayNotice(msg)}
@@ -176,7 +176,7 @@ function beginListening(automatic=false){
       }
     };
     recognition.onaudiostart=()=>{if(sequence===state.listenSequence)transcript('Safari confirmó entrada de audio. Esperando palabras...')};
-    recognition.onspeechstart=()=>{if(sequence===state.listenSequence)transcript('Safari detectó voz. Esperando transcripción...')};
+    recognition.onspeechstart=()=>{if(sequence===state.listenSequence)transcript('El navegador detectó voz. Esperando transcripción...')};
     recognition.onerror=event=>{
       if(sequence!==state.listenSequence)return;
       failed=true;
@@ -188,7 +188,7 @@ function beginListening(automatic=false){
         :code==='language-not-supported'?'Safari no admite este idioma. Cambia el idioma de escucha.'
         :code==='network'?'Falló el servicio de reconocimiento por red. Usa el dictado del teclado.'
         :'Safari interrumpió el reconocimiento ('+code+'). Toca Hablar.';
-      transcript('Diagnóstico Safari: '+code+'. '+reason);
+      transcript('Reconocimiento web ('+code+'): '+reason);
       if(state.dialogEnabled)pauseDialogue(reason);
       else {cancelRecognition();voiceStatus(reason,'paused');sayNotice(reason)}
     };
