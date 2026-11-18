@@ -820,6 +820,10 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden){stopVoice();voiceStatus('Modo detenido: la página no está visible.','paused');return;}
   refreshVisibleTrust();
 });
+window.addEventListener('pagehide',()=>{
+  // iOS may navigate away without delivering visibilitychange; never leave the microphone active.
+  stopVoice();
+});
 window.addEventListener('focus',refreshVisibleTrust);
 supabase.auth.onAuthStateChange((_event,session)=>{queueMicrotask(()=>updateIdentity(session))});
 updateVoiceControl();
