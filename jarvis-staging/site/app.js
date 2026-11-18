@@ -809,7 +809,16 @@ window.addEventListener('online',()=>{if(ready())void loadWorkspace()});
 $('action-accept').addEventListener('click',()=>void confirmAction());$('action-reject').addEventListener('click',()=>{discard();append('assistant','Propuesta cancelada.')});
 $('audio-toggle').addEventListener('click',()=>setVoiceEnabled(!state.voiceEnabled));
 $('session-button').addEventListener('click',startDialogue);
-$('listen-button').addEventListener('click',listen);$('stop-button').addEventListener('click',()=>{stopVoice();sayNotice('Voz detenida.')});
+$('listen-button').addEventListener('click',listen);
+$('dictation-button').addEventListener('click',()=>{
+  // Focus is directly inside the user gesture so iOS can offer its native keyboard.
+  // The browser does not expose a safe API to start native keyboard dictation automatically.
+  stopVoice();
+  const field=$('message');
+  field.focus();
+  transcript('Usa el micrófono del teclado del iPhone y pulsa ENVIAR cuando termine el dictado.');
+});
+$('stop-button').addEventListener('click',()=>{stopVoice();sayNotice('Voz detenida.')});
 $('read-button').addEventListener('click',()=>state.lastReply?speak(state.lastReply,{force:true}):sayNotice('No tengo una respuesta para leer.'));
 $('signout-button').addEventListener('click',async()=>{clearIdentity();visible('workspace',false);visible('login',true);await supabase.auth.signOut();});
 $('login-form').addEventListener('submit',async e=>{e.preventDefault();const email=$('email').value.trim();if(!email)return;
