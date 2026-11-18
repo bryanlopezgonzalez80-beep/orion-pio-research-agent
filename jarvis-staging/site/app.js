@@ -156,10 +156,11 @@ function beginListening(automatic=false){
     };
     recognition.onresult=event=>{
       if(sequence!==state.listenSequence||!ready())return;
+      // Ignore malformed recognition payloads rather than treating them as valid speech.
       const all=Array.from(event.results||[]);
-      const words=all.map(x=>x[0]?.transcript||'').join(' ').trim();
+      const words=all.map(x=>String(x?.[0]?.transcript||'')).join(' ').trim();
       if(words){transcript(words);armRecognitionWatchdog(recognition,sequence)}
-      const final=all.filter(x=>x.isFinal).map(x=>x[0]?.transcript||'').join(' ').trim();
+      const final=all.filter(x=>x?.isFinal).map(x=>String(x?.[0]?.transcript||'')).join(' ').trim();
       if(final&&!gotFinal){
         gotFinal=true;
         clearRecognitionWatchdog();
@@ -185,7 +186,7 @@ function beginListening(automatic=false){
       clearRecognitionWatchdog();
       const code=String(event?.error||'desconocido');
       const reason=code==='not-allowed'||code==='service-not-allowed'
-        ?'Safari no tiene permiso para usar el micrófono.'
+        ?'El navegador rechazó el reconocimiento de voz. Revisa el permiso del sitio y prueba el dictado del teclado.'
         :code==='no-speech'?'Safari no detectó palabras. Prueba en un lugar silencioso o usa el dictado del teclado.'
         :code==='language-not-supported'?'Safari no admite este idioma. Cambia el idioma de escucha.'
         :code==='network'?'Falló el servicio de reconocimiento por red. Usa el dictado del teclado.'
@@ -201,7 +202,7 @@ function beginListening(automatic=false){
       $('listen-button').classList.remove('active');
       $('listen-button').setAttribute('aria-pressed','false');
       if(!gotFinal&&!failed){
-        const reason='Safari terminó sin entregar palabras. Prueba otro idioma o el dictado del teclado.';
+        const reason='El navegador terminó sin entregar palabras. Prueba otro idioma o el dictado del teclado.';
         transcript(reason);
         if(state.dialogEnabled)pauseDialogue(reason);
         else voiceStatus(reason,'paused');
@@ -214,7 +215,7 @@ function beginListening(automatic=false){
     recognition.start();
   }catch(error){
     cancelRecognition();
-    const msg=automatic?'Safari requiere tocar Hablar para continuar.':'No se pudo abrir el micrófono. Inténtalo en Safari.';
+    const msg=automatic?'Safari requiere tocar Hablar para continuar.':'No se pudo iniciar el reconocimiento web. Prueba el dictado del teclado.';
     if(state.dialogEnabled)pauseDialogue(msg);
     else {voiceStatus(msg,'paused');sayNotice(msg)}
   }
