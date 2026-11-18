@@ -117,3 +117,18 @@ test('Real-world UTC offsets only: UTC−12 through UTC+14',()=>{
   assert.match(result,/vence /,due_at);
  }
 });
+
+test('Cancelled tasks are not reported as pending, overdue or upcoming',()=>{
+ const tasks=[
+  {title:'Cancelled appointment',status:'cancelled',priority:'high',due_at:'2026-11-17T10:00:00Z'},
+  {title:'Canceled meeting',status:'canceled',priority:'high',due_at:'2026-11-18T14:00:00Z'},
+  {title:'Actual work',status:'pending',priority:'normal',due_at:'2026-11-18T14:00:00Z'}
+ ];
+ const result=dailyBriefing({...ctx,tasks});
+ assert.match(result,/1 pendientes/);
+ assert.match(result,/0 atrasadas/);
+ assert.match(result,/1 con vencimiento más tarde hoy/);
+ assert.ok(!result.includes('Cancelled appointment'));
+ assert.ok(!result.includes('Canceled meeting'));
+ assert.match(result,/Actual work/);
+});
