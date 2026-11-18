@@ -37,7 +37,7 @@
     </main>
 
     <main id="workspace" hidden>
-      <section class="hero panel" aria-labelledby="hero-title">
+      <section class="hero panel" aria-labelledby="hero-title" data-voice-mode="idle">
         <div class="hero-content"><p class="eyebrow">CENTRO DE COMANDO / SISTEMA PERSONAL</p><h1 id="hero-title">Estoy aquí.</h1><p id="hero-subtitle">Tareas, recuerdos y voz bajo tu control.</p><div class="hero-meta"><span>PRIVADO</span><span id="model-label">IA EN ESPERA</span></div></div>
         <div class="arc-container" aria-hidden="true"><div class="arc arc-one"></div><div class="arc arc-two"></div><div class="arc arc-three"></div><div class="arc-core">J</div></div>
       </section>
@@ -54,7 +54,7 @@
           <button id="export-button" class="mini" type="button">Exportar copia</button>
         </div>
       </div>
-      <section class="trust-sources" aria-label="Verificación de fuentes">
+      <details class="trust-sources" aria-label="Verificación de fuentes"><summary class="trust-summary">Fuentes, privacidad y vigencia</summary><div class="trust-body">
         <div class="trust-sources-head"><strong>FUENTES VERIFICABLES</strong><span>JARVIS TRUST</span></div>
         <div class="trust-sources-grid">
           <span id="source-tasks">Tareas: sin verificar</span>
@@ -62,8 +62,7 @@
           <span id="source-calendar">Calendario: no conectado</span>
           <span id="source-traffic">Tráfico: no conectado</span>
         </div>
-        <p>Solo puedo confirmar datos sincronizados. Las recomendaciones no equivalen a reuniones verificadas.</p>
-      </section>
+        <p>Solo puedo confirmar datos sincronizados. Las recomendaciones no equivalen a reuniones verificadas.</p></div></details>
       <section class="pane active panel" id="pane-conversation" aria-label="Consola">
         <header class="pane-head"><div><p class="eyebrow">CANAL / CONVERSACIÓN</p><h2>Habla con JARVIS</h2></div><span class="tiny">ES-PR</span></header>
         <div id="thread" class="thread" role="log" aria-label="Conversación" aria-live="polite"></div>
@@ -80,7 +79,7 @@
           <input id="message" name="message" maxlength="4000" placeholder="Dime qué necesitas..." autocomplete="off" required>
           <button class="send" id="send-button" aria-label="Enviar mensaje" type="submit">ENVIAR</button>
         </form>
-        <div class="voice-config">
+        <details class="voice-settings"><summary>Opciones de conversación y voz</summary><div class="voice-config">
           <label for="recognition-lang" class="voice-lang-label">Idioma de escucha</label>
           <select id="recognition-lang" aria-label="Idioma del reconocimiento de voz">
             <option value="es-PR">Español (Puerto Rico)</option>
@@ -89,13 +88,13 @@
           <button id="audio-toggle" class="secondary voice-switch" type="button" aria-pressed="false">Activar respuestas en voz alta</button>
           <button id="session-button" class="secondary voice-switch" type="button" aria-pressed="false">Iniciar diálogo</button>
           <span id="voice-state" role="status" aria-live="polite">Voz desactivada</span>
-        </div>
+        </div></details>
         <div id="transcript-panel" class="transcript-panel" role="status" aria-live="polite" aria-atomic="true">
           <span class="transcript-label">TRANSCRIPCIÓN</span>
           <span id="live-transcript">Tu voz aparecerá aquí mientras hablas.</span>
         </div>
         <div class="voice-tools">
-          <button id="listen-button" class="primary mic-button" type="button" aria-pressed="false">Hablar</button>
+          <button id="listen-button" class="primary mic-button" type="button" aria-pressed="false" aria-label="Activar micrófono para hablar con JARVIS">Hablar</button>
           <button id="read-button" class="secondary" type="button">Repetir audio</button>
           <button id="stop-button" class="secondary" type="button">Detener</button>
         </div>
