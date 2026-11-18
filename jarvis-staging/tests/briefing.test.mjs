@@ -207,3 +207,11 @@ test('Unicode line and paragraph separators do not split voice briefing output',
   assert.equal(task.title,title);
  }
 });
+
+test('Malformed task records never become fabricated pending commitments',()=>{
+ const tasks=[null,4,'fake',false,[],{}, {title:'  ',status:'pending'}, {title:'Real task',status:'pending'}];
+ const response=dailyBriefing({...ctx,tasks});
+ assert.match(response,/1 pendientes/);
+ assert.match(response,/Real task/);
+ assert.doesNotMatch(response,/Sin título|fake/);
+});
