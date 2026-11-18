@@ -170,3 +170,13 @@ test('Briefing task titles cannot inject control characters or multiline speech'
  assert.ok(!/[\u0000-\u001f\u007f-\u009f]/.test(result));
  assert.ok(!result.includes('Enviar\n'));
 });
+
+test('Combined appointments and meetings queries remain calendar-only and fail closed',()=>{
+ for(const phrase of ['Do I have any appointments or meetings?','Are there any meetings or appointments today?','Jarvis, do I have meetings and appointments tomorrow?']){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer.language,'en');
+  assert.match(answer.text,/calendar is not connected/i);
+  assert.doesNotMatch(answer.text,/9:00|confirmed meeting at/i);
+ }
+});
