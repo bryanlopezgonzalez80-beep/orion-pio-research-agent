@@ -42,10 +42,11 @@ function dueValue(task){
   const date=new Date(raw);
   return Number.isFinite(date.getTime())?date:null;
 }
-export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Date(),english=false}={}){
+export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Date(),calendarQueried=false,english=false}={}){
   const current=now instanceof Date?now:new Date(now);
   if(!Number.isFinite(current.getTime()))throw Error('Invalid briefing timestamp');
   if(!loaded||!Array.isArray(tasks)||!recentVerification(verifiedAt,current.getTime())){
+    if(calendarQueried) return english?'Tasks could not be verified.':'No pude verificar tus tareas.';
     return english
       ? 'I cannot verify your tasks with recent data. Tap Update data first. Your calendar is not connected to JARVIS.'
       : 'No puedo verificar tus tareas con datos recientes. Pulsa Actualizar datos primero. Tu calendario aún no está conectado a JARVIS.';
@@ -72,9 +73,9 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
   const suggestions=ordered.slice(0,3).map(taskText).join('; ');
   const verified=new Date(verifiedAt).toLocaleTimeString(english?'en-US':'es-PR',{timeZone:BRIEFING_TIME_ZONE,hour:'numeric',minute:'2-digit'});
   if(english){
-    return 'Based on your JARVIS tasks verified at '+verified+': '+pending.length+' pending, '+overdue.length+' overdue and '+upcoming.length+' due later today. '+(suggestions?'Suggested priorities: '+suggestions+'. ':'No pending tasks were recorded. ')+'Your calendar and live traffic are not connected, so I cannot confirm meetings or departure times. These are task suggestions, not appointments.';
+    return 'Based on your JARVIS tasks verified at '+verified+': '+pending.length+' pending, '+overdue.length+' overdue and '+upcoming.length+' due later today. '+(suggestions?'Suggested priorities: '+suggestions+'. ':'No pending tasks were recorded. ')+(calendarQueried?'': 'Your calendar and live traffic are not connected, so I cannot confirm meetings or departure times. These are task suggestions, not appointments.');
   }
-  return 'Según tus tareas de JARVIS verificadas a las '+verified+': '+pending.length+' pendientes, '+overdue.length+' atrasadas y '+upcoming.length+' con vencimiento más tarde hoy. '+(suggestions?'Prioridades sugeridas: '+suggestions+'. ':'No hay tareas pendientes registradas. ')+'Tu calendario y el tráfico en vivo no están conectados; no puedo confirmar reuniones ni horas de salida. Estas son propuestas de tareas, no citas.';
+  return 'Según tus tareas de JARVIS verificadas a las '+verified+': '+pending.length+' pendientes, '+overdue.length+' atrasadas y '+upcoming.length+' con vencimiento más tarde hoy. '+(suggestions?'Prioridades sugeridas: '+suggestions+'. ':'No hay tareas pendientes registradas. ')+(calendarQueried?'':'Tu calendario y el tráfico en vivo no están conectados; no puedo confirmar reuniones ni horas de salida. Estas son propuestas de tareas, no citas.');
 }
 export function trustedCommand(input,context={}){
   const kind=classifyCommand(input);

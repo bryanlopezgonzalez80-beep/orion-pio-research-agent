@@ -62,6 +62,15 @@
           <span id="source-calendar">Calendario: no conectado</span>
           <span id="source-traffic">Tráfico: no conectado</span>
         </div>
+        <details><summary>Conectar calendario de iCloud</summary>
+          <p>Consulta un calendario durante 30 minutos. Usa una contraseña específica de app creada en tu cuenta Apple. La API de JARVIS la conserva temporalmente en memoria.</p>
+          <label for="icloud-account">Correo de tu cuenta Apple</label><input id="icloud-account" type="email" autocomplete="off">
+          <label for="icloud-key">Contraseña específica de app</label><input id="icloud-key" type="password" autocomplete="off">
+          <button id="icloud-connect" type="button">Conectar iCloud</button>
+          <label for="icloud-choice">Calendario para consultar</label><select id="icloud-choice"></select>
+          <button id="icloud-read" type="button" disabled>Consultar hoy</button>
+          <button id="icloud-end" type="button" disabled>Desconectar</button>
+        </details>
         <p>Solo puedo confirmar datos sincronizados. Las recomendaciones no equivalen a reuniones verificadas.</p>
       </section>
       <section class="pane active panel" id="pane-conversation" aria-label="Consola">

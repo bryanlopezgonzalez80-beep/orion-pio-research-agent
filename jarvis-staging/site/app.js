@@ -1,4 +1,4 @@
-import {trustedCommand,recentVerification} from './briefing.js';
+import {classifyCommand,englishIntent,trustedCommand,recentVerification} from './briefing.js';
 let createClient;
 try {
   ({createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm'));
@@ -222,7 +222,68 @@ function startDialogue(){
   }
   updateVoiceControl();
 }
+
+let calendarToken = '';
+function resetCalendar(){
+  calendarToken = '';
+  $('icloud-choice').replaceChildren();
+  $('icloud-key').value = $('icloud-account').value = '';
+  $('icloud-read').disabled = $('icloud-end').disabled = true;
+  $('source-calendar').textContent = 'Calendario: no conectado';
+}
+$('icloud-connect').addEventListener('click', async () => {
+  if (!ready() || !$('icloud-account').reportValidity()) return;
+  const rev = state.rev;
+  $('icloud-connect').disabled = true;
+  try {
+    const body = {email:$('icloud-account').value.trim(), password:$('icloud-key').value};
+    $('icloud-key').value = '';
+    const result = await request('/v1/calendar/icloud/connect','POST',body);
+    resetCalendar();
+    calendarToken = result.connection;
+    $('icloud-choice').append(new Option('Selecciona un calendario',''));
+    for (const calendar of result.calendars) $('icloud-choice').append(new Option(calendar.name,calendar.id));
+    $('icloud-end').disabled = false;
+    $('source-calendar').textContent = 'iCloud conectado. Selecciona un calendario.';
+  } catch (e) {
+    if (rev === state.rev) $('source-calendar').textContent = 'Conexión no verificada. '+e.message;
+  } finally { $('icloud-connect').disabled = false; }
+});
+$('icloud-choice').addEventListener('change', () => {
+  $('icloud-read').disabled = !$('icloud-choice').value;
+  $('source-calendar').textContent = 'iCloud conectado. Agenda pendiente de consulta.';
+});
+$('icloud-end').addEventListener('click', async () => {
+  const token = calendarToken;
+  try {
+    await request('/v1/calendar/icloud/disconnect','POST',{connection:token});
+    if (calendarToken === token) resetCalendar();
+  } catch(e) {
+    if (calendarToken === token) $('source-calendar').textContent = 'Desconexión sin verificar. '+e.message;
+  }
+});
+async function calendarToday(english){
+  const rev = state.rev, token = calendarToken, id = $('icloud-choice').value;
+  const source = $('icloud-choice').selectedOptions[0]?.textContent;
+  let answer;
+  try {
+    const result = await request('/v1/calendar/icloud/today','POST',{connection:token, calendar:id});
+    const clock = date => new Date(date).toLocaleTimeString(english?'en-US':'es-PR',{timeZone:'America/Puerto_Rico',hour:'numeric',minute:'2-digit'});
+    const stamp = new Date(result.checked).toLocaleString(english?'en-US':'es-PR',{timeZone:'America/Puerto_Rico',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    const events = result.events.slice(0,12).map(event => (event.start.length===10?(english?'All day':'Todo el día'):clock(event.start))+' · '+event.title);
+    answer = (english?'Today in ':'Hoy en ')+source+' (iCloud, '+stamp+', Puerto Rico). '+(events.join('. ') || (english?'No events listed.':'No hay eventos registrados.'));
+    if(result.events.length>12) answer += english?' Showing the first 12 events.':' Se muestran los primeros 12 eventos.';
+  } catch {
+    answer = english?'I could not verify today’s iCloud calendar.':'No pude verificar la agenda de hoy en iCloud. Si han pasado 30 minutos, vuelve a conectarlo.';
+  }
+  if(rev!==state.rev || token!==calendarToken || id!==$('icloud-choice').value) return null;
+  $('source-calendar').textContent = answer;
+  return answer;
+}
+$('icloud-read').addEventListener('click', () => void calendarToday(false));
+
 function clearIdentity(){
+  resetCalendar();
   state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];state.editingTaskId=null;state.editingMemoryId=null;state.tasksVerifiedAt=null;state.memoriesVerifiedAt=null;state.replyLanguage='es';
   for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();state.voiceEnabled=false;updateVoiceControl();
   $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();$('history-list').replaceChildren();$('history-messages').replaceChildren();visible('history-detail',false);visible('action-box',false);resetTaskEditor();resetMemoryEditor();$('task-search').value='';$('memory-search').value='';$('memory-filter').value='all';syncStatus('Sesión cerrada','idle');renderTrust();
@@ -680,6 +741,21 @@ async function processMessage(input){
   try{
     if(state.pending&&/^(confirmar accion|confirmar|aceptar)$/.test(normalize(command))){await confirmAction();return}
     if(state.pending&&/^(cancelar accion|cancelar)$/.test(normalize(command))){discard();append('assistant','Propuesta cancelada. No guardé cambios.');return}
+    const kind = classifyCommand(command);
+    if (calendarToken && (kind === 'calendar' || kind === 'brief')) {
+      const english = englishIntent(command);
+      state.replyLanguage = english ? 'en' : 'es';
+      if (! $('icloud-choice').value) { append('assistant',english?'Choose an iCloud calendar first.':'Selecciona primero un calendario de iCloud.'); return; }
+      if (/mañana|ayer|semana|tomorrow|yesterday|week/i.test(command)) {
+        append('assistant',english?'I can currently check today in Puerto Rico.':'Por ahora puedo consultar hoy en Puerto Rico.');return;
+      }
+      const agenda = await calendarToday(english);
+      if (agenda) {
+        const tasks = kind === 'brief' ? trustedCommand(command,{tasks:state.tasks,loaded:sourceIsRecent('tasks'),verifiedAt:state.tasksVerifiedAt,calendarQueried:true}).text+' ' : '';
+        append('assistant',tasks+agenda);
+      }
+      return;
+    }
     const answer=command?localCommand(command):'Te escucho. Dime qué necesitas.';
     if(answer!==null){append('assistant',answer);return}
     if(!state.model){append('assistant','Todavía no tengo habilitada la conversación libre con OpenAI. Puedo ayudarte con tus tareas y recuerdos sin generar gastos de IA. Di «Qué puedes hacer» para ver las órdenes.');return}
