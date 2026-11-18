@@ -82,3 +82,11 @@ test('Speech failures identify browser events without assuming Chrome is Safari'
  assert.match(app,/El navegador no entregó transcripción en 20 segundos/);
  assert.doesNotMatch(app,/Diagnóstico Safari:/);
 });
+
+test('Speech-end and no-match events report uncertainty without inventing transcribed words',()=>{
+ assert.match(app,/recognition\.onspeechend=/);
+ assert.match(app,/recognition\.onnomatch=/);
+ assert.match(app,/El navegador detectó el final de la voz, pero aún no entregó texto/);
+ assert.match(app,/El reconocimiento no encontró palabras coincidentes/);
+ assert.match(app,/recognition\.onspeechend=\(\)=>\{if\(sequence===state\.listenSequence&&!gotFinal\)/);
+});
