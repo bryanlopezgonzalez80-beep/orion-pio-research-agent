@@ -223,6 +223,7 @@ function startDialogue(){
   updateVoiceControl();
 }
 function clearIdentity(){
+  $('new-password').value='';$('password-status').textContent='';$('password-settings').open=false;
   state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];state.editingTaskId=null;state.editingMemoryId=null;state.tasksVerifiedAt=null;state.memoriesVerifiedAt=null;state.replyLanguage='es';
   for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();state.voiceEnabled=false;updateVoiceControl();
   $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();$('history-list').replaceChildren();$('history-messages').replaceChildren();visible('history-detail',false);visible('action-box',false);resetTaskEditor();resetMemoryEditor();$('task-search').value='';$('memory-search').value='';$('memory-filter').value='all';syncStatus('Sesión cerrada','idle');renderTrust();
@@ -800,12 +801,54 @@ $('session-button').addEventListener('click',startDialogue);
 $('listen-button').addEventListener('click',listen);$('stop-button').addEventListener('click',()=>{stopVoice();sayNotice('Voz detenida.')});
 $('read-button').addEventListener('click',()=>state.lastReply?speak(state.lastReply,{force:true}):sayNotice('No tengo una respuesta para leer.'));
 $('signout-button').addEventListener('click',async()=>{clearIdentity();visible('workspace',false);visible('login',true);await supabase.auth.signOut();});
-$('login-form').addEventListener('submit',async e=>{e.preventDefault();const email=$('email').value.trim();if(!email)return;
-  $('login-button').disabled=true;$('login-message').textContent='Preparando el enlace de acceso...';
-  try{const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.origin}});if(error)throw error;
-    $('login-message').textContent='Revisa tu correo y abre el enlace desde este iPhone. Si no funciona, comprueba las redirecciones permitidas en Supabase Auth.';}
-  catch(err){$('login-message').textContent='No pude enviar el enlace: '+err.message}
-  finally{$('login-button').disabled=false}
+async function loginWith(method) {
+  const email = $('email');
+  const password = $('login-password');
+  if (!email.reportValidity() || $('login-button').disabled) return;
+  if (method === 'password' && !password.value) {
+    $('login-message').textContent = 'Escribe tu contraseña o solicita el enlace por correo.';
+    password.focus();
+    return;
+  }
+  $('login-button').disabled = $('email-link').disabled = true;
+  $('login-message').textContent = method === 'password' ? 'Comprobando acceso…' : 'Solicitando enlace…';
+  try {
+    const result = method === 'password'
+      ? await supabase.auth.signInWithPassword({ email: email.value.trim(), password: password.value })
+      : await supabase.auth.signInWithOtp({ email: email.value.trim(), options: { emailRedirectTo: window.location.origin } });
+    if (result.error) throw result.error;
+    password.value = '';
+    $('login-message').textContent = method === 'password' ? '' : 'Revisa tu correo para entrar con el enlace.';
+  } catch {
+    $('login-message').textContent = method === 'password'
+      ? 'No se pudo iniciar sesión. Comprueba tus datos y la conexión, o utiliza el enlace por correo.'
+      : 'No se pudo enviar el enlace. Inténtalo de nuevo más tarde.';
+  } finally {
+    $('login-button').disabled = $('email-link').disabled = false;
+  }
+}
+$('login-form').addEventListener('submit', event => {
+  event.preventDefault();
+  void loginWith('password');
+});
+$('email-link').addEventListener('click', () => void loginWith('link'));
+$('password-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const field = $('new-password');
+  const button = event.currentTarget.querySelector('button');
+  if (!state.user || button.disabled || !field.reportValidity()) return;
+  const revision = state.rev;
+  button.disabled = true;
+  try {
+    const { error } = await supabase.auth.updateUser({ password: field.value });
+    if (error) throw error;
+    if (revision === state.rev) $('password-status').textContent = 'Contraseña guardada. Puedes usarla la próxima vez que entres.';
+  } catch {
+    if (revision === state.rev) $('password-status').textContent = 'No se pudo guardar. Vuelve a entrar con un enlace reciente y comprueba los requisitos de contraseña.';
+  } finally {
+    field.value = '';
+    button.disabled = false;
+  }
 });
 function refreshVisibleTrust(){
   if(document.hidden)return;
