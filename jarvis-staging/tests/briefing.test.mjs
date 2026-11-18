@@ -187,3 +187,12 @@ test('Bidi direction controls in untrusted task titles are removed before spoken
  assert.match(result,/Enviar informe urgente/);
  assert.doesNotMatch(result,/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/);
 });
+
+test('Zero-width and BOM formatting in task titles is removed without changing stored tasks',()=>{
+ const original='Enviar\u200b\u200c\u200d\u2060\ufeff informe';
+ const task={title:original,status:'pending',priority:'normal',due_at:null};
+ const result=dailyBriefing({...ctx,tasks:[task]});
+ assert.match(result,/Enviar informe/);
+ assert.doesNotMatch(result,/[\u200b-\u200f\u2060\ufeff]/);
+ assert.equal(task.title,original);
+});
