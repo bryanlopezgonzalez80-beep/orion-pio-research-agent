@@ -67,7 +67,7 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
     const d=dueValue(task);
     const date=d?d.toLocaleString(english?'en-US':'es-PR',{timeZone:BRIEFING_TIME_ZONE,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
     const high=String(task.priority??'').trim().toLowerCase()==='high'?(english?', high priority':', prioridad alta'):'';
-    return (index+1)+'. '+String(task.title||'Sin título').slice(0,120)+high+(date?(english?', due '+date:', vence '+date):'');
+    return (index+1)+'. '+(String(task.title||'Sin título').replace(/[\u0000-\u001f\u007f-\u009f]/g,' ').replace(/\s+/g,' ').trim().slice(0,120)|| (english?'Untitled':'Sin título'))+high+(date?(english?', due '+date:', vence '+date):'');
   };
   const suggestions=ordered.slice(0,3).map(taskText).join('; ');
   const verified=new Date(verifiedAt).toLocaleTimeString(english?'en-US':'es-PR',{timeZone:BRIEFING_TIME_ZONE,hour:'numeric',minute:'2-digit'});
