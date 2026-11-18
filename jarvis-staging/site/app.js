@@ -367,11 +367,11 @@ function actionButton(label,description,handler){
 function drawTasks(){
   const root=$('task-list');root.replaceChildren();
   const pending=state.tasks.filter(x=>x.status!=='done');
-  $('task-count').textContent=state.tasksLoaded?String(pending.length)+' pendientes':'Sin verificar';
-  $('dash-pending').textContent=state.tasksLoaded?String(pending.length):'—';
-  $('dash-high').textContent=state.tasksLoaded?String(pending.filter(x=>x.priority==='high').length):'—';
-  $('dash-done').textContent=state.tasksLoaded?String(state.tasks.length-pending.length):'—';
-  if(!state.tasksLoaded){root.append(element('li','empty','Tareas sin verificar. Pulsa Actualizar.'));return}
+  $('task-count').textContent=sourceIsRecent('tasks')?String(pending.length)+' pendientes':'Sin verificar';
+  $('dash-pending').textContent=sourceIsRecent('tasks')?String(pending.length):'—';
+  $('dash-high').textContent=sourceIsRecent('tasks')?String(pending.filter(x=>x.priority==='high').length):'—';
+  $('dash-done').textContent=sourceIsRecent('tasks')?String(state.tasks.length-pending.length):'—';
+  if(!sourceIsRecent('tasks')){root.append(element('li','empty','Tareas sin verificación reciente. Pulsa Actualizar.'));return}
   if(!state.tasks.length){root.append(element('li','empty','No hay tareas guardadas.'));return}
   const search=normalize($('task-search').value);
   const filter=$('task-filter').value;
@@ -396,8 +396,8 @@ function drawTasks(){
 }
 function drawMemories(){
   const root=$('memory-list');root.replaceChildren();
-  $('memory-count').textContent=state.memoriesLoaded?String(state.memories.length):'—';
-  if(!state.memoriesLoaded){root.append(element('li','empty','Memoria sin verificar. Pulsa Actualizar.'));return}
+  $('memory-count').textContent=sourceIsRecent('memories')?String(state.memories.length):'—';
+  if(!sourceIsRecent('memories')){root.append(element('li','empty','Memoria sin verificación reciente. Pulsa Actualizar.'));return}
   if(!state.memories.length){root.append(element('li','empty','Aún no has guardado recuerdos.'));return}
   const search=normalize($('memory-search').value);
   const category=$('memory-filter').value;
@@ -807,7 +807,20 @@ $('login-form').addEventListener('submit',async e=>{e.preventDefault();const ema
   catch(err){$('login-message').textContent='No pude enviar el enlace: '+err.message}
   finally{$('login-button').disabled=false}
 });
-document.addEventListener('visibilitychange',()=>{if(document.hidden){stopVoice();voiceStatus('Modo detenido: la página no está visible.','paused')}});
+function refreshVisibleTrust(){
+  if(document.hidden)return;
+  renderTrust();
+  drawTasks();
+  drawMemories();
+  if(ready()&&(!sourceIsRecent('tasks')||!sourceIsRecent('memories'))){
+    syncStatus('Datos sin verificación reciente. Pulsa Actualizar.','idle');
+  }
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){stopVoice();voiceStatus('Modo detenido: la página no está visible.','paused');return;}
+  refreshVisibleTrust();
+});
+window.addEventListener('focus',refreshVisibleTrust);
 supabase.auth.onAuthStateChange((_event,session)=>{queueMicrotask(()=>updateIdentity(session))});
 updateVoiceControl();
 updateVoiceCompatibility();
