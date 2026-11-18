@@ -29,11 +29,14 @@
       <p>Inicia sesión para consultar tus tareas y recuerdos. Tus datos permanecen en tu cuenta de Supabase.</p>
       <form id="login-form">
         <label for="email">Correo electrónico</label>
-        <input id="email" name="email" type="email" placeholder="tu@correo.com" autocomplete="email" required>
-        <button type="submit" class="primary" id="login-button">Enviar enlace de acceso</button>
+        <input id="email" name="email" type="email" placeholder="tu@correo.com" autocomplete="username" required>
+        <label for="login-password">Contraseña (opcional)</label>
+        <input id="login-password" type="password" autocomplete="current-password" aria-describedby="access-help">
+        <p id="access-help">Si ya configuraste una contraseña, úsala para entrar aquí. Si dejas el campo vacío, recibirás un enlace de acceso por correo.</p>
+        <button type="submit" class="primary" id="login-button">Continuar</button>
       </form>
       <p id="login-message" class="note" role="status"></p>
-      <p class="microcopy">Utiliza el correo autorizado para ORIÓN JARVIS. No compartas códigos de inicio de sesión.</p>
+      <p class="microcopy">Utiliza el correo autorizado para ORIÓN JARVIS. El enlace de acceso es privado y de un solo uso.</p>
     </main>
 
     <main id="workspace" hidden>
@@ -149,6 +152,15 @@
           <div id="history-messages" class="thread" role="log" aria-label="Mensajes históricos"></div>
         </section>
       </section>
+      <details id="password-settings">
+        <summary>Configurar contraseña de acceso</summary>
+        <form id="set-password-form">
+          <label for="new-password">Nueva contraseña (mínimo 12 caracteres)</label>
+          <input id="new-password" type="password" autocomplete="new-password" required minlength="12">
+          <button id="save-password" type="submit">Guardar contraseña</button>
+        </form>
+        <p id="password-message" role="status"></p>
+      </details>
       <div class="lower"><span id="user-label" class="tiny"></span><button id="signout-button" class="text-button" type="button">Cerrar sesión</button></div>
     </main>
     <footer><span>ORIÓN JARVIS / MOBILE</span><span>VERSIÓN 0.9.4 · TRUST</span></footer>
