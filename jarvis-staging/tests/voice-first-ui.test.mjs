@@ -98,3 +98,11 @@ test('Malformed recognition results are handled defensively and errors stay brow
  assert.match(app,/El navegador terminó sin entregar palabras/);
  assert.doesNotMatch(app,/Safari no tiene permiso para usar el micrófono/);
 });
+
+test('Voice recognition failure messages do not misidentify Chrome as Safari',()=>{
+ const begin=app.slice(app.indexOf('function beginListening('),app.indexOf('function startDialogue('));
+ assert.doesNotMatch(begin,/Safari/);
+ assert.match(begin,/El navegador inició el reconocimiento/);
+ assert.match(begin,/El navegador no admite este idioma/);
+ assert.match(begin,/El navegador interrumpió el reconocimiento/);
+});
