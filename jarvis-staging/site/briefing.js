@@ -17,9 +17,17 @@ export function classifyCommand(phrase){
   if(/^(?:planifica (?:mi |el )?(?:dia|jornada)|planea (?:mi |el )?dia|organiza (?:mi |el )?dia|plan de hoy|mis prioridades de hoy|que (?:tengo|hay|debo hacer) hoy|what (?:i (?:got|have) to do|do i have|should i do|have i got) today|what is on my schedule today|what am i doing today|my schedule today)\b/.test(n))return 'brief';
   return null;
 }
+export const BRIEFING_TIME_ZONE='America/Puerto_Rico';
+// Pin the calendar day to Puerto Rico; never silently interpret a naive timestamp.
+function calendarDay(date){
+  return new Intl.DateTimeFormat('en-CA',{timeZone:BRIEFING_TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
+}
 function dueValue(task){
-  if(!task||!task.due_at)return null;
-  const date=new Date(task.due_at);
+  if(!task||typeof task.due_at!=='string')return null;
+  const raw=task.due_at.trim();
+  const hasZone=/(?:Z|[+-][0-9]{2}:[0-9]{2})$/i.test(raw);
+  if(!hasZone||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw))return null;
+  const date=new Date(raw);
   return Number.isFinite(date.getTime())?date:null;
 }
 export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Date(),english=false}={}){
@@ -30,28 +38,25 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
       ? 'I cannot verify your tasks with recent data. Tap Update data first. Your calendar is not connected to JARVIS.'
       : 'No puedo verificar tus tareas con datos recientes. Pulsa Actualizar datos primero. Tu calendario aún no está conectado a JARVIS.';
   }
-  // Deadlines are compared using the device's local calendar day. Do not
-  // interpret a timestamp without a timezone as a verified appointment.
-  const dayKey=date=>date.getFullYear()+'-'+date.getMonth()+'-'+date.getDate();
-  const today=dayKey(current);
-  const sixDays=new Date(current.getFullYear(),current.getMonth(),current.getDate()+7);
+  const today=calendarDay(current);
+  const sevenDays=new Date(current.getTime()+7*24*60*60*1000);
   const pending=tasks.filter(x=>x&&x.status!=='done');
   const overdue=pending.filter(x=>{const d=dueValue(x);return d&&d<current});
-  const upcoming=pending.filter(x=>{const d=dueValue(x);return d&&dayKey(d)===today&&d>=current});
+  const upcoming=pending.filter(x=>{const d=dueValue(x);return d&&calendarDay(d)===today&&d>=current});
   const rank={high:0,normal:1,low:2};
-  const urgency=d=>d?d<current?-2:d<sixDays?-1:0:1;
+  const urgency=d=>d?d<current?-2:d<sevenDays?-1:0:1;
   const ordered=[...pending].sort((a,b)=>{
     const da=dueValue(a),db=dueValue(b);
     return urgency(da)-urgency(db)||(rank[a.priority]??1)-(rank[b.priority]??1)||(da?.getTime()??Infinity)-(db?.getTime()??Infinity);
   });
   const taskText=(task,index)=>{
     const d=dueValue(task);
-    const date=d?d.toLocaleString(english?'en-US':'es-PR',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+    const date=d?d.toLocaleString(english?'en-US':'es-PR',{timeZone:BRIEFING_TIME_ZONE,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
     const high=task.priority==='high'?(english?', high priority':', prioridad alta'):'';
     return (index+1)+'. '+String(task.title||'Sin título').slice(0,120)+high+(date?(english?', due '+date:', vence '+date):'');
   };
   const suggestions=ordered.slice(0,3).map(taskText).join('; ');
-  const verified=new Date(verifiedAt).toLocaleTimeString(english?'en-US':'es-PR',{hour:'numeric',minute:'2-digit'});
+  const verified=new Date(verifiedAt).toLocaleTimeString(english?'en-US':'es-PR',{timeZone:BRIEFING_TIME_ZONE,hour:'numeric',minute:'2-digit'});
   if(english){
     return 'Based on your JARVIS tasks verified at '+verified+': '+pending.length+' pending, '+overdue.length+' overdue and '+upcoming.length+' due later today. '+(suggestions?'Suggested priorities: '+suggestions+'. ':'No pending tasks were recorded. ')+'Your calendar and live traffic are not connected, so I cannot confirm meetings or departure times. These are task suggestions, not appointments.';
   }
