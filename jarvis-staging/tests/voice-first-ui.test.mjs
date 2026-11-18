@@ -53,3 +53,10 @@ test('A single mic tap starts recognition without requiring TTS or a second tap'
  assert.match(app,/voiceStatus\(automatic\?'Intentando reanudar micrófono\.\.\.':'Solicitando micrófono\.\.\.','thinking'\)/);
  assert.match(app,/recognition\.onstart=\(\)=>\{[\s\S]*?voiceStatus\('Escuchando\.\.\.','listening'\)/);
 });
+
+test('iPhone browser messaging does not claim SpeechRecognition guarantees transcription',()=>{
+ assert.match(app,/NO confirma que pueda transcribir/);
+ assert.match(app,/Chrome para iPhone o Safari/);
+ assert.match(html,/micrófono del teclado de iOS/);
+ assert.match(html,/no garantiza una transcripción/);
+});
