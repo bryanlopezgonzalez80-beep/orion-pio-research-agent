@@ -44,6 +44,9 @@ function voiceStatus(label,status='idle'){
   el.textContent=label;el.dataset.state=status;
   const hero=document.querySelector('.hero');
   if(hero)hero.dataset.voiceMode=['listening','speaking','thinking','paused'].includes(status)?status:'idle';
+  // Keep the mic's accessible name in sync with the actual listening state.
+  const mic=$('listen-button');
+  if(mic)mic.setAttribute('aria-label',status==='listening'?'Micrófono activo: JARVIS está escuchando':status==='thinking'?'JARVIS está procesando la voz':status==='speaking'?'JARVIS está hablando':'Activar micrófono para hablar con JARVIS');
 }
 function transcript(label){
   const el=$('live-transcript');if(el)el.textContent=label;
