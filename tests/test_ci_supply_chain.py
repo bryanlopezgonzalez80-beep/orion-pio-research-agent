@@ -14,11 +14,7 @@ USE_PATTERN = re.compile(
     re.MULTILINE,
 )
 FULL_SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
-EXPECTED_SCHEDULES = {
-    "daily-radar.yml": 'cron: "0 10 * * *"',
-    "weekly-radar.yml": 'cron: "0 12 * * 5"',
-    "orion-health-monitor.yml": 'cron: "17 * * * *"',
-}
+MANUAL_WORKFLOWS = ("daily-radar.yml", "weekly-radar.yml", "orion-health-monitor.yml", "cloud-harvest.yml")
 
 
 def _workflows() -> list[Path]:
@@ -103,7 +99,10 @@ def test_dependency_audit_is_secret_free_read_only_and_unsuppressed():
     assert "continue-on-error" not in contents
 
 
-def test_operational_schedules_remain_unchanged():
-    for filename, expected_schedule in EXPECTED_SCHEDULES.items():
+def test_paused_operational_workflows_allow_only_manual_dispatch():
+    for filename in MANUAL_WORKFLOWS:
         contents = (WORKFLOW_DIRECTORY / filename).read_text(encoding="utf-8")
-        assert expected_schedule in contents
+        triggers = re.search(r"^on:\s*\n((?:[ \t]+[^\n]*\n|\n)+)", contents, re.MULTILINE)
+        assert triggers, filename
+        events = re.findall(r"^  ([\w-]+):", triggers[1], re.MULTILINE)
+        assert events == ["workflow_dispatch"], filename

@@ -198,15 +198,6 @@ def test_workflows_use_minimum_permissions_and_nonpersistent_checkout():
         )
         assert "git push" not in contents
 
-    assert 'cron: "0 10 * * *"' in Path(
-        ".github/workflows/daily-radar.yml"
-    ).read_text(encoding="utf-8")
-    assert 'cron: "0 12 * * 5"' in Path(
-        ".github/workflows/weekly-radar.yml"
-    ).read_text(encoding="utf-8")
-    assert 'cron: "17 * * * *"' in Path(
-        ".github/workflows/orion-health-monitor.yml"
-    ).read_text(encoding="utf-8")
 
 
 def test_dependabot_covers_supported_ecosystems_weekly():
