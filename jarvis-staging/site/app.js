@@ -131,7 +131,7 @@ function beginListening(automatic=false){
   if(!ready()||state.busy||document.hidden)return;
   const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!Speech){
-    pauseDialogue('Safari no ofrece dictado web aquí. Usa el micrófono del teclado.');
+    pauseDialogue('Este navegador no ofrece reconocimiento web aquí. Usa el micrófono del teclado.');
     return;
   }
   clearRearm();
@@ -151,7 +151,7 @@ function beginListening(automatic=false){
     recognition.onstart=()=>{
       if(sequence!==state.listenSequence)return;
       voiceStatus('Escuchando...','listening');
-      transcript('Safari inició reconocimiento. Esperando palabras...');
+      transcript('El navegador inició el reconocimiento. Esperando palabras...');
       armRecognitionWatchdog(recognition,sequence);
     };
     recognition.onresult=event=>{
@@ -176,7 +176,7 @@ function beginListening(automatic=false){
         void processMessage(final);
       }
     };
-    recognition.onaudiostart=()=>{if(sequence===state.listenSequence)transcript('Safari confirmó entrada de audio. Esperando palabras...')};
+    recognition.onaudiostart=()=>{if(sequence===state.listenSequence)transcript('El navegador confirmó entrada de audio. Esperando palabras...')};
     recognition.onspeechstart=()=>{if(sequence===state.listenSequence)transcript('El navegador detectó voz. Esperando transcripción...')};
     recognition.onspeechend=()=>{if(sequence===state.listenSequence&&!gotFinal)transcript('El navegador detectó el final de la voz, pero aún no entregó texto. Esperando resultado...')};
     recognition.onnomatch=()=>{if(sequence===state.listenSequence&&!gotFinal)transcript('El reconocimiento no encontró palabras coincidentes. Prueba el dictado del teclado del iPhone.')};
@@ -187,10 +187,10 @@ function beginListening(automatic=false){
       const code=String(event?.error||'desconocido');
       const reason=code==='not-allowed'||code==='service-not-allowed'
         ?'El navegador rechazó el reconocimiento de voz. Revisa el permiso del sitio y prueba el dictado del teclado.'
-        :code==='no-speech'?'Safari no detectó palabras. Prueba en un lugar silencioso o usa el dictado del teclado.'
-        :code==='language-not-supported'?'Safari no admite este idioma. Cambia el idioma de escucha.'
+        :code==='no-speech'?'El navegador no detectó palabras. Prueba en un lugar silencioso o usa el dictado del teclado.'
+        :code==='language-not-supported'?'El navegador no admite este idioma. Cambia el idioma de escucha.'
         :code==='network'?'Falló el servicio de reconocimiento por red. Usa el dictado del teclado.'
-        :'Safari interrumpió el reconocimiento ('+code+'). Toca Hablar.';
+        :'El navegador interrumpió el reconocimiento ('+code+'). Toca Hablar.';
       transcript('Reconocimiento web ('+code+'): '+reason);
       if(state.dialogEnabled)pauseDialogue(reason);
       else {cancelRecognition();voiceStatus(reason,'paused');sayNotice(reason)}
@@ -215,7 +215,7 @@ function beginListening(automatic=false){
     recognition.start();
   }catch(error){
     cancelRecognition();
-    const msg=automatic?'Safari requiere tocar Hablar para continuar.':'No se pudo iniciar el reconocimiento web. Prueba el dictado del teclado.';
+    const msg=automatic?'El navegador requiere tocar Hablar para continuar.':'No se pudo iniciar el reconocimiento web. Prueba el dictado del teclado.';
     if(state.dialogEnabled)pauseDialogue(msg);
     else {voiceStatus(msg,'paused');sayNotice(msg)}
   }
