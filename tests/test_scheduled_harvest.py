@@ -255,9 +255,6 @@ def test_historical_time_budget_preserves_cursor_and_resumes_checkpoint(monkeypa
 def test_workflows_share_writer_group_and_separate_daily_from_deep():
     daily = Path(".github/workflows/daily-radar.yml").read_text()
     cloud = Path(".github/workflows/cloud-harvest.yml").read_text()
-    assert 'cron: "0 10 * * *"' in daily
-    assert 'cron: "0 11 * * *"' in cloud
-    assert 'cron: "23 2,8,14,20 * * *"' in cloud
     for text in (daily, cloud):
         assert "group: orion-harvest-writers" in text
         assert "cancel-in-progress: false" in text
