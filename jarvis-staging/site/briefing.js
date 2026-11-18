@@ -25,8 +25,15 @@ function calendarDay(date){
 function dueValue(task){
   if(!task||typeof task.due_at!=='string')return null;
   const raw=task.due_at.trim();
-  const hasZone=/(?:Z|[+-][0-9]{2}:[0-9]{2})$/i.test(raw);
-  if(!hasZone||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw))return null;
+  // Reject impossible dates and offsets instead of letting Date silently normalize them.
+  const match=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|([+-])(\d{2}):(\d{2}))$/i.exec(raw);
+  if(!match)return null;
+  const [,year,month,day,hour,minute,second='00',fraction='',zone,sign,offsetHours,offsetMinutes]=match;
+  const y=Number(year),mo=Number(month),d=Number(day),h=Number(hour),mi=Number(minute),sec=Number(second);
+  if(y<1||mo<1||mo>12||d<1||d>31||h>23||mi>59||sec>59)return null;
+  const canonical=new Date(Date.UTC(y,mo-1,d,h,mi,sec));
+  if(canonical.getUTCFullYear()!==y||canonical.getUTCMonth()!==mo-1||canonical.getUTCDate()!==d)return null;
+  if(zone.toUpperCase()!=='Z'&&(Number(offsetHours)>23||Number(offsetMinutes)>59))return null;
   const date=new Date(raw);
   return Number.isFinite(date.getTime())?date:null;
 }
