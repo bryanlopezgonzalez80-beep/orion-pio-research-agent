@@ -42,6 +42,10 @@ function dueValue(task){
   const date=new Date(raw);
   return Number.isFinite(date.getTime())?date:null;
 }
+export function safeTaskTitle(title,english=false){
+  const cleaned=typeof title==='string'?title.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060\u2066-\u2069\ufeff]/g,' ').replace(/\s+/g,' ').trim().slice(0,120):'';
+  return cleaned||(english?'Untitled':'Sin título');
+}
 export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Date(),english=false}={}){
   const current=now instanceof Date?now:new Date(now);
   if(!Number.isFinite(current.getTime()))throw Error('Invalid briefing timestamp');
@@ -54,7 +58,7 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
   const sevenDays=new Date(current.getTime()+7*24*60*60*1000);
   // Completed or explicitly cancelled tasks must never be presented as outstanding commitments.
   const inactiveStatuses=new Set(['done','completed','complete','cancelled','canceled']);
-  const pending=tasks.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.title==='string'&&x.title.trim()&&!inactiveStatuses.has(String(x.status??'').trim().toLowerCase()));
+  const pending=tasks.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.title==='string'&&safeTaskTitle(x.title)!=='Sin título'&&!inactiveStatuses.has(String(x.status??'').trim().toLowerCase()));
   const overdue=pending.filter(x=>{const d=dueValue(x);return d&&d<current});
   const upcoming=pending.filter(x=>{const d=dueValue(x);return d&&calendarDay(d)===today&&d>=current});
   const rank={high:0,normal:1,low:2};
@@ -67,7 +71,7 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
     const d=dueValue(task);
     const date=d?d.toLocaleString(english?'en-US':'es-PR',{timeZone:BRIEFING_TIME_ZONE,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
     const high=String(task.priority??'').trim().toLowerCase()==='high'?(english?', high priority':', prioridad alta'):'';
-    return (index+1)+'. '+(String(task.title||'Sin título').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060\u2066-\u2069\ufeff]/g,' ').replace(/\s+/g,' ').trim().slice(0,120)|| (english?'Untitled':'Sin título'))+high+(date?(english?', due '+date:', vence '+date):'');
+    return (index+1)+'. '+safeTaskTitle(task.title,english)+high+(date?(english?', due '+date:', vence '+date):'');
   };
   const suggestions=ordered.slice(0,3).map(taskText).join('; ');
   const verified=new Date(verifiedAt).toLocaleTimeString(english?'en-US':'es-PR',{timeZone:BRIEFING_TIME_ZONE,hour:'numeric',minute:'2-digit'});
