@@ -132,3 +132,12 @@ test('Cancelled tasks are not reported as pending, overdue or upcoming',()=>{
  assert.ok(!result.includes('Canceled meeting'));
  assert.match(result,/Actual work/);
 });
+
+test('Completed and cancelled task statuses are excluded regardless of casing or whitespace',()=>{
+ const tasks=['DONE',' Completed ','complete',' CANCELLED ','Canceled','pending'].map((status,i)=>({title:'Task '+i,status,due_at:'2026-11-17T10:00:00Z'}));
+ const result=dailyBriefing({...ctx,tasks});
+ assert.match(result,/1 pendientes/);
+ assert.match(result,/1 atrasadas/);
+ assert.ok(result.includes('Task 5'));
+ for(let i=0;i<5;i++)assert.ok(!result.includes('Task '+i));
+});
