@@ -90,3 +90,17 @@ test('Naive and date-only timestamps are not invented deadlines',()=>{
   assert.ok(!response.includes('vence '));
  }
 });
+
+test('Impossible dates, overflow hours and invalid offsets are not confirmed deadlines',()=>{
+ const t=new Date('2026-11-18T08:00:00Z');
+ const base={loaded:true,verifiedAt:t.getTime()-1000,now:t};
+ for(const due_at of ['2026-02-30T09:00:00Z','2026-13-01T09:00:00Z','2026-11-18T25:00:00Z','2026-11-18T09:00:00+24:00','2026-11-18T09:00:00+04:60','2026-11-18T09:00:00Zextra']){
+  const result=dailyBriefing({...base,tasks:[{title:'Invalid',status:'pending',due_at}]});
+  assert.match(result,/0 con vencimiento más tarde hoy/,due_at);
+  assert.ok(!result.includes('vence '),due_at);
+ }
+ for(const due_at of ['2026-11-18T09:00:00Z','2026-11-18T09:00:00-04:00','2024-02-29T09:00:00Z']){
+  const result=dailyBriefing({...base,tasks:[{title:'Valid',status:'pending',due_at}]});
+  assert.match(result,/vence /,due_at);
+ }
+});
