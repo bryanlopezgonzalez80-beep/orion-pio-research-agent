@@ -196,3 +196,14 @@ test('Zero-width and BOM formatting in task titles is removed without changing s
  assert.doesNotMatch(result,/[\u200b-\u200f\u2060\ufeff]/);
  assert.equal(task.title,original);
 });
+
+test('Unicode line and paragraph separators do not split voice briefing output',()=>{
+ for(const separator of ['\u2028','\u2029']){
+  const title='Enviar'+separator+'reporte';
+  const task={title,status:'pending',priority:'normal',due_at:null};
+  const response=dailyBriefing({...ctx,tasks:[task]});
+  assert.match(response,/Enviar reporte/);
+  assert.doesNotMatch(response,/[\u2028\u2029]/);
+  assert.equal(task.title,title);
+ }
+});
