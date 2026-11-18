@@ -70,7 +70,8 @@ function armRecognitionWatchdog(current,sequence){
   state.recognitionWatchdog=setTimeout(()=>{
     state.recognitionWatchdog=null;
     if(state.recognition===current&&sequence===state.listenSequence){
-      const msg='Safari dejó de responder al micrófono. Toca Hablar para continuar.';
+      const msg='Safari no entregó palabras en 20 segundos. Prueba otro idioma o dictado del teclado.';
+      transcript(msg);
       if(state.dialogEnabled)pauseDialogue(msg);
       else {cancelRecognition();voiceStatus(msg,'paused');sayNotice(msg)}
     }
@@ -141,7 +142,7 @@ function beginListening(automatic=false){
   try{
     recognition=new Speech();
     state.recognition=recognition;
-    recognition.lang=$('recognition-lang').value==='en-US'?'en-US':'es-PR';
+    recognition.lang=$('recognition-lang').value==='en-US'?'en-US':'es-ES';
     recognition.continuous=false;
     recognition.interimResults=true;
     recognition.maxAlternatives=1;
@@ -150,7 +151,7 @@ function beginListening(automatic=false){
     recognition.onstart=()=>{
       if(sequence!==state.listenSequence)return;
       voiceStatus('Escuchando...','listening');
-      transcript('Puedes hablar ahora. Escuchando...');
+      transcript('Safari inició reconocimiento. Esperando palabras...');
       armRecognitionWatchdog(recognition,sequence);
     };
     recognition.onresult=event=>{
@@ -174,6 +175,8 @@ function beginListening(automatic=false){
         void processMessage(final);
       }
     };
+    recognition.onaudiostart=()=>{if(sequence===state.listenSequence)transcript('Safari confirmó entrada de audio. Esperando palabras...')};
+    recognition.onspeechstart=()=>{if(sequence===state.listenSequence)transcript('Safari detectó voz. Esperando transcripción...')};
     recognition.onerror=event=>{
       if(sequence!==state.listenSequence)return;
       failed=true;
@@ -181,8 +184,11 @@ function beginListening(automatic=false){
       const code=String(event?.error||'desconocido');
       const reason=code==='not-allowed'||code==='service-not-allowed'
         ?'Safari no tiene permiso para usar el micrófono.'
-        :code==='no-speech'?'No detecté voz; toca Hablar para reintentar.'
+        :code==='no-speech'?'Safari no detectó palabras. Prueba en un lugar silencioso o usa el dictado del teclado.'
+        :code==='language-not-supported'?'Safari no admite este idioma. Cambia el idioma de escucha.'
+        :code==='network'?'Falló el servicio de reconocimiento por red. Usa el dictado del teclado.'
         :'Safari interrumpió el reconocimiento ('+code+'). Toca Hablar.';
+      transcript('Diagnóstico Safari: '+code+'. '+reason);
       if(state.dialogEnabled)pauseDialogue(reason);
       else {cancelRecognition();voiceStatus(reason,'paused');sayNotice(reason)}
     };
@@ -193,7 +199,8 @@ function beginListening(automatic=false){
       $('listen-button').classList.remove('active');
       $('listen-button').setAttribute('aria-pressed','false');
       if(!gotFinal&&!failed){
-        const reason='No escuché una instrucción. Toca Hablar para continuar.';
+        const reason='Safari terminó sin entregar palabras. Prueba otro idioma o el dictado del teclado.';
+        transcript(reason);
         if(state.dialogEnabled)pauseDialogue(reason);
         else voiceStatus(reason,'paused');
       }
