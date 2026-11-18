@@ -26,3 +26,6 @@ if not spec or not spec.loader:
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 app = engine.app
+
+from icloud_calendar import register as register_icloud_calendar
+register_icloud_calendar(app, engine.user_context)

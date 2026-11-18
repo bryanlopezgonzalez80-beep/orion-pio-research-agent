@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readdir,readFile} from 'node:fs/promises';
 import {join} from 'node:path';
-const root=new URL('../site/',import.meta.url);
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../site/',import.meta.url));
 async function frontendFiles(dir){
   const files=[];
   for(const item of await readdir(dir,{withFileTypes:true})){
