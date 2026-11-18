@@ -42,6 +42,8 @@ function updateVoiceCompatibility(){
 function voiceStatus(label,status='idle'){
   const el=$('voice-state');if(!el)return;
   el.textContent=label;el.dataset.state=status;
+  const hero=document.querySelector('.hero');
+  if(hero)hero.dataset.voiceMode=['listening','speaking','thinking','paused'].includes(status)?status:'idle';
 }
 function transcript(label){
   const el=$('live-transcript');if(el)el.textContent=label;
