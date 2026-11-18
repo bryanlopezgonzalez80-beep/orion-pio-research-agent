@@ -35,7 +35,7 @@ function updateVoiceCompatibility(){
   }else if(!synthesis){
     el.textContent='Reconocimiento de voz detectado. La lectura en voz alta no está disponible.';
   }else{
-    el.textContent='Micrófono web y lectura de voz detectados. Safari puede limitar las conversaciones continuas.';
+    el.textContent='El navegador expone reconocimiento y lectura de voz, pero esto NO confirma que pueda transcribir. Pulsa Hablar y comprueba el resultado. En Chrome para iPhone o Safari, usa el dictado del teclado si falla.';
   }
 }
 
