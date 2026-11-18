@@ -141,3 +141,15 @@ test('Completed and cancelled task statuses are excluded regardless of casing or
  assert.ok(result.includes('Task 5'));
  for(let i=0;i<5;i++)assert.ok(!result.includes('Task '+i));
 });
+
+test('Priority labels and ordering normalize casing and whitespace',()=>{
+ const tasks=[
+  {title:'Low priority',status:'pending',priority:' LOW ',due_at:null},
+  {title:'High priority',status:'pending',priority:' HIGH ',due_at:null},
+  {title:'Normal priority',status:'pending',priority:'normal',due_at:null}
+ ];
+ const result=dailyBriefing({...ctx,tasks});
+ assert.ok(result.indexOf('High priority')<result.indexOf('Normal priority'));
+ assert.ok(result.indexOf('Normal priority')<result.indexOf('Low priority'));
+ assert.match(result,/High priority, prioridad alta/);
+});
