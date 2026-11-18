@@ -223,6 +223,7 @@ function startDialogue(){
   updateVoiceControl();
 }
 function clearIdentity(){
+  $('new-password').value='';$('login-password').value='';$('password-message').textContent='';$('password-settings').open=false;
   state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];state.editingTaskId=null;state.editingMemoryId=null;state.tasksVerifiedAt=null;state.memoriesVerifiedAt=null;state.replyLanguage='es';
   for(const controller of state.aborters){controller.abort()}state.aborters.clear();stopVoice();state.voiceEnabled=false;updateVoiceControl();
   $('thread').replaceChildren();$('task-list').replaceChildren();$('memory-list').replaceChildren();$('history-list').replaceChildren();$('history-messages').replaceChildren();visible('history-detail',false);visible('action-box',false);resetTaskEditor();resetMemoryEditor();$('task-search').value='';$('memory-search').value='';$('memory-filter').value='all';syncStatus('Sesión cerrada','idle');renderTrust();
@@ -800,12 +801,50 @@ $('session-button').addEventListener('click',startDialogue);
 $('listen-button').addEventListener('click',listen);$('stop-button').addEventListener('click',()=>{stopVoice();sayNotice('Voz detenida.')});
 $('read-button').addEventListener('click',()=>state.lastReply?speak(state.lastReply,{force:true}):sayNotice('No tengo una respuesta para leer.'));
 $('signout-button').addEventListener('click',async()=>{clearIdentity();visible('workspace',false);visible('login',true);await supabase.auth.signOut();});
-$('login-form').addEventListener('submit',async e=>{e.preventDefault();const email=$('email').value.trim();if(!email)return;
-  $('login-button').disabled=true;$('login-message').textContent='Preparando el enlace de acceso...';
-  try{const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.origin}});if(error)throw error;
-    $('login-message').textContent='Revisa tu correo y abre el enlace desde este iPhone. Si no funciona, comprueba las redirecciones permitidas en Supabase Auth.';}
-  catch(err){$('login-message').textContent='No pude enviar el enlace: '+err.message}
-  finally{$('login-button').disabled=false}
+$('login-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const email = $('email').value.trim();
+  const password = $('login-password').value;
+  const message = $('login-message');
+  if (!email || $('login-button').disabled) return;
+  $('login-button').disabled = true;
+  message.textContent = password ? 'Verificando acceso…' : 'Solicitando enlace…';
+  try {
+    if (password) {
+      const {error} = await supabase.auth.signInWithPassword({email, password});
+      if (error) throw error;
+      $('login-password').value = '';
+      message.textContent = '';
+    } else {
+      const {error} = await supabase.auth.signInWithOtp({email, options: {emailRedirectTo: window.location.origin}});
+      if (error) throw error;
+      message.textContent = 'Busca el correo más reciente de Supabase Auth y toca «Sign in». El enlace abrirá JARVIS en tu navegador. Si prefieres entrar desde el icono del iPhone, configura una contraseña después de iniciar sesión.';
+    }
+  } catch {
+    message.textContent = password ? 'No se pudo iniciar sesión. Revisa tus datos o deja la contraseña vacía para solicitar un enlace.' : 'No se pudo solicitar el enlace. Comprueba tu conexión y vuelve a intentarlo en un minuto.';
+  } finally {
+    $('login-button').disabled = false;
+  }
+});
+$('set-password-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const field = $('new-password');
+  const owner = state.session?.user?.id;
+  if (!owner || !field.reportValidity() || $('save-password').disabled) return;
+  $('save-password').disabled = true;
+  $('password-message').textContent = 'Guardando…';
+  try {
+    const {error} = await supabase.auth.updateUser({password: field.value});
+    if (error) throw error;
+    if (owner === state.session?.user?.id) {
+      field.value = '';
+      $('password-message').textContent = 'Contraseña guardada. Ya puedes usarla para entrar desde el icono de JARVIS.';
+    }
+  } catch {
+    if (owner === state.session?.user?.id) $('password-message').textContent = 'No se pudo guardar. Abre un enlace de acceso nuevo y prueba con una contraseña segura.';
+  } finally {
+    $('save-password').disabled = false;
+  }
 });
 function refreshVisibleTrust(){
   if(document.hidden)return;
