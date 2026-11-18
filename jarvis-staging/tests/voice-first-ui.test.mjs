@@ -60,3 +60,15 @@ test('iPhone browser messaging does not claim SpeechRecognition guarantees trans
  assert.match(html,/micrófono del teclado de iOS/);
  assert.match(html,/no garantiza una transcripción/);
 });
+
+test('Native iPhone dictation fallback focuses existing composer without requesting permissions or saving data',()=>{
+ assert.match(html,/id="dictation-button"/);
+ const start=app.indexOf("$('dictation-button').addEventListener('click'");
+ const end=app.indexOf("$('stop-button').addEventListener",start);
+ assert.ok(start>=0&&end>start);
+ const handler=app.slice(start,end);
+ assert.match(handler,/stopVoice\(\)/);
+ assert.match(handler,/field\.focus\(\)/);
+ assert.match(handler,/micrófono del teclado del iPhone/);
+ assert.doesNotMatch(handler,/request\(|getUserMedia|processMessage\(|signIn|localStorage|fetch\(/);
+});
