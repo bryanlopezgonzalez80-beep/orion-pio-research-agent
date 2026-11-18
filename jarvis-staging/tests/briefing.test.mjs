@@ -72,3 +72,21 @@ test('Rendering avoids dangerous HTML assignment',async()=>{
   assert.ok(html.includes('id="'+id+'"'),'Missing '+id);
  }
 });
+
+test('Puerto Rico day boundaries are independent of browser timezone',()=>{
+ const t=new Date('2026-11-18T03:30:00Z'); // Nov 17, 11:30 PM PR
+ const base={loaded:true,verifiedAt:t.getTime()-1000,now:t};
+ const today=dailyBriefing({...base,tasks:[{title:'Before midnight',status:'pending',due_at:'2026-11-18T03:45:00Z'}]});
+ const tomorrow=dailyBriefing({...base,tasks:[{title:'After midnight',status:'pending',due_at:'2026-11-18T04:15:00Z'}]});
+ assert.match(today,/1 con vencimiento más tarde hoy/);
+ assert.match(tomorrow,/0 con vencimiento más tarde hoy/);
+});
+test('Naive and date-only timestamps are not invented deadlines',()=>{
+ const t=new Date('2026-11-18T08:00:00Z');
+ const base={loaded:true,verifiedAt:t.getTime()-1000,now:t};
+ for(const due_at of ['2026-11-18T09:00:00','2026-11-18','tomorrow']){
+  const response=dailyBriefing({...base,tasks:[{title:'Unverified deadline',status:'pending',due_at}]});
+  assert.match(response,/0 con vencimiento más tarde hoy/);
+  assert.ok(!response.includes('vence '));
+ }
+});
