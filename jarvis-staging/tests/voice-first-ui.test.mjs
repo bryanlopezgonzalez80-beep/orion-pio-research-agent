@@ -133,3 +133,12 @@ test('Synchronous speech synthesis failure is contained and never reported as de
  assert.match(body,/else sayNotice\(guidance\)/);
  assert.match(body,/updateVoiceControl\(\)/);
 });
+
+
+test('Voice dialogue resumes after async request settles without listening over speech',()=>{
+ const body=app.slice(app.indexOf('async function processMessage('),app.indexOf('function speak(',app.indexOf('async function processMessage(')));
+ assert.match(body,/finally\s*\{[\s\S]*?state\.busy=false/);
+ assert.match(body,/if\(state\.dialogEnabled&&state\.voiceEnabled&&!state\.activeUtterance\)scheduleRearm\(\)/);
+ const rearm=app.slice(app.indexOf('function scheduleRearm('),app.indexOf('function beginListening(',app.indexOf('function scheduleRearm(')));
+ assert.match(rearm,/if\(!state\.dialogEnabled\|\|state\.busy\|\|document\.hidden\|\|!ready\(\)\)return/);
+});
