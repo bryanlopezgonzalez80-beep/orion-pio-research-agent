@@ -108,7 +108,7 @@ test('Voice recognition failure messages do not misidentify Chrome as Safari',()
 });
 
 test('Daily plan refuses stale task snapshots instead of presenting an outdated schedule as current',()=>{
- const body=app.slice(app.indexOf('function localDayPlan(){'),app.indexOf('function localCommand(',app.indexOf('function localDayPlan(){'));
+ const body=app.slice(app.indexOf('function localDayPlan(){'),app.indexOf('function localCommand(',app.indexOf('function localDayPlan(){')));
  assert.match(body,/if\(!sourceIsRecent\('tasks'\)\)/);
  assert.match(body,/no tienen verificación reciente/);
  assert.doesNotMatch(body,/if\(!state\.tasksLoaded\)/);
@@ -145,9 +145,19 @@ test('Voice dialogue resumes after async request settles without listening over 
 
 
 test('Malformed non-iterable recognition payload fails closed without inventing speech',()=>{
- const body=app.slice(app.indexOf('recognition.onresult=event=>{'),app.indexOf('recognition.onaudiostart=',app.indexOf('recognition.onresult=event=>{'));
+ const body=app.slice(app.indexOf('recognition.onresult=event=>{'),app.indexOf('recognition.onaudiostart=',app.indexOf('recognition.onresult=event=>{')));
  assert.match(body,/try\s*\{\s*all=Array\.from\(event\?\.results\|\|\[\]\)/);
  assert.match(body,/catch\s*\(error\)\s*\{[\s\S]*?pauseDialogue\('El navegador entregó un resultado de voz inválido/);
  assert.match(body,/catch\s*\(error\)\s*\{[\s\S]*?return;/);
- assert.ok(body.indexOf('pauseDialogue(')<body.indexOf('const words='));
+ assert.ok(body.indexOf('pauseDialogue(')<body.indexOf('let words,final;'));
+});
+
+test('Throwing speech result getters fail closed instead of fabricating recognized words',()=>{
+ const start=app.indexOf('recognition.onresult=event=>{');
+ const body=app.slice(start,app.indexOf('recognition.onaudiostart=',start));
+ assert.match(body,/let words,final;/);
+ assert.match(body,/try\s*\{[\s\S]*?words=all\.map\(/);
+ assert.match(body,/final=all\.filter\(/);
+ assert.match(body,/catch\s*\(error\)\s*\{[\s\S]*?pauseDialogue\('El navegador entregó datos de voz dañados/);
+ assert.ok(body.indexOf('if(words){transcript(')>body.indexOf('catch (error)'));
 });
