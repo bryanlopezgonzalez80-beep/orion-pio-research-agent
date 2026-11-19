@@ -317,3 +317,13 @@ test('English travel duration questions retain English safety response',()=>{
   assert.doesNotMatch(answer.text,/\b\d+ minutes\b/i,phrase);
  }
 });
+
+test('English departure paraphrases never fabricate a departure time',()=>{
+ for(const phrase of ['What time do I need to leave?','What time do I have to leave?','Jarvis, what time do I need to leave?']){
+  assert.equal(classifyCommand(phrase),'travel',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/cannot calculate a reliable departure time/i,phrase);
+  assert.doesNotMatch(answer.text,/\\b\\d+ minutes\\b/i,phrase);
+ }
+});
