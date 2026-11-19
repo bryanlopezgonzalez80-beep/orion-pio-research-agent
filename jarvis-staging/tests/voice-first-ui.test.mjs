@@ -142,3 +142,12 @@ test('Voice dialogue resumes after async request settles without listening over 
  const rearm=app.slice(app.indexOf('function scheduleRearm('),app.indexOf('function beginListening(',app.indexOf('function scheduleRearm(')));
  assert.match(rearm,/if\(!state\.dialogEnabled\|\|state\.busy\|\|document\.hidden\|\|!ready\(\)\)return/);
 });
+
+
+test('Malformed non-iterable recognition payload fails closed without inventing speech',()=>{
+ const body=app.slice(app.indexOf('recognition.onresult=event=>{'),app.indexOf('recognition.onaudiostart=',app.indexOf('recognition.onresult=event=>{'));
+ assert.match(body,/try\s*\{\s*all=Array\.from\(event\?\.results\|\|\[\]\)/);
+ assert.match(body,/catch\s*\(error\)\s*\{[\s\S]*?pauseDialogue\('El navegador entregó un resultado de voz inválido/);
+ assert.match(body,/catch\s*\(error\)\s*\{[\s\S]*?return;/);
+ assert.ok(body.indexOf('pauseDialogue(')<body.indexOf('const words='));
+});
