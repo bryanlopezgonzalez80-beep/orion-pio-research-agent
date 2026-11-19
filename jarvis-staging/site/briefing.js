@@ -8,7 +8,7 @@ export function normalizedPhrase(value){
 }
 export function englishIntent(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
-  return /^(what\b|what's\b|do i have\b|when\b|where\b|what time\b|when should i\b|what time should i\b|what time do i\b|how long\b|how much time\b|are there any\b|show my\b|my schedule\b|my meetings\b|my appointments\b|what\b|show my\b)/.test(n);
+  return /^(what\b|what's\b|do i have\b|have i got\b|when\b|where\b|what time\b|when should i\b|what time should i\b|what time do i\b|how long\b|how much time\b|are there any\b|show my\b|my schedule\b|my meetings\b|my appointments\b|what\b|show my\b)/.test(n);
 }
 export function classifyCommand(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
