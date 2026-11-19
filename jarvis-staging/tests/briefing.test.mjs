@@ -273,3 +273,17 @@ test('Natural travel-duration questions fail closed without verified route or tr
   assert.doesNotMatch(answer.text,/\b\d+ minutes\b|\b\d+ min\b/i,phrase);
  }
 });
+
+test('Spanish travel duration paraphrases fail closed without traffic or route',()=>{
+ for(const phrase of ['¿Cuánto tiempo tardaré en llegar?','¿Cuánto tiempo tardaría?','¿Cuánto dura el viaje?','¿Cuánto durará el trayecto?','¿Cuánto tiempo se tarda en ir?']){
+  assert.equal(classifyCommand(phrase),'travel',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'es',phrase);
+  assert.match(answer.text,/No puedo calcular una hora fiable para salir/,phrase);
+  assert.match(answer.text,/datos reales de tráfico/,phrase);
+  assert.doesNotMatch(answer.text,/\\b\\d+ minutos\\b/i,phrase);
+ }
+ for(const phrase of ['¿Cuánto tiempo tengo para estudiar?','¿Cuánto dura mi tarea?','Agrega tarea comprar café']){
+  assert.notEqual(classifyCommand(phrase),'travel',phrase);
+ }
+});
