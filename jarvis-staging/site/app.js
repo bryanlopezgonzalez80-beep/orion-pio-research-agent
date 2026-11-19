@@ -813,9 +813,14 @@ $('task-form').addEventListener('submit',async e=>{
       await request('/v1/tasks','POST',payload);
     }
     resetTaskEditor();
-    await loadWorkspace();
-    sayNotice(editingId?'Tarea actualizada.':'Tarea guardada.');
-  }catch(err){sayNotice('No se pudo guardar: '+err.message)}
+    // The server accepted the write. A failed refresh must not imply the write failed.
+    try{
+      await loadWorkspace();
+      sayNotice(editingId?'El servidor confirmó la actualización de la tarea. Comprueba la sincronización.':'El servidor confirmó la tarea. Comprueba la sincronización.');
+    }catch(syncError){
+      sayNotice('El servidor confirmó la tarea, pero no pude actualizar la pantalla. Pulsa Actualizar antes de reintentar para evitar duplicados.');
+    }
+  }catch(err){sayNotice('No pude confirmar la tarea en el servidor: '+err.message+'. Comprueba tus datos antes de reintentar.')}
   finally{button.disabled=false}
 });
 $('memory-form').addEventListener('submit',async e=>{
@@ -833,9 +838,14 @@ $('memory-form').addEventListener('submit',async e=>{
       await request('/v1/memories','POST',payload);
     }
     resetMemoryEditor();
-    await loadWorkspace();
-    sayNotice(editingId?'Recuerdo corregido.':'Recuerdo guardado.');
-  }catch(err){sayNotice('No se pudo guardar: '+err.message)}
+    // Never describe a confirmed write as failed solely because reloading failed.
+    try{
+      await loadWorkspace();
+      sayNotice(editingId?'El servidor confirmó la actualización del recuerdo. Comprueba la sincronización.':'El servidor confirmó el recuerdo. Comprueba la sincronización.');
+    }catch(syncError){
+      sayNotice('El servidor confirmó el recuerdo, pero no pude actualizar la pantalla. Pulsa Actualizar antes de reintentar para evitar duplicados.');
+    }
+  }catch(err){sayNotice('No pude confirmar el recuerdo en el servidor: '+err.message+'. Comprueba tus datos antes de reintentar.')}
   finally{$('memory-submit').disabled=false}
 });
 $('task-search').addEventListener('input',drawTasks);
