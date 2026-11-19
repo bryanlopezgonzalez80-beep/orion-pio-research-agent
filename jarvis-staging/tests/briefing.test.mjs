@@ -373,3 +373,13 @@ test('Possessive next-meeting questions never bypass calendar verification',()=>
   assert.doesNotMatch(answer.text,/confirmed at|confirmada a las|9:00/i,phrase);
  }
 });
+
+test('Have-I-got meeting questions retain English and never claim calendar access',()=>{
+ for(const phrase of ['Have I got a meeting today?','Have I got any appointments tomorrow?','Jarvis, have I got any meetings?']){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/calendar is not connected/i,phrase);
+  assert.doesNotMatch(answer.text,/confirmed meeting at|\\b9:00\\b/i,phrase);
+ }
+});
