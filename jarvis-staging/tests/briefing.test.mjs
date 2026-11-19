@@ -250,3 +250,15 @@ test('Only explicitly pending tasks are announced as current commitments',()=>{
  assert.match(result,/Legacy task without status/);
  for(const title of ['Draft','Archived','Blocked','Unknown'])assert.ok(!result.includes(title),title);
 });
+
+test('Bilingual meeting time, location and singular appointment questions fail closed',()=>{
+ for(const phrase of ['¿A qué hora es mi reunión?','¿Dónde es mi cita mañana?','¿Tengo una cita hoy?','¿Hay alguna reunión mañana?','What meetings do I have today?','What time is my appointment?','Where is my meeting?','Do I have a meeting tomorrow?']){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.ok(answer&&/calendar|calendario/i.test(answer.text),phrase);
+  assert.doesNotMatch(answer.text,/confirmed at|confirmada a las|9:00/i,phrase);
+ }
+ for(const phrase of ['Agrega tarea comprar café','¿Qué tengo hoy?','What I got to do today?','¿Cuándo debo salir?']){
+  assert.notEqual(classifyCommand(phrase),'calendar',phrase);
+ }
+});
