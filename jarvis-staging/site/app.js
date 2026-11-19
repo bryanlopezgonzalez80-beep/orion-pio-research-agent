@@ -164,9 +164,16 @@ function beginListening(automatic=false){
         pauseDialogue('El navegador entregó un resultado de voz inválido. Usa el dictado del teclado.');
         return;
       }
-      const words=all.map(x=>String(x?.[0]?.transcript||'')).join(' ').trim();
+      // Browser speech results can contain throwing getters; fail closed.
+      let words,final;
+      try {
+        words=all.map(x=>String(x?.[0]?.transcript||'')).join(' ').trim();
+        final=all.filter(x=>x?.isFinal).map(x=>String(x?.[0]?.transcript||'')).join(' ').trim();
+      } catch (error) {
+        pauseDialogue('El navegador entregó datos de voz dañados. Usa el dictado del teclado.');
+        return;
+      }
       if(words){transcript(words);armRecognitionWatchdog(recognition,sequence)}
-      const final=all.filter(x=>x?.isFinal).map(x=>String(x?.[0]?.transcript||'')).join(' ').trim();
       if(final&&!gotFinal){
         gotFinal=true;
         clearRecognitionWatchdog();
