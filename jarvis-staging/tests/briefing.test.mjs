@@ -337,3 +337,16 @@ test('Next and upcoming meeting questions require calendar verification',()=>{
   assert.doesNotMatch(answer.text,/\b9:00\b|confirmed meeting at/i,phrase);
  }
 });
+
+test('Spanish next-meeting and next-appointment queries require verified calendar',()=>{
+ for(const phrase of ['¿Cuándo es mi próxima reunión?','¿A qué hora es mi siguiente cita?','¿Dónde será la próxima reunión?']){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'es',phrase);
+  assert.match(answer.text,/calendario aún no está conectado/i,phrase);
+  assert.doesNotMatch(answer.text,/9:00|confirmada a las/i,phrase);
+ }
+ for(const phrase of ['¿Cuándo es mi próxima tarea?','¿Dónde será mi próximo viaje?']){
+  assert.notEqual(classifyCommand(phrase),'calendar',phrase);
+ }
+});
