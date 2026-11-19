@@ -262,3 +262,14 @@ test('Bilingual meeting time, location and singular appointment questions fail c
   assert.notEqual(classifyCommand(phrase),'calendar',phrase);
  }
 });
+
+test('Natural travel-duration questions fail closed without verified route or traffic',()=>{
+ for(const phrase of ['How long does it take to get there?','How long will it take to arrive?','How much time does it take to get there?','How much time will it take?']){
+  assert.equal(classifyCommand(phrase),'travel',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/cannot calculate a reliable departure time/i,phrase);
+  assert.match(answer.text,/live traffic data/i,phrase);
+  assert.doesNotMatch(answer.text,/\b\d+ minutes\b|\b\d+ min\b/i,phrase);
+ }
+});
