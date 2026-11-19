@@ -402,3 +402,13 @@ test('Elliptical bilingual calendar voice questions fail closed',()=>{
   assert.notEqual(classifyCommand(phrase),'calendar',phrase);
  }
 });
+
+
+test('Elliptical English meeting questions answer in English without calendar access',()=>{
+ for(const phrase of ['Any meetings today?','Any appointments tomorrow?','Jarvis, any meetings?']){
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/calendar is not connected/i,phrase);
+ }
+});
