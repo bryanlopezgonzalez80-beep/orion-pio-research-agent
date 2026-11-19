@@ -307,3 +307,13 @@ test('Additional bilingual travel duration expressions never imply a verified ro
   assert.notEqual(classifyCommand(phrase),'travel',phrase);
  }
 });
+
+test('English travel duration questions retain English safety response',()=>{
+ for(const phrase of ['How much time will it take?','How much time does it take to get there?','Jarvis, how much time will it take to arrive?']){
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(classifyCommand(phrase),'travel',phrase);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/cannot calculate a reliable departure time/i,phrase);
+  assert.doesNotMatch(answer.text,/\b\d+ minutes\b/i,phrase);
+ }
+});
