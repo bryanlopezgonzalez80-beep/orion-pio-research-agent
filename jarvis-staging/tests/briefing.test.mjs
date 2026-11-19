@@ -363,3 +363,13 @@ test('English when/where meeting queries retain English safety language',()=>{
   assert.equal(answer?.language,'es',phrase);
  }
 });
+
+test('Possessive next-meeting questions never bypass calendar verification',()=>{
+ for(const [phrase,language] of [["What's my next meeting?",'en'],['What is my upcoming appointment?','en'],["When's my next meeting?",'en'],['¿Cuándo tengo mi próxima cita?','es']]){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,language,phrase);
+  assert.match(answer.text,/calendar|calendario/i,phrase);
+  assert.doesNotMatch(answer.text,/confirmed at|confirmada a las|9:00/i,phrase);
+ }
+});
