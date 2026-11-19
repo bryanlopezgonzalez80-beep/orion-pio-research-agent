@@ -113,3 +113,12 @@ test('Daily plan refuses stale task snapshots instead of presenting an outdated 
  assert.match(body,/no tienen verificación reciente/);
  assert.doesNotMatch(body,/if\(!state\.tasksLoaded\)/);
 });
+
+
+test('Speech playback failures give browser-neutral recovery guidance for Chrome and Safari',()=>{
+ const body=app.slice(app.indexOf('utterance.onerror=event=>{'),app.indexOf('synth.speak(utterance);'));
+ assert.match(body,/El navegador no pudo reproducir la respuesta hablada/);
+ assert.match(body,/Comprueba el volumen y pulsa Hablar para continuar/);
+ assert.match(body,/vuelve a pulsar Repetir audio/);
+ assert.doesNotMatch(body,/Safari no pudo reproducir|volumen y Safari/);
+});
