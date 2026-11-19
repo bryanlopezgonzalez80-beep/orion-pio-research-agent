@@ -738,7 +738,18 @@ function speak(content,{force=false,language=null}={}){
     else sayNotice('El navegador no pudo reproducir la respuesta hablada. Comprueba el volumen y vuelve a pulsar Repetir audio.');
     updateVoiceControl();
   };
-  synth.speak(utterance);
+  try {
+    synth.speak(utterance);
+  } catch (error) {
+    // Speech engines can throw synchronously (e.g. while a device changes).
+    // Do not claim audio was delivered; keep the written response available.
+    if(sequence!==state.speechSequence)return;
+    state.activeUtterance=null;
+    const guidance='El navegador no pudo iniciar la respuesta hablada. Comprueba el volumen y vuelve a pulsar Repetir audio.';
+    if(state.dialogEnabled)pauseDialogue(guidance);
+    else sayNotice(guidance);
+    updateVoiceControl();
+  }
 }
 function listen(){
   if(!ready())return;
