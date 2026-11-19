@@ -626,7 +626,19 @@ async function confirmAction(){
   const pending=state.pending;if(!pending)return;
   if(Date.now()>pending.until){discard();append('assistant','La propuesta caducó. Vuelve a darme la instrucción.');return}
   discard();
-  try{await pending.action();await loadWorkspace();append('assistant','He guardado el cambio y actualizado tu espacio.')}catch(e){append('assistant','No pude guardarlo: '+e.message)}
+  try{
+    await pending.action();
+  }catch(e){
+    append('assistant','No pude confirmar el cambio en el servidor: '+e.message+'. Comprueba tus datos antes de reintentar para evitar duplicados.');
+    return;
+  }
+  // A successful write must never be described as failed because a later refresh failed.
+  try{
+    await loadWorkspace();
+    append('assistant','El servidor confirmó el cambio. Solicité actualizar los datos; comprueba su estado de sincronización.');
+  }catch(e){
+    append('assistant','El servidor confirmó el cambio, pero no pude verificar la actualización de la pantalla. Pulsa Actualizar datos antes de reintentar.');
+  }
 }
 function dateKey(date){
   return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
