@@ -412,3 +412,19 @@ test('Elliptical English meeting questions answer in English without calendar ac
   assert.match(answer.text,/calendar is not connected/i,phrase);
  }
 });
+
+test('Invisible Unicode controls cannot bypass calendar and travel safety classification',()=>{
+ for(const [phrase,kind,language] of [
+  ['Do I\u200b have any meetings?','calendar','en'],
+  ['¿Tengo\u202e reuniones hoy?','calendar','es'],
+  ['What\u2060 time should I leave?','travel','en'],
+  ['¿A qué\u200b hora debería salir?','travel','es'],
+  ['Jarvis,\n any appointments?','calendar','en']
+ ]){
+  assert.equal(classifyCommand(phrase),kind,phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,language,phrase);
+  assert.match(answer.text,/calendar|calendario|cannot calculate|no puedo calcular/i,phrase);
+ }
+ assert.equal(classifyCommand('Agrega tarea comprar café'),null);
+});
