@@ -157,7 +157,13 @@ function beginListening(automatic=false){
     recognition.onresult=event=>{
       if(sequence!==state.listenSequence||!ready())return;
       // Ignore malformed recognition payloads rather than treating them as valid speech.
-      const all=Array.from(event.results||[]);
+      let all;
+      try { all=Array.from(event?.results||[]); }
+      catch (error) {
+        // A malformed browser event is not a transcript. Stop safely instead of crashing.
+        pauseDialogue('El navegador entregó un resultado de voz inválido. Usa el dictado del teclado.');
+        return;
+      }
       const words=all.map(x=>String(x?.[0]?.transcript||'')).join(' ').trim();
       if(words){transcript(words);armRecognitionWatchdog(recognition,sequence)}
       const final=all.filter(x=>x?.isFinal).map(x=>String(x?.[0]?.transcript||'')).join(' ').trim();
