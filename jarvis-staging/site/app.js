@@ -619,7 +619,8 @@ function dateKey(date){
   return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
 }
 function localDayPlan(){
-  if(!state.tasksLoaded)return 'No puedo preparar un plan fiable sin comprobar primero tus tareas. Pulsa Actualizar datos.';
+  // A previously loaded snapshot is not proof of a current schedule.
+  if(!sourceIsRecent('tasks'))return 'No puedo preparar un plan fiable: mis tareas no tienen verificación reciente. Pulsa Actualizar datos e inténtalo de nuevo.';
   const now=new Date();
   const today=dateKey(now);
   const tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
