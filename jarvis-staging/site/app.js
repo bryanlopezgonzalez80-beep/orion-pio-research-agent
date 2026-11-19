@@ -734,8 +734,8 @@ function speak(content,{force=false,language=null}={}){
   utterance.onerror=event=>{
     if(sequence!==state.speechSequence)return;
     state.activeUtterance=null;
-    if(state.dialogEnabled)pauseDialogue('Safari no pudo reproducir el audio; toca Hablar para continuar.');
-    else sayNotice('No se pudo reproducir la voz. Comprueba el volumen y Safari.');
+    if(state.dialogEnabled)pauseDialogue('El navegador no pudo reproducir la respuesta hablada. Comprueba el volumen y pulsa Hablar para continuar.');
+    else sayNotice('El navegador no pudo reproducir la respuesta hablada. Comprueba el volumen y vuelve a pulsar Repetir audio.');
     updateVoiceControl();
   };
   synth.speak(utterance);
