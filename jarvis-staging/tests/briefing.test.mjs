@@ -428,3 +428,13 @@ test('Invisible Unicode controls cannot bypass calendar and travel safety classi
  }
  assert.equal(classifyCommand('Agrega tarea comprar café'),null);
 });
+
+test('English quantity and selection meeting questions retain English safety language',()=>{
+ for(const phrase of ["How many meetings do I have today?","Which meetings do I have tomorrow?","Jarvis, how many appointments do I have?"]){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/calendar is not connected/i,phrase);
+  assert.doesNotMatch(answer.text,/confirmed meeting at|\\b9:00\\b/i,phrase);
+ }
+});
