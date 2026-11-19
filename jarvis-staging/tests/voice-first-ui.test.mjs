@@ -186,3 +186,21 @@ test('Delayed microphone rearm never interrupts active playback or duplicates re
  assert.ok(body.indexOf('state.activeUtterance||state.recognition')<body.indexOf('beginListening(true)'));
  assert.ok(body.indexOf('window.speechSynthesis.speaking')<body.indexOf('beginListening(true)'));
 });
+
+test('Task and memory forms distinguish confirmed writes from refresh failures',()=>{
+ for(const [start,end,kind] of [
+  ["$('task-form').addEventListener","$('memory-form').addEventListener",'tarea'],
+  ["$('memory-form').addEventListener","$('task-search').addEventListener",'recuerdo']
+ ]){
+  const begin=app.indexOf(start),finish=app.indexOf(end,begin+start.length);
+  assert.ok(begin>=0&&finish>begin,'form section exists');
+  const body=app.slice(begin,finish);
+  assert.match(body,/await loadWorkspace\(\)/);
+  assert.match(body,/catch\(syncError\)/);
+  assert.match(body,new RegExp('El servidor confirmó (?:la |el )?'+kind));
+  assert.match(body,/antes de reintentar para evitar duplicados/);
+  assert.match(body,new RegExp('No pude confirmar (?:la |el )?'+kind));
+  assert.ok(body.indexOf('await request(')<body.indexOf('await loadWorkspace()'),'write precedes refresh');
+  assert.ok(body.indexOf('catch(syncError)')<body.indexOf('catch(err)'),'refresh errors are separated');
+ }
+});
