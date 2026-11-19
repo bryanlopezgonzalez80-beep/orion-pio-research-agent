@@ -122,3 +122,14 @@ test('Speech playback failures give browser-neutral recovery guidance for Chrome
  assert.match(body,/vuelve a pulsar Repetir audio/);
  assert.doesNotMatch(body,/Safari no pudo reproducir|volumen y Safari/);
 });
+
+
+test('Synchronous speech synthesis failure is contained and never reported as delivered audio',()=>{
+ const body=app.slice(app.indexOf('function speak('),app.indexOf('function listen(){'));
+ assert.match(body,/try\s*\{\s*synth\.speak\(utterance\);\s*\}\s*catch\s*\(error\)/);
+ assert.match(body,/state\.activeUtterance=null/);
+ assert.match(body,/El navegador no pudo iniciar la respuesta hablada/);
+ assert.match(body,/if\(state\.dialogEnabled\)pauseDialogue\(guidance\)/);
+ assert.match(body,/else sayNotice\(guidance\)/);
+ assert.match(body,/updateVoiceControl\(\)/);
+});
