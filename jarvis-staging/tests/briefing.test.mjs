@@ -383,3 +383,22 @@ test('Have-I-got meeting questions retain English and never claim calendar acces
   assert.doesNotMatch(answer.text,/confirmed meeting at|\\b9:00\\b/i,phrase);
  }
 });
+
+test('Elliptical bilingual calendar voice questions fail closed',()=>{
+ for(const [phrase,language] of [
+  ['Any meetings today?','en'],
+  ['Any appointments tomorrow?','en'],
+  ['Jarvis, any meetings?','en'],
+  ['¿Alguna cita mañana?','es'],
+  ['¿Algunas reuniones hoy?','es']
+ ]){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,language,phrase);
+  assert.match(answer.text,/calendar|calendario/i,phrase);
+  assert.doesNotMatch(answer.text,/confirmed meeting at|confirmada a las|9:00/i,phrase);
+ }
+ for(const phrase of ['Any tasks today?','¿Alguna tarea pendiente?']){
+  assert.notEqual(classifyCommand(phrase),'calendar',phrase);
+ }
+});
