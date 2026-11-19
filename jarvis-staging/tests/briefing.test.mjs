@@ -350,3 +350,16 @@ test('Spanish next-meeting and next-appointment queries require verified calenda
   assert.notEqual(classifyCommand(phrase),'calendar',phrase);
  }
 });
+
+test('English when/where meeting queries retain English safety language',()=>{
+ for(const phrase of ['When is my next meeting?','Where is my next meeting?','Where is my appointment?','When are my meetings?']){
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/calendar is not connected/i,phrase);
+ }
+ for(const phrase of ['¿Dónde es mi cita?','¿Cuándo es mi próxima reunión?']){
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'es',phrase);
+ }
+});
