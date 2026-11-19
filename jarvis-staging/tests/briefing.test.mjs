@@ -327,3 +327,13 @@ test('English departure paraphrases never fabricate a departure time',()=>{
   assert.doesNotMatch(answer.text,/\b\d+ minutes\b/i,phrase);
  }
 });
+
+test('Next and upcoming meeting questions require calendar verification',()=>{
+ for(const phrase of ['When is my next meeting?','What time is my upcoming appointment?','Where is my next meeting?']){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/calendar is not connected/i,phrase);
+  assert.doesNotMatch(answer.text,/\b9:00\b|confirmed meeting at/i,phrase);
+ }
+});
