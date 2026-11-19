@@ -106,3 +106,10 @@ test('Voice recognition failure messages do not misidentify Chrome as Safari',()
  assert.match(begin,/El navegador no admite este idioma/);
  assert.match(begin,/El navegador interrumpió el reconocimiento/);
 });
+
+test('Daily plan refuses stale task snapshots instead of presenting an outdated schedule as current',()=>{
+ const body=app.slice(app.indexOf('function localDayPlan(){'),app.indexOf('function localCommand(',app.indexOf('function localDayPlan(){'));
+ assert.match(body,/if\(!sourceIsRecent\('tasks'\)\)/);
+ assert.match(body,/no tienen verificación reciente/);
+ assert.doesNotMatch(body,/if\(!state\.tasksLoaded\)/);
+});
