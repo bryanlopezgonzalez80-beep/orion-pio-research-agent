@@ -324,6 +324,6 @@ test('English departure paraphrases never fabricate a departure time',()=>{
   const answer=trustedCommand(phrase,ctx);
   assert.equal(answer?.language,'en',phrase);
   assert.match(answer.text,/cannot calculate a reliable departure time/i,phrase);
-  assert.doesNotMatch(answer.text,/\\b\\d+ minutes\\b/i,phrase);
+  assert.doesNotMatch(answer.text,/\b\d+ minutes\b/i,phrase);
  }
 });
