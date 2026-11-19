@@ -123,7 +123,10 @@ function scheduleRearm(){
   clearRearm();
   state.rearmTimer=setTimeout(()=>{
     state.rearmTimer=null;
-    if(!state.dialogEnabled||state.busy||document.hidden||!ready())return;
+    // Do not start the microphone over a reply that began during the re-arm delay.
+    // Recognition must never cancel JARVIS's own speech or start twice.
+    if(!state.dialogEnabled||state.busy||document.hidden||!ready()||state.activeUtterance||state.recognition)return;
+    if('speechSynthesis' in window&&window.speechSynthesis.speaking)return;
     beginListening(true);
   },450);
 }
