@@ -287,3 +287,23 @@ test('Spanish travel duration paraphrases fail closed without traffic or route',
   assert.notEqual(classifyCommand(phrase),'travel',phrase);
  }
 });
+
+test('Additional bilingual travel duration expressions never imply a verified route',()=>{
+ for(const [phrase,language] of [
+  ['How long is the drive?','en'],
+  ['How long will be the trip?','en'],
+  ['How long is my journey?','en'],
+  ['¿Cuánto me toma llegar?','es'],
+  ['¿Cuánto me tomará llegar?','es'],
+  ['¿Cuánto demoraré en llegar?','es']
+ ]){
+  assert.equal(classifyCommand(phrase),'travel',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,language,phrase);
+  assert.match(answer.text,/cannot calculate|no puedo calcular/i,phrase);
+  assert.doesNotMatch(answer.text,/\\b\\d+ (?:minutes|minutos)\\b/i,phrase);
+ }
+ for(const phrase of ['How long is my study session?','¿Cuánto me toma estudiar?']){
+  assert.notEqual(classifyCommand(phrase),'travel',phrase);
+ }
+});
