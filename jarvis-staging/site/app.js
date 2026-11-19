@@ -703,7 +703,13 @@ async function processMessage(input){
     if(data?.conversation_id)state.conversation=data.conversation_id;
     append('assistant',data?.reply||'La respuesta no está disponible; consulta el estado de la solicitud.');
   }catch(e){append('assistant','No pude completar la solicitud: '+e.message)}
-  finally{state.busy=false;$('send-button').disabled=false}
+  finally{
+    state.busy=false;
+    $('send-button').disabled=false;
+    // A short spoken response may finish while the request is still marked busy.
+    // Re-arm only after the request settles, and never while JARVIS is speaking.
+    if(state.dialogEnabled&&state.voiceEnabled&&!state.activeUtterance)scheduleRearm();
+  }
 }
 
 function speak(content,{force=false,language=null}={}){
