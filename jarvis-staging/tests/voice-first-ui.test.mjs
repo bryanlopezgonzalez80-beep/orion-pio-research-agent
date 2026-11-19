@@ -175,3 +175,14 @@ test('Confirmed writes are not falsely reported as failed when refresh fails',()
  assert.ok(body.indexOf('await pending.action()')<body.indexOf('await loadWorkspace()'));
  assert.doesNotMatch(body,/No pude guardarlo:/);
 });
+
+test('Delayed microphone rearm never interrupts active playback or duplicates recognition',()=>{
+ const start=app.indexOf('function scheduleRearm(){');
+ const end=app.indexOf('function beginListening(',start);
+ assert.ok(start>=0&&end>start);
+ const body=app.slice(start,end);
+ assert.match(body,/state\.activeUtterance\|\|state\.recognition/);
+ assert.match(body,/window\.speechSynthesis\.speaking/);
+ assert.ok(body.indexOf('state.activeUtterance||state.recognition')<body.indexOf('beginListening(true)'));
+ assert.ok(body.indexOf('window.speechSynthesis.speaking')<body.indexOf('beginListening(true)'));
+});
