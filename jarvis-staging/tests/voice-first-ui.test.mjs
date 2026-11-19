@@ -161,3 +161,17 @@ test('Throwing speech result getters fail closed instead of fabricating recogniz
  assert.match(body,/catch\s*\(error\)\s*\{[\s\S]*?pauseDialogue\('El navegador entregó datos de voz dañados/);
  assert.ok(body.indexOf('if(words){transcript(')>body.indexOf('catch (error)'));
 });
+
+
+test('Confirmed writes are not falsely reported as failed when refresh fails',()=>{
+ const start=app.indexOf('async function confirmAction(){');
+ const end=app.indexOf('function dateKey(',start);
+ assert.ok(start>=0&&end>start);
+ const body=app.slice(start,end);
+ assert.match(body,/await pending\.action\(\)/);
+ assert.match(body,/await loadWorkspace\(\)/);
+ assert.match(body,/El servidor confirmó el cambio, pero no pude verificar/);
+ assert.match(body,/antes de reintentar para evitar duplicados/);
+ assert.ok(body.indexOf('await pending.action()')<body.indexOf('await loadWorkspace()'));
+ assert.doesNotMatch(body,/No pude guardarlo:/);
+});
