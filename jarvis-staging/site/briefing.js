@@ -8,7 +8,7 @@ export function normalizedPhrase(value){
 }
 export function englishIntent(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
-  return /^(what\b|what's\b|do i have\b|have i got\b|when\b|where\b|what time\b|when should i\b|what time should i\b|what time do i\b|how long\b|how much time\b|are there any\b|(?:how many|which) (?:meetings|appointments)\b|any (?:meetings|appointments)\b|show my\b|my schedule\b|my meetings\b|my appointments\b|what\b|show my\b)/.test(n);
+  return /^(what\b|what's\b|do i have\b|have i got\b|when\b|where\b|what time\b|when should i\b|what time should i\b|what time do i\b|how long\b|how much time\b|are there (?:any )?(?:meetings|appointments)\b|(?:how many|which) (?:meetings|appointments)\b|any (?:meetings|appointments)\b|show my\b|my schedule\b|my meetings\b|my appointments\b|what\b|show my\b)/.test(n);
 }
 export function classifyCommand(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
@@ -20,7 +20,7 @@ export function classifyCommand(phrase){
   if(/^(?:any (?:meetings|appointments)|(?:alguna|algunas) (?:cita|citas|reunion|reuniones))(?:\b|$)/.test(n))return 'calendar';
   // Natural possessive questions must not fall through to generic chat without a calendar.
   if(/^(?:what(?: is| s|'s)? (?:my |the )?(?:next|upcoming) (?:meeting|appointment)|when(?:'s| is) (?:my |the )?(?:next|upcoming) (?:meeting|appointment)|(?:cuando|donde) (?:tengo|sera) (?:mi |la )?(?:proxima|siguiente) (?:reunion|cita))\b/.test(n))return 'calendar';
-  if(/^(?:(?:cuando|a que hora|donde) (?:es|sera) (?:mi |la )?(?:proxima |siguiente )?(?:reunion|cita)|tengo (?:(?:alguna|una) reunion|(?:algunas|unas) citas|citas|reuniones)|hay (?:citas|reuniones)|(?:cuales|que) (?:son )?(?:mis )?(?:citas|reuniones)|(?:que|cuales) (?:reuniones|citas) tengo|do i have (?:any )?(?:appointments|meetings)(?: (?:or|and) (?:appointments|meetings))?|are there any (?:appointments|meetings)(?: (?:or|and) (?:appointments|meetings))?|my appointments|my meetings|what(?: is| s|'s)? on my calendar|what(?: is| s|'s)? on my agenda|show my calendar|show my meetings|show my appointments|que (?:hay|tengo) en (?:mi |el )?calendario|que (?:hay|tengo) en (?:mi |la )?agenda|muestrame (?:mi |el )?calendario|muestrame (?:mi |la )?agenda)\b/.test(n))return 'calendar';
+  if(/^(?:(?:cuando|a que hora|donde) (?:es|sera) (?:mi |la )?(?:proxima |siguiente )?(?:reunion|cita)|tengo (?:(?:alguna|una) reunion|(?:algunas|unas) citas|citas|reuniones)|hay (?:citas|reuniones)|(?:cuales|que) (?:son )?(?:mis )?(?:citas|reuniones)|(?:que|cuales) (?:reuniones|citas) tengo|do i have (?:any )?(?:appointments|meetings)(?: (?:or|and) (?:appointments|meetings))?|are there (?:any )?(?:appointments|meetings)(?: (?:or|and) (?:appointments|meetings))?|my appointments|my meetings|what(?: is| s|'s)? on my calendar|what(?: is| s|'s)? on my agenda|show my calendar|show my meetings|show my appointments|que (?:hay|tengo) en (?:mi |el )?calendario|que (?:hay|tengo) en (?:mi |la )?agenda|muestrame (?:mi |el )?calendario|muestrame (?:mi |la )?agenda)\b/.test(n))return 'calendar';
   if(/^(?:planifica (?:mi |el )?(?:dia|jornada)|planea (?:mi |el )?dia|organiza (?:mi |el )?dia|plan de hoy|mis prioridades de hoy|que (?:tengo|hay|debo hacer) hoy|what (?:i (?:got|have) to do|do i have|should i do|have i got) today|what is on my schedule today|what am i doing today|my schedule today)\b/.test(n))return 'brief';
   return null;
 }
