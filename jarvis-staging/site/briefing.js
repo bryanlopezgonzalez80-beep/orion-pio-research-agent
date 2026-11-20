@@ -16,6 +16,8 @@ export function classifyCommand(phrase){
   // Questions about a meeting's time or today's appointments still require a connected calendar.
   // Match specific calendar terms, not generic task deadlines or free-form questions.
   if(/^(?:(?:a que hora|cuando|donde) (?:es|sera|tengo) (?:mi |la |el |una |un )?(?:reunion|cita)|(?:tengo|hay) (?:una |alguna |un )?(?:cita|reunion)(?:\b|$)|(?:que|cuales|cuantas|cuantos) (?:citas|reuniones|appointments|meetings) (?:tengo|hay)|(?:what time|when|where) (?:is|are) (?:my |the )?(?:(?:next|upcoming) )?(?:meeting|appointment|meetings|appointments)|(?:what|which|how many) (?:meetings|appointments) (?:do i have|are there)|(?:do i have|have i got) (?:a |an |any )?(?:meeting|appointment|meetings|appointments))\b/.test(n))return 'calendar';
+  // Singular English meeting questions require a verified calendar, never generic chat.
+  if(/^is there (?:a |an |any )?(?:meeting|appointment)\b/.test(n))return 'calendar';
   // Elliptical voice questions still require verified calendar access.
   if(/^(?:any (?:meetings|appointments)|(?:alguna|algunas) (?:cita|citas|reunion|reuniones))(?:\b|$)/.test(n))return 'calendar';
   // Natural possessive questions must not fall through to generic chat without a calendar.
