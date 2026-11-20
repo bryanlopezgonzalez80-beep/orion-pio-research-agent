@@ -460,3 +460,15 @@ test('Singular is-there calendar queries fail closed in English',()=>{
  }
  for(const phrase of ['Is there a task today?','Is there a book available?'])assert.notEqual(classifyCommand(phrase),'calendar',phrase);
 });
+
+
+test('Possessive yes/no meeting questions fail closed in English',()=>{
+ for(const phrase of ['Is my meeting today?','Is the appointment tomorrow?','Jarvis, is my next meeting at nine?']){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/calendar is not connected/i,phrase);
+  assert.doesNotMatch(answer.text,/confirmed meeting at|9:00/i,phrase);
+ }
+ for(const phrase of ['Is my task due today?','Is the journey tomorrow?'])assert.notEqual(classifyCommand(phrase),'calendar',phrase);
+});
