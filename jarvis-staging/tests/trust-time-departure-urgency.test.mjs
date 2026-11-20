@@ -13,7 +13,7 @@ test('departure urgency questions fail closed in both languages', () => {
     const response = trustedCommand(phrase);
     assert.equal(response?.language, language, phrase);
     assert.match(response.text, language === 'en' ? /cannot calculate a reliable departure time/i : /no puedo calcular una hora fiable/i);
-    assert.doesNotMatch(response.text, /\\b\\d+\\s*(?:minutos?|minutes?|mins?)\\b/i);
+    assert.doesNotMatch(response.text, /\b\d+\s*(?:minutos?|minutes?|mins?)\b/i);
   }
 });
 
