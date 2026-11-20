@@ -472,3 +472,15 @@ test('Possessive yes/no meeting questions fail closed in English',()=>{
  }
  for(const phrase of ['Is my task due today?','Is the journey tomorrow?'])assert.notEqual(classifyCommand(phrase),'calendar',phrase);
 });
+
+
+test('Polite English voice requests about meeting details require verified calendar',()=>{
+ for(const phrase of ['Can you tell me when my meeting is?','Jarvis, can you tell me where my next appointment is?','Can you tell me what time the meeting starts?']){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const result=trustedCommand(phrase,ctx);
+  assert.equal(result?.language,'en',phrase);
+  assert.match(result.text,/calendar is not connected/i,phrase);
+  assert.doesNotMatch(result.text,/confirmed at|9:00/i,phrase);
+ }
+ assert.equal(classifyCommand('Can you tell me what time my task is due?'),null);
+});
