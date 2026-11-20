@@ -4,7 +4,7 @@ export function recentVerification(timestamp,now=Date.now()){
   return Number.isFinite(timestamp)&&timestamp>0&&timestamp<=now&&now-timestamp<MAX_TASK_AGE_MS;
 }
 export function normalizedPhrase(value){
-  return String(value||'').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060\u2066-\u2069\ufeff]/g,' ').replace(/[¡!¿?.,;:]+/g,' ').replace(/\s+/g,' ').trim();
+  return String(value||'').replace(/[\u2018\u2019\u02bc]/g,"'").toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060\u2066-\u2069\ufeff]/g,' ').replace(/[¡!¿?.,;:]+/g,' ').replace(/\s+/g,' ').trim();
 }
 export function englishIntent(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
