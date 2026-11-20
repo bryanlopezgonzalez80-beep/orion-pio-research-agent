@@ -8,6 +8,7 @@ export function normalizedPhrase(value){
 }
 export function englishIntent(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
+  if(/^(?:can you (?:tell me|check|see) (?:if|whether)|could you (?:tell me|check) (?:if|whether))\b/.test(n))return true;
   return /^(should i leave|do i need to leave|what\b|what's\b|do i have\b|have i got\b|when\b|where\b|what time\b|when should i\b|what time should i\b|what time do i\b|how long\b|how much time\b|can you tell me (?:when|where|what time) (?:my |the )?(?:next |upcoming )?(?:meeting|appointment)\b|are there (?:any )?(?:meetings|appointments)\b|is there (?:a |an |any )?(?:meeting|appointment)\b|is (?:my |the )?(?:(?:next|upcoming) )?(?:meeting|appointment)\b|(?:how many|which) (?:meetings|appointments)\b|any (?:meetings|appointments)\b|show my\b|my schedule\b|my meetings\b|my appointments\b|what\b|show my\b)/.test(n);
 }
 export function classifyCommand(phrase){
