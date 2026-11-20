@@ -18,6 +18,10 @@ test('immediate departure questions fail closed without authorized calendar and 
     ['Do I need to leave now?', 'en'],
     ['¿Salgo ya?', 'es'],
     ['¿Debo salir ya?', 'es'],
+    ['¿A qué hora salgo?', 'es'],
+    ['¿Cuándo salgo?', 'es'],
+    ['What time do I leave?', 'en'],
+    ['When do I leave?', 'en'],
   ]) {
     assert.equal(classifyCommand(phrase), 'travel', phrase);
     const result = trustedCommand(phrase);
