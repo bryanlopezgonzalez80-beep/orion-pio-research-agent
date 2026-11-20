@@ -19,6 +19,8 @@ export function classifyCommand(phrase){
   // Spanish medical appointments are calendar questions, never evidence of a saved event.
   // Keep the match anchored to avoid misclassifying generic task discussions.
   if(/^(?:tengo|hay) (?:(?:una|alguna|un) )?(?:(?:cita|consulta) (?:medica|con (?:el |la )?(?:medico|medica|doctor|doctora|dentista))|(?:cita|consulta) (?:del |de la )?(?:dentista|doctor|medico))\b/.test(n))return 'calendar';
+  // Natural yes/no voice questions must not imply that a calendar was consulted.
+  if(/^(?:can you (?:tell me|check|see) (?:if|whether) |could you (?:tell me|check) (?:if|whether) )?(?:i have|i've got|there (?:is|are)) (?:a |an |any )?(?:meeting|appointment|meetings|appointments)\b/.test(n))return 'calendar';
   // Polite voice questions still require a verified calendar, not generic conversation.
   if(/^can you tell me (?:when|where|what time) (?:my |the )?(?:next |upcoming )?(?:meeting|appointment)\b/.test(n))return 'calendar';
   // Possessive yes/no questions also require verified calendar access.
