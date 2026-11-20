@@ -438,3 +438,14 @@ test('English quantity and selection meeting questions retain English safety lan
   assert.doesNotMatch(answer.text,/confirmed meeting at|\\b9:00\\b/i,phrase);
  }
 });
+
+test('English are-there questions without any require calendar verification',()=>{
+ for(const phrase of ['Are there meetings today?','Are there appointments tomorrow?','Jarvis, are there meetings or appointments?']){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/calendar is not connected/i,phrase);
+  assert.doesNotMatch(answer.text,/confirmed meeting at|9:00/i,phrase);
+ }
+ for(const phrase of ['Are there tasks today?','Are there books to read?'])assert.notEqual(classifyCommand(phrase),'calendar',phrase);
+});
