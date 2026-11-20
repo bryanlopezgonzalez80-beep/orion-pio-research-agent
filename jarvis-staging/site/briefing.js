@@ -26,6 +26,8 @@ export function classifyCommand(phrase){
   if(/^can you tell me (?:when|where|what time) (?:my |the )?(?:next |upcoming )?(?:meeting|appointment)\b/.test(n))return 'calendar';
   // Possessive yes/no questions also require verified calendar access.
   if(/^is (?:my |the )?(?:(?:next|upcoming) )?(?:meeting|appointment)\b/.test(n))return 'calendar';
+  // Medical appointment time questions require a calendar even when the provider appears before 'appointment'.
+  if(/^(?:what time|when|where) (?:is|was|will be) (?:my |the )?(?:(?:next|upcoming) )?(?:doctor(?:'s| s)?|dentist(?:'s| s)?|medical) (?:appointment|visit)\b/.test(n))return 'calendar';
   // Specific appointment types still require calendar access; do not infer real appointments.
   if(/^(?:do i have|have i got) (?:a |an |any )?(?:(?:doctor(?:'s| s)?|dentist(?:'s| s)?|medical|work) )?(?:appointment|meeting)\b/.test(n))return 'calendar';
   // Singular English meeting questions require a verified calendar, never generic chat.
