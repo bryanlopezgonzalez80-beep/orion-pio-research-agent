@@ -18,7 +18,7 @@ export function classifyCommand(phrase){
   if(/^(?:(?:a que hora|cuando|donde) (?:es|sera|tengo) (?:mi |la |el |una |un )?(?:reunion|cita)|(?:tengo|hay) (?:una |alguna |un )?(?:cita|reunion)(?:\b|$)|(?:que|cuales|cuantas|cuantos) (?:citas|reuniones|appointments|meetings) (?:tengo|hay)|(?:what time|when|where) (?:is|are) (?:my |the )?(?:(?:next|upcoming) )?(?:meeting|appointment|meetings|appointments)|(?:what|which|how many) (?:meetings|appointments) (?:do i have|are there)|(?:do i have|have i got) (?:a |an |any )?(?:meeting|appointment|meetings|appointments))\b/.test(n))return 'calendar';
   // Spanish medical appointments are calendar questions, never evidence of a saved event.
   // Keep the match anchored to avoid misclassifying generic task discussions.
-  if(/^(?:tengo|hay) (?:(?:una|alguna|un) )?(?:(?:cita|consulta) (?:medica|con (?:el |la )?(?:medico|doctor|dentista))|(?:cita|consulta) (?:del |de la )?(?:dentista|doctor|medico))\\b/.test(n))return 'calendar';
+  if(/^(?:tengo|hay) (?:(?:una|alguna|un) )?(?:(?:cita|consulta) (?:medica|con (?:el |la )?(?:medico|medica|doctor|doctora|dentista))|(?:cita|consulta) (?:del |de la )?(?:dentista|doctor|medico))\\b/.test(n))return 'calendar';
   // Polite voice questions still require a verified calendar, not generic conversation.
   if(/^can you tell me (?:when|where|what time) (?:my |the )?(?:next |upcoming )?(?:meeting|appointment)\b/.test(n))return 'calendar';
   // Possessive yes/no questions also require verified calendar access.
