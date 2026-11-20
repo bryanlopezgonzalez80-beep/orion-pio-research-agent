@@ -484,3 +484,16 @@ test('Polite English voice requests about meeting details require verified calen
  }
  assert.equal(classifyCommand('Can you tell me what time my task is due?'),null);
 });
+
+
+test('Typed appointment questions never invent calendar access',()=>{
+ for(const phrase of ["Do I have a doctor's appointment tomorrow?","Have I got a dentist appointment today?","Do I have a medical appointment?","Do I have a work meeting?"]){
+  assert.equal(classifyCommand(phrase),'calendar',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.equal(answer?.language,'en',phrase);
+  assert.match(answer.text,/calendar is not connected/i,phrase);
+ }
+ for(const phrase of ['Do I have a task to finish?','Do I have a doctor to call?']){
+  assert.notEqual(classifyCommand(phrase),'calendar',phrase);
+ }
+});
