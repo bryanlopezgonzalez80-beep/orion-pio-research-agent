@@ -8,7 +8,7 @@ export function normalizedPhrase(value){
 }
 export function englishIntent(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
-  return /^(what\b|what's\b|do i have\b|have i got\b|when\b|where\b|what time\b|when should i\b|what time should i\b|what time do i\b|how long\b|how much time\b|are there (?:any )?(?:meetings|appointments)\b|is there (?:a |an |any )?(?:meeting|appointment)\b|(?:how many|which) (?:meetings|appointments)\b|any (?:meetings|appointments)\b|show my\b|my schedule\b|my meetings\b|my appointments\b|what\b|show my\b)/.test(n);
+  return /^(what\b|what's\b|do i have\b|have i got\b|when\b|where\b|what time\b|when should i\b|what time should i\b|what time do i\b|how long\b|how much time\b|are there (?:any )?(?:meetings|appointments)\b|is there (?:a |an |any )?(?:meeting|appointment)\b|is (?:my |the )?(?:(?:next|upcoming) )?(?:meeting|appointment)\b|(?:how many|which) (?:meetings|appointments)\b|any (?:meetings|appointments)\b|show my\b|my schedule\b|my meetings\b|my appointments\b|what\b|show my\b)/.test(n);
 }
 export function classifyCommand(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
@@ -16,6 +16,8 @@ export function classifyCommand(phrase){
   // Questions about a meeting's time or today's appointments still require a connected calendar.
   // Match specific calendar terms, not generic task deadlines or free-form questions.
   if(/^(?:(?:a que hora|cuando|donde) (?:es|sera|tengo) (?:mi |la |el |una |un )?(?:reunion|cita)|(?:tengo|hay) (?:una |alguna |un )?(?:cita|reunion)(?:\b|$)|(?:que|cuales|cuantas|cuantos) (?:citas|reuniones|appointments|meetings) (?:tengo|hay)|(?:what time|when|where) (?:is|are) (?:my |the )?(?:(?:next|upcoming) )?(?:meeting|appointment|meetings|appointments)|(?:what|which|how many) (?:meetings|appointments) (?:do i have|are there)|(?:do i have|have i got) (?:a |an |any )?(?:meeting|appointment|meetings|appointments))\b/.test(n))return 'calendar';
+  // Possessive yes/no questions also require verified calendar access.
+  if(/^is (?:my |the )?(?:(?:next|upcoming) )?(?:meeting|appointment)\b/.test(n))return 'calendar';
   // Singular English meeting questions require a verified calendar, never generic chat.
   if(/^is there (?:a |an |any )?(?:meeting|appointment)\b/.test(n))return 'calendar';
   // Elliptical voice questions still require verified calendar access.
