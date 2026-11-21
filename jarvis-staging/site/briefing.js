@@ -43,7 +43,10 @@ export function classifyCommand(phrase){
 export const BRIEFING_TIME_ZONE='America/Puerto_Rico';
 // Pin the calendar day to Puerto Rico; never silently interpret a naive timestamp.
 function calendarDay(date){
-  return new Intl.DateTimeFormat('en-CA',{timeZone:BRIEFING_TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
+  // formatToParts avoids locale-dependent MM/DD/YYYY vs YYYY-MM-DD output across JS engines.
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:BRIEFING_TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
+  const values=Object.fromEntries(parts.map(({type,value})=>[type,value]));
+  return values.year+'-'+values.month+'-'+values.day;
 }
 function dueValue(task){
   if(!task||typeof task.due_at!=='string')return null;
