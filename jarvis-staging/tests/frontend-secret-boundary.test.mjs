@@ -29,3 +29,15 @@ test('frontend must not opt into paid model requests',async()=>{
     assert.doesNotMatch(source,/ENABLE_MODEL_REQUESTS\s*[:=]\s*(?:true|['"]true['"]|1)\b/i,'paid model flag enabled in '+file);
   }
 });
+
+test('frontend contains no embedded service-role JWT payloads',async()=>{
+  for(const file of await frontendFiles(root)){
+    const source=await readFile(file,'utf8');
+    // JWTs are checked by their decoded claims, not only by variable names.
+    for(const match of source.matchAll(/eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+/g)){
+      const payload=match[0].split('.')[1];
+      const decoded=Buffer.from(payload,'base64url').toString('utf8');
+      assert.doesNotMatch(decoded,/"role"\\s*:\\s*"service_role"/,'service-role JWT exposed in '+file);
+    }
+  }
+});
