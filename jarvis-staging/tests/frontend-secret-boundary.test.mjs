@@ -26,7 +26,7 @@ test('frontend contains no Supabase secret/service-role or private OpenAI key li
 test('frontend must not opt into paid model requests',async()=>{
   for(const file of await frontendFiles(root)){
     const source=await readFile(file,'utf8');
-    assert.doesNotMatch(source,/ENABLE_MODEL_REQUESTS\s*[:=]\s*(?:true|['"]true['"]|1)\b/i,'paid model flag enabled in '+file);
+    assert.doesNotMatch(source,/ENABLE_MODEL_REQUESTS\s*[:=]\s*(?:true\b|1\b|['"](?:true|1)['"])/i,'paid model flag enabled in '+file);
   }
 });
 
@@ -54,4 +54,10 @@ test('frontend contains no embedded service-role JWT payloads',async()=>{
     const source=await readFile(file,'utf8');
     assert.equal(containsServiceRoleJwt(source),false,'service-role JWT exposed in '+file);
   }
+});
+
+test('paid-model flag scanner catches quoted numeric opt-ins',()=>{
+  const enabled=/ENABLE_MODEL_REQUESTS\s*[:=]\s*(?:true\b|1\b|['"](?:true|1)['"])/i;
+  for(const value of ['true','1','"true"',"'true'",'"1"',"'1'"]) assert.match('ENABLE_MODEL_REQUESTS = '+value,enabled);
+  for(const value of ['false','0','"false"',"'0'"]) assert.doesNotMatch('ENABLE_MODEL_REQUESTS = '+value,enabled);
 });
