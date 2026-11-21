@@ -30,14 +30,28 @@ test('frontend must not opt into paid model requests',async()=>{
   }
 });
 
+// Parse JWT claims rather than relying on base64 prefixes or JSON property order.
+function containsServiceRoleJwt(source){
+  for(const match of source.matchAll(/\b[A-Za-z0-9_-]{8,}\.([A-Za-z0-9_-]{8,})\.[A-Za-z0-9_-]{8,}\b/g)){
+    try{
+      const claims=JSON.parse(Buffer.from(match[1],'base64url').toString('utf8'));
+      if(claims&&claims.role==='service_role')return true;
+    }catch{
+      // Non-JWT dotted strings are not credentials.
+    }
+  }
+  return false;
+}
+test('JWT scanner detects privileged claims regardless of claim ordering',()=>{
+  const jwt=(claims)=>['eyJhbGciOiJIUzI1NiJ9',Buffer.from(JSON.stringify(claims)).toString('base64url'),'abcdefgh123'].join('.');
+  assert.equal(containsServiceRoleJwt(jwt({role:'service_role'})),true);
+  assert.equal(containsServiceRoleJwt(jwt({aud:'authenticated',role:'service_role'})),true);
+  assert.equal(containsServiceRoleJwt(jwt({role:'anon'})),false);
+  assert.equal(containsServiceRoleJwt('not-a-jwt'),false);
+});
 test('frontend contains no embedded service-role JWT payloads',async()=>{
   for(const file of await frontendFiles(root)){
     const source=await readFile(file,'utf8');
-    // JWTs are checked by their decoded claims, not only by variable names.
-    for(const match of source.matchAll(/eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g)){
-      const payload=match[0].split('.')[1];
-      const decoded=Buffer.from(payload,'base64url').toString('utf8');
-      assert.doesNotMatch(decoded,/"role"\s*:\s*"service_role"/,'service-role JWT exposed in '+file);
-    }
+    assert.equal(containsServiceRoleJwt(source),false,'service-role JWT exposed in '+file);
   }
 });
