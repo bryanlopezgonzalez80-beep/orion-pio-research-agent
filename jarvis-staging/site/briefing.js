@@ -73,7 +73,9 @@ export function safeTaskTitle(title,english=false){
   return cleaned||(english?'Untitled':'Sin título');
 }
 export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Date(),english=false}={}){
-  const current=now instanceof Date?now:new Date(now);
+  // Date(Symbol) and Date(BigInt) throw TypeError; fail closed rather than breaking the voice flow.
+  let current;
+  try{current=now instanceof Date?now:new Date(now);}catch{current=new Date(NaN);}
   // Fail closed on invalid clock input; never crash the voice briefing or present stale tasks as current.
   if(!Number.isFinite(current.getTime()))return english
     ? 'I cannot verify your tasks because the current time is unavailable. Please check your device clock and update data. Your calendar is not connected to JARVIS.'
