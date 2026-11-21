@@ -21,7 +21,7 @@ test('offset-free and impossible due dates are never spoken as appointments or d
     {title:'OFFSET_CANARY',status:'pending',due_at:'2026-11-21T22:00:00+15:00'}
   ]});
   assert.match(result,/3 pendientes/);
-  assert.doesNotMatch(result,/vence |atrasadas|citas confirmadas/);
+  assert.doesNotMatch(result,/NAIVE_CANARY, vence|IMPOSSIBLE_CANARY, vence|OFFSET_CANARY, vence|citas confirmadas/);
   assert.match(result,/0 atrasadas y 0 con vencimiento/);
   assert.match(result,/calendario.*no est[aá]n conectados/i);
 });
