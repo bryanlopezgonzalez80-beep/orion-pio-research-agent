@@ -22,3 +22,14 @@ test('non-departure questions are not classified as travel', () => {
     assert.notEqual(classifyCommand(phrase), 'travel', phrase);
   }
 });
+
+
+test('urgent appointment departures require verified route data, not invented minutes', () => {
+  for (const phrase of ['Should I leave for my appointment now?', 'Do I need to leave for the meeting now?']) {
+    assert.equal(classifyCommand(phrase), 'travel', phrase);
+    const response=trustedCommand(phrase);
+    assert.equal(response?.language, 'en');
+    assert.match(response.text,/cannot calculate a reliable departure time/i);
+    assert.doesNotMatch(response.text,/\b\d+\s*(?:minutos?|minutes?|mins?)\b/i);
+  }
+});
