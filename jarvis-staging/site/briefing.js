@@ -74,7 +74,10 @@ export function safeTaskTitle(title,english=false){
 }
 export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Date(),english=false}={}){
   const current=now instanceof Date?now:new Date(now);
-  if(!Number.isFinite(current.getTime()))throw Error('Invalid briefing timestamp');
+  // Fail closed on invalid clock input; never crash the voice briefing or present stale tasks as current.
+  if(!Number.isFinite(current.getTime()))return english
+    ? 'I cannot verify your tasks because the current time is unavailable. Please check your device clock and update data. Your calendar is not connected to JARVIS.'
+    : 'No puedo verificar tus tareas porque la hora actual no está disponible. Comprueba el reloj del dispositivo y actualiza los datos. Tu calendario aún no está conectado a JARVIS.';
   if(!loaded||!Array.isArray(tasks)||!recentVerification(verifiedAt,current.getTime())){
     return english
       ? 'I cannot verify your tasks with recent data. Tap Update data first. Your calendar is not connected to JARVIS.'
