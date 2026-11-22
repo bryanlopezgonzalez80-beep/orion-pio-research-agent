@@ -12,6 +12,8 @@ export function normalizedPhrase(value){
 export function englishIntent(phrase){
   const n=normalizedPhrase(phrase).replace(/^(?:oye )?jarvis\s*/,'');
   if(/^(?:(?:can you (?:tell me|check|see)|could you (?:tell me|check)) (?:if|whether)|i have|i've got|there (?:is|are))\b/.test(n))return true;
+  // Elliptical English calendar queries must not fall back to Spanish voice output.
+  if(/^(?:any (?:meetings|appointments)|my (?:meetings|appointments|schedule)|show my (?:calendar|meetings|appointments)|are there (?:any )?(?:meetings|appointments)|is there (?:a |an |any )?(?:meeting|appointment))\b/.test(n))return true;
   return /^((?:will i make it|can i make it|will i arrive|can i arrive)(?: to (?:my |the )?(?:meeting|appointment|doctor(?:'s| s)? appointment|dentist(?:'s| s)? appointment))? on time|should i leave|do i need to leave|what\b|what's\b|do i have\b|have i got\b|when\b|where\b|what time\b|when should i\b|what time should i\b|what time do i\b|how long\b|how much time\b|how soon (?:should i leave|do i need to leave)\b|can you tell me (?:when|where|what time) (?:my |the )?(?:next |upcoming )?(?:meeting|appointment)\b|are there (?:any )?(?:meetings|appointments)\b|is there (?:a |an |any )?(?:meeting|appointment)\b|is (?:my |the )?(?:(?:next|upcoming) )?(?:meeting|appointment)\b|(?:how many|which) (?:meetings|appointments)\b|any (?:meetings|appointments)\b|show my\b|my schedule\b|my meetings\b|my appointments\b|what\b|show my\b)/.test(n);
 }
 export function classifyCommand(phrase){
