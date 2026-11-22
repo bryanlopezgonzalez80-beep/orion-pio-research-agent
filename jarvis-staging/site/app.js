@@ -242,16 +242,16 @@ function startDialogue(){
   if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){
     sayNotice('El micrófono web no está disponible. Puedes dictar con el teclado.');return;
   }
-  state.dialogEnabled=true;
-  transcript('Diálogo activo. Pronuncia una instrucción cuando el indicador diga Escuchando.');
-  if(!state.voiceEnabled){
-    // Al activar la voz se obtiene el gesto de usuario requerido para TTS.
-    setVoiceEnabled(true);
-    // La escucha comienza al terminar el saludo, cuando Safari lo permita.
-  }else{
-    beginListening(false);
+  if(!('speechSynthesis' in window)){
+    sayNotice('Este navegador no permite reproducir respuestas por voz. Puedes usar Hablar para dictar.');return;
   }
+  state.dialogEnabled=true;
+  state.voiceEnabled=true;
+  transcript('Diálogo activo. Pronuncia una instrucción cuando el indicador diga Escuchando.');
   updateVoiceControl();
+  // Start recognition in the initiating gesture; a spoken greeting would defer it
+  // until after synthesis and could lose the browser's user activation.
+  beginListening(false);
 }
 function clearIdentity(){
   state.rev++;state.user=null;state.session=null;state.tasks=[];state.memories=[];state.pending=null;state.model=false;state.conversation=null;state.lastReply='';state.tasksLoaded=false;state.memoriesLoaded=false;state.syncSerial+=1;state.historyLoaded=false;state.historySerial+=1;state.historyDetailSerial+=1;state.conversations=[];state.editingTaskId=null;state.editingMemoryId=null;state.tasksVerifiedAt=null;state.memoriesVerifiedAt=null;state.replyLanguage='es';
@@ -768,9 +768,9 @@ function speak(content,{force=false,language=null}={}){
   utterance.onerror=event=>{
     if(sequence!==state.speechSequence)return;
     state.activeUtterance=null;
+    updateVoiceControl();
     if(state.dialogEnabled)pauseDialogue('El navegador no pudo reproducir la respuesta hablada. Comprueba el volumen y pulsa Hablar para continuar.');
     else sayNotice('El navegador no pudo reproducir la respuesta hablada. Comprueba el volumen y vuelve a pulsar Repetir audio.');
-    updateVoiceControl();
   };
   try {
     synth.speak(utterance);
@@ -780,9 +780,9 @@ function speak(content,{force=false,language=null}={}){
     if(sequence!==state.speechSequence)return;
     state.activeUtterance=null;
     const guidance='El navegador no pudo iniciar la respuesta hablada. Comprueba el volumen y vuelve a pulsar Repetir audio.';
+    updateVoiceControl();
     if(state.dialogEnabled)pauseDialogue(guidance);
     else sayNotice(guidance);
-    updateVoiceControl();
   }
 }
 function listen(){
