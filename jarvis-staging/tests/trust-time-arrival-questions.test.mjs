@@ -6,6 +6,7 @@ import { classifyCommand, trustedCommand } from '../site/briefing.js';
 for (const [phrase, language] of [
   ['¿Llego a tiempo a mi cita?', 'es'],
   ['¿Llego a tiempo para la reunión?', 'es'],
+  ['¿Llego a tiempo al trabajo?', 'es'],
   ['Will I make it to my meeting on time?', 'en'],
   ['Will I make it on time?', 'en'],
 ]) {
@@ -19,5 +20,4 @@ for (const [phrase, language] of [
 }
 test('unrelated phrases do not trigger an arrival claim', () => {
   assert.equal(classifyCommand('Will I make a cake?'), null);
-  assert.equal(classifyCommand('¿Llego a tiempo al trabajo?'), null);
 });

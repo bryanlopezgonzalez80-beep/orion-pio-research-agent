@@ -3,13 +3,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readdir,readFile} from 'node:fs/promises';
 import {join} from 'node:path';
-const root=new URL('../site/',import.meta.url);
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../site/',import.meta.url));
 async function frontendFiles(dir){
   const files=[];
   for(const item of await readdir(dir,{withFileTypes:true})){
     const path=join(dir,item.name);
     if(item.isDirectory())files.push(...await frontendFiles(path));
-    else if(/\.(?:js|mjs|html|json|css)$/i.test(item.name))files.push(path);
+    else if(/\.(?:js|mjs|html|json|css|svg|webmanifest)$/i.test(item.name))files.push(path);
   }
   return files;
 }
@@ -18,15 +19,16 @@ test('frontend contains no Supabase secret/service-role or private OpenAI key li
   assert.ok(files.length>0,'expected frontend assets');
   for(const file of files){
     const source=await readFile(file,'utf8');
-    assert.doesNotMatch(source,/sb_secret_[A-Za-z0-9_-]+/,'Supabase secret exposed in '+file);
-    assert.doesNotMatch(source,/sk-(?:proj-)?[A-Za-z0-9_-]{16,}/,'private model key exposed in '+file);
-    assert.doesNotMatch(source,/SUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*['"`][^'"`]+/,'service-role credential exposed in '+file);
+    // Never include file contents in assertion output, including when a secret is found.
+    assert.ok(!/sb_secret_[A-Za-z0-9_-]+/.test(source),'Supabase secret exposed in '+file);
+    assert.ok(!/sk-(?:proj-)?[A-Za-z0-9_-]{16,}/.test(source),'private model key exposed in '+file);
+    assert.ok(!/SUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*['"`][^'"`]+/.test(source),'service-role credential exposed in '+file);
   }
 });
 test('frontend must not opt into paid model requests',async()=>{
   for(const file of await frontendFiles(root)){
     const source=await readFile(file,'utf8');
-    assert.doesNotMatch(source,/ENABLE_MODEL_REQUESTS\s*[:=]\s*(?:true\b|1\b|['"](?:true|1)['"])/i,'paid model flag enabled in '+file);
+    assert.ok(!/ENABLE_MODEL_REQUESTS\s*[:=]\s*(?:true\b|1\b|['"](?:true|1)['"])/i.test(source),'paid model flag enabled in '+file);
   }
 });
 

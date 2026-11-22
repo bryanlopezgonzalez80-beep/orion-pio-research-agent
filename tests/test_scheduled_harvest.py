@@ -252,15 +252,14 @@ def test_historical_time_budget_preserves_cursor_and_resumes_checkpoint(monkeypa
     assert result["next_cursor"] == "2026-08-01"
 
 
-def test_workflows_share_writer_group_and_separate_daily_from_deep():
+def test_manual_workflows_share_writer_group_and_separate_daily_from_deep():
     daily = Path(".github/workflows/daily-radar.yml").read_text()
     cloud = Path(".github/workflows/cloud-harvest.yml").read_text()
-    assert 'cron: "0 10 * * *"' in daily
-    assert 'cron: "0 11 * * *"' in cloud
-    assert 'cron: "23 2,8,14,20 * * *"' in cloud
     for text in (daily, cloud):
         assert "group: orion-harvest-writers" in text
         assert "cancel-in-progress: false" in text
         assert "workflow_dispatch:" in text
-    assert 'ORION_AUTO_CREATE_SCHEMA: "false"' in text
+    assert 'ORION_AUTO_CREATE_SCHEMA: "false"' in cloud
+    assert 'ORION_JOB_SCHEDULED: "false"' in cloud
+    assert "ORION_JOB_KIND: ${{ inputs.job || 'verify' }}" in cloud
     assert "--job daily" in daily
