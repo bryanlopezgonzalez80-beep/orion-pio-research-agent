@@ -497,3 +497,13 @@ test('Typed appointment questions never invent calendar access',()=>{
   assert.notEqual(classifyCommand(phrase),'calendar',phrase);
  }
 });
+
+test('Natural bilingual departure follow-ups fail closed without authorized route data',()=>{
+ for(const phrase of ['¿A qué hora tengo que irme?','¿Cuándo debería irme?','¿Me tengo que ir ya?','Tengo que irme ya','What time should I head out?','What time do I head out?']){
+  assert.equal(classifyCommand(phrase),'travel',phrase);
+  const answer=trustedCommand(phrase,ctx);
+  assert.ok(answer,phrase);
+  assert.match(answer.text,/no puedo calcular|cannot calculate/i,phrase);
+  assert.doesNotMatch(answer.text,/\\b(?:15|20|30|45) (?:minutes|minutos)\\b/i,phrase);
+ }
+});
