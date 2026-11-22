@@ -1,4 +1,4 @@
-import {trustedCommand,recentVerification} from './briefing.js';
+import {trustedCommand,recentVerification,pendingTaskRecords} from './briefing.js';
 let createClient;
 try {
   ({createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm'));
@@ -377,7 +377,7 @@ function append(role,content){
 }
 function taskLabel(task){
   const due=task.due_at?new Date(task.due_at):null;
-  const overdue=due&&Number.isFinite(due.getTime())&&due.getTime()<Date.now()&&task.status!=='done';
+  const overdue=due&&Number.isFinite(due.getTime())&&due.getTime()<Date.now()&&task.status==='pending';
   const date=due&&Number.isFinite(due.getTime())?due.toLocaleString('es-PR',{dateStyle:'medium',timeStyle:'short'}):'Sin fecha';
   const priority={high:'ALTA',normal:'NORMAL',low:'BAJA'}[task.priority]||'NORMAL';
   return priority+' / '+(overdue?'ATRASADA · ':'')+date;
@@ -397,17 +397,17 @@ function actionButton(label,description,handler){
 }
 function drawTasks(){
   const root=$('task-list');root.replaceChildren();
-  const pending=state.tasks.filter(x=>x.status!=='done');
+  const pending=pendingTaskRecords(state.tasks);
   $('task-count').textContent=sourceIsRecent('tasks')?String(pending.length)+' pendientes':'Sin verificar';
   $('dash-pending').textContent=sourceIsRecent('tasks')?String(pending.length):'—';
   $('dash-high').textContent=sourceIsRecent('tasks')?String(pending.filter(x=>x.priority==='high').length):'—';
-  $('dash-done').textContent=sourceIsRecent('tasks')?String(state.tasks.length-pending.length):'—';
+  $('dash-done').textContent=sourceIsRecent('tasks')?String(state.tasks.filter(x=>x?.status==='done').length):'—';
   if(!sourceIsRecent('tasks')){root.append(element('li','empty','Tareas sin verificación reciente. Pulsa Actualizar.'));return}
   if(!state.tasks.length){root.append(element('li','empty','No hay tareas guardadas.'));return}
   const search=normalize($('task-search').value);
   const filter=$('task-filter').value;
   const filtered=[...state.tasks].filter(task=>{
-    if(filter==='pending'&&task.status==='done')return false;
+    if(filter==='pending'&&!pending.includes(task))return false;
     if(filter==='done'&&task.status!=='done')return false;
     return !search||normalize(task.title).includes(search);
   }).sort(taskSort);
@@ -417,8 +417,11 @@ function drawTasks(){
     const main=element('div','item-main');
     main.append(element('div','item-title',task.title),element('div','item-sub',taskLabel(task)));
     const actions=element('div','item-actions');
+    // Unsupported/cancelled statuses remain visible under "Todas", but cannot be completed implicitly.
+    if(task.status==='pending'||task.status==='done'){
+      actions.append(actionButton(task.status==='done'?'Reabrir':'Completar',(task.status==='done'?'Reabrir':'Completar')+' tarea '+task.title,()=>updateTask(task,{status:task.status==='done'?'pending':'done'})));
+    }
     actions.append(
-      actionButton(task.status==='done'?'Reabrir':'Completar',(task.status==='done'?'Reabrir':'Completar')+' tarea '+task.title,()=>updateTask(task,{status:task.status==='done'?'pending':'done'})),
       actionButton('Editar','Editar tarea '+task.title,()=>editTask(task)),
       actionButton('Borrar','Borrar tarea '+task.title,()=>removeTask(task))
     );
@@ -653,7 +656,7 @@ function localDayPlan(){
   const today=dateKey(now);
   const tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
   const sevenDays=new Date(now.getFullYear(),now.getMonth(),now.getDate()+7);
-  const pending=state.tasks.filter(t=>t.status!=='done');
+  const pending=pendingTaskRecords(state.tasks);
   if(!pending.length)return 'No tienes tareas pendientes registradas. Puedes añadir una tarea en la sección Tareas para preparar tu siguiente plan.';
   const dueDate=t=>{if(!t.due_at)return null;const d=new Date(t.due_at);return Number.isFinite(d.getTime())?d:null};
   const overdue=pending.filter(t=>{const d=dueDate(t);return d&&d.getTime()<now.getTime()});
@@ -681,13 +684,13 @@ function localCommand(input){
   if(/^(planifica (mi |el )?(dia|jornada)|planea (mi |el )?dia|organiza (mi |el )?dia|plan de hoy|mis prioridades de hoy)/.test(normalized))return localDayPlan();
   if(/^(resumen( de hoy)?|como va mi dia|mi resumen)/.test(normalized)){
     if(!sourceIsRecent('tasks')||!sourceIsRecent('memories'))return 'Todavía no puedo confirmar tus datos. Pulsa Actualizar datos e inténtalo de nuevo.';
-    const pending=state.tasks.filter(x=>x.status!=='done');
+    const pending=pendingTaskRecords(state.tasks);
     const high=pending.filter(x=>x.priority==='high');
     return 'Tu resumen: '+pending.length+' tarea(s) pendiente(s), '+high.length+' de prioridad alta y '+state.memories.length+' recuerdo(s). '+(pending.length?'Las próximas tareas son: '+pending.slice(0,3).map(x=>x.title).join('; ')+'.':'No tienes pendientes registrados.');
   }
   if(/(que tengo pendiente|mis pendientes|tareas pendientes|que debo hacer)/.test(normalized)){
     if(!sourceIsRecent('tasks'))return 'No he podido verificar tus tareas. Pulsa Actualizar datos.';
-    const rows=state.tasks.filter(x=>x.status!=='done').slice(0,8);
+    const rows=pendingTaskRecords(state.tasks).slice(0,8);
     return rows.length?'Tus tareas pendientes: '+rows.map((x,i)=>(i+1)+'. '+x.title).join('; ')+'.':'Tu lista de pendientes está vacía.';
   }
   if(/(que recuerdas|mis recuerdos|mi memoria)/.test(normalized)){
@@ -707,7 +710,7 @@ function localCommand(input){
     return 'He preparado el recuerdo. Confírmalo antes de guardarlo.';
   }
   const doneMatch=input.match(/^(?:completa|termina)\s+tarea\s+(.+)$/i);
-  if(doneMatch){const matches=state.tasks.filter(t=>t.status!=='done'&&normalize(t.title)===normalize(doneMatch[1]));
+  if(doneMatch){const matches=pendingTaskRecords(state.tasks).filter(t=>normalize(t.title)===normalize(doneMatch[1]));
     if(matches.length!==1)return matches.length?'Encontré varias tareas con ese nombre. Usa la sección Tareas.':'No encontré una tarea pendiente con ese título exacto.';
     propose('¿Marcar como completada «'+matches[0].title+'»?',()=>request('/v1/tasks/'+encodeURIComponent(matches[0].id),'PATCH',{status:'done'}));
     return 'La tarea está lista para completar. Confirma en la pantalla.';
