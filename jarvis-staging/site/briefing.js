@@ -81,6 +81,13 @@ export function safeTaskTitle(title,english=false){
   const cleaned=typeof title==='string'?title.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060\u2066-\u2069\ufeff]/g,' ').replace(/\s+/g,' ').trim().slice(0,120):'';
   return cleaned||(english?'Untitled':'Sin título');
 }
+// Shared fail-closed pending-task rule used by briefing, lists and voice actions.
+export function pendingTaskRecords(tasks){
+  if(!Array.isArray(tasks))return [];
+  return tasks.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)
+    &&typeof x.title==='string'&&safeTaskTitle(x.title)!=='Sin título'
+    &&String(x.status??'pending').trim().toLowerCase()==='pending');
+}
 export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Date(),english=false}={}){
   // Date(Symbol) and Date(BigInt) throw TypeError; fail closed rather than breaking the voice flow.
   let current;
@@ -97,8 +104,7 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
   const today=calendarDay(current);
   const sevenDays=new Date(current.getTime()+7*24*60*60*1000);
   // Completed or explicitly cancelled tasks must never be presented as outstanding commitments.
-  const inactiveStatuses=new Set(['done','completed','complete','cancelled','canceled']);
-  const pending=tasks.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.title==='string'&&safeTaskTitle(x.title)!=='Sin título'&&!inactiveStatuses.has(String(x.status??'').trim().toLowerCase())&&String(x.status??'pending').trim().toLowerCase()==='pending');
+  const pending=pendingTaskRecords(tasks);
   const overdue=pending.filter(x=>{const d=dueValue(x);return d&&d<current});
   const upcoming=pending.filter(x=>{const d=dueValue(x);return d&&calendarDay(d)===today&&d>=current});
   const rank={high:0,normal:1,low:2};
