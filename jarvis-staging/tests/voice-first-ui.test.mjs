@@ -140,7 +140,9 @@ test('Voice dialogue resumes after async request settles without listening over 
  assert.match(body,/finally\s*\{[\s\S]*?state\.busy=false/);
  assert.match(body,/if\(state\.dialogEnabled&&state\.voiceEnabled&&!state\.activeUtterance\)scheduleRearm\(\)/);
  const rearm=app.slice(app.indexOf('function scheduleRearm('),app.indexOf('function beginListening(',app.indexOf('function scheduleRearm(')));
- assert.match(rearm,/if\(!state\.dialogEnabled\|\|state\.busy\|\|document\.hidden\|\|!ready\(\)\)return/);
+ assert.match(rearm,/if\(!state\.dialogEnabled\|\|!state\.voiceEnabled\|\|!ready\(\)\|\|document\.hidden\)return/);
+ assert.match(rearm,/if\(!state\.dialogEnabled\|\|state\.busy\|\|document\.hidden\|\|!ready\(\)\|\|state\.activeUtterance\|\|state\.recognition\)return/);
+ assert.match(rearm,/if\('speechSynthesis' in window&&window\.speechSynthesis\.speaking\)return/);
 });
 
 
