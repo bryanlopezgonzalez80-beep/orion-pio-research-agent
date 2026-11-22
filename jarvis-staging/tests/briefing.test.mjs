@@ -67,7 +67,7 @@ test('Rendering avoids dangerous HTML assignment',async()=>{
  const app=await readFile(new URL('../site/app.js',import.meta.url),'utf8');
  const html=await readFile(new URL('../site/index.html',import.meta.url),'utf8');
  assert.ok(!/\binnerHTML\s*=/.test(app));
- assert.match(app,/import \{trustedCommand,recentVerification\} from '.\/briefing\.js'/);
+ assert.match(app,/import \{[^}]*trustedCommand[^}]*recentVerification[^}]*\} from '.\/briefing\.js'/);
  for(const id of ['source-tasks','source-memory','source-calendar','source-traffic','recognition-lang']){
   assert.ok(html.includes('id="'+id+'"'),'Missing '+id);
  }
