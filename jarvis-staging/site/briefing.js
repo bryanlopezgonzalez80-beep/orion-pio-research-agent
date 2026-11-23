@@ -114,7 +114,8 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
     return (index+1)+'. '+safeTaskTitle(task.title,english)+high+(date?(english?', due '+date:', vence '+date):'');
   };
   const suggestions=ordered.slice(0,3).map(taskText).join('; ');
-  const verified=new Date(verifiedAt).toLocaleTimeString(english?'en-US':'es-PR',{timeZone:BRIEFING_TIME_ZONE,hour:'numeric',minute:'2-digit'});
+  // Include the calendar date as well as time so a cross-midnight sync cannot be mistaken for today's verification.
+  const verified=new Date(verifiedAt).toLocaleString(english?'en-US':'es-PR',{timeZone:BRIEFING_TIME_ZONE,year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
   if(english){
     return 'Based on your JARVIS tasks verified at '+verified+': '+pending.length+' pending, '+overdue.length+' overdue and '+upcoming.length+' due later today. '+(suggestions?'Suggested priorities: '+suggestions+'. ':'No pending tasks were recorded. ')+'Your calendar and live traffic are not connected, so I cannot confirm meetings or departure times. These are task suggestions, not appointments.';
   }
