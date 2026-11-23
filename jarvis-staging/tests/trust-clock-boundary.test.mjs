@@ -68,3 +68,21 @@ test('a failed or incomplete task load is never reported as an empty task list',
   assert.match(notLoaded,/No puedo verificar tus tareas/i);
   assert.doesNotMatch(notLoaded,/No hay tareas pendientes registradas/i);
 });
+
+test('calendar questions in both languages never assert a verified meeting', () => {
+  for (const phrase of ['Do I have any appointments?', '¿Tengo una reunión?']) {
+    const response=trustedCommand(phrase);
+    assert.ok(response, 'calendar intent must be handled');
+    assert.match(response.text,/calendar is not connected|calendario aún no está conectado/i);
+    assert.doesNotMatch(response.text,/confirmed for|confirmada para/i);
+  }
+});
+
+test('a legitimate empty task list does not imply an empty calendar', () => {
+  const now=Date.parse('2026-11-23T08:00:00Z');
+  for (const english of [false,true]) {
+    const response=dailyBriefing({tasks:[],loaded:true,verifiedAt:now,now:new Date(now),english});
+    assert.match(response,english?/No pending tasks were recorded/i:/No hay tareas pendientes registradas/i);
+    assert.match(response,english?/calendar and live traffic are not connected/i:/calendario y el tráfico en vivo no están conectados/i);
+  }
+});
