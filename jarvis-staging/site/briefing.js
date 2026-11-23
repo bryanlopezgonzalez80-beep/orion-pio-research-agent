@@ -101,11 +101,12 @@ export function dailyBriefing({tasks=[],loaded=false,verifiedAt=null,now=new Dat
   const pending=tasks.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.title==='string'&&safeTaskTitle(x.title)!=='Sin título'&&!inactiveStatuses.has(String(x.status??'').trim().toLowerCase())&&String(x.status??'pending').trim().toLowerCase()==='pending');
   const overdue=pending.filter(x=>{const d=dueValue(x);return d&&d<current});
   const upcoming=pending.filter(x=>{const d=dueValue(x);return d&&calendarDay(d)===today&&d>=current});
-  const rank={high:0,normal:1,low:2};
+  // Map avoids inherited Object keys (e.g. "constructor") being treated as priorities.
+  const rank=new Map([['high',0],['normal',1],['low',2]]);
   const urgency=d=>d?d<current?-2:d<sevenDays?-1:0:1;
   const ordered=[...pending].sort((a,b)=>{
     const da=dueValue(a),db=dueValue(b);
-    return urgency(da)-urgency(db)||(rank[String(a.priority??'').trim().toLowerCase()]??1)-(rank[String(b.priority??'').trim().toLowerCase()]??1)||(da?.getTime()??Infinity)-(db?.getTime()??Infinity);
+    return urgency(da)-urgency(db)||(rank.get(String(a.priority??'').trim().toLowerCase())??1)-(rank.get(String(b.priority??'').trim().toLowerCase())??1)||(da?.getTime()??Infinity)-(db?.getTime()??Infinity);
   });
   const taskText=(task,index)=>{
     const d=dueValue(task);
