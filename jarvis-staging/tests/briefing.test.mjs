@@ -497,3 +497,16 @@ test('Typed appointment questions never invent calendar access',()=>{
   assert.notEqual(classifyCommand(phrase),'calendar',phrase);
  }
 });
+
+
+test('Briefing identifies the verification calendar date across Puerto Rico midnight',()=>{
+ const localNow=new Date('2026-11-23T04:02:00Z'); // 00:02 PR on Nov 23
+ const verifiedAt=new Date('2026-11-23T03:59:00Z').getTime(); // 23:59 PR on Nov 22
+ for(const english of [false,true]){
+  const response=dailyBriefing({tasks:[],loaded:true,verifiedAt,now:localNow,english});
+  assert.match(response,/nov/i);
+  assert.match(response,/22/,'The verification must identify the previous calendar date');
+  assert.match(response,/11:59|23:59/);
+  assert.doesNotMatch(response,/cannot verify|no puedo verificar/i);
+ }
+});
