@@ -27,3 +27,20 @@ test('travel request does not invent departure time or route', () => {
   assert.match(answer.text,/live traffic/i);
   assert.doesNotMatch(answer.text,/\b\d+\s*(?:minutes?|mins?)\b/i);
 });
+
+test('unparseable clock values fail closed in both languages without throwing', () => {
+  for (const now of [Symbol('clock'), 123n, 'not-a-date', new Date(NaN)]) {
+    for (const english of [false,true]) {
+      const response=dailyBriefing({loaded:true,tasks:[{title:'Private task',status:'pending'}],verifiedAt:Date.now(),now,english});
+      assert.match(response,english?/current time is unavailable/i:/hora actual no está disponible/i);
+      assert.doesNotMatch(response,/Private task/);
+    }
+  }
+});
+test('future verification is not treated as fresh', () => {
+  const now=Date.parse('2026-11-23T08:00:00Z');
+  assert.equal(recentVerification(now+1000,now),false);
+  const response=dailyBriefing({loaded:true,tasks:[{title:'Private task',status:'pending'}],verifiedAt:now+1000,now:new Date(now)});
+  assert.match(response,/No puedo verificar tus tareas/i);
+  assert.doesNotMatch(response,/Private task/);
+});
